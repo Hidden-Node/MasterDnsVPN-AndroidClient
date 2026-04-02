@@ -63,7 +63,7 @@ jobs:
           echo "$(go env GOPATH)/bin" >> "$GITHUB_PATH"
 
       - name: Build Go mobile AAR
-        run: ./android/build_go_mobile.sh
+        run: bash ./android/build_go_mobile.sh
 
       - name: Build Signed Release APKs (split + universal)
         working-directory: android
