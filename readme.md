@@ -1,10 +1,10 @@
 # MasterDnsVPN Android Client
-
+🌐 **[فارسی](README_fa.md)** 
 An Android client for the **MasterDnsVPN** ecosystem.
 
 - **Upstream project (original)**: https://github.com/masterking32/MasterDnsVPN
 - **Note**: This repository is a client-side Android app built on top of the upstream Go core.
-- **فارسی**: See `readme_fa.md`
+  
 
 ## Download & install
 
