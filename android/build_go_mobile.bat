@@ -4,6 +4,8 @@ REM MasterDnsVPN - Build Go Mobile Library for Android
 REM Prerequisites: Go 1.25+, gomobile, Android NDK
 REM ============================================================================
 
+set MOBILE_TOOLS_VERSION=v0.0.0-20231127183840-76ac6878050a
+
 echo ===================================
 echo MasterDnsVPN - Android Build Script
 echo ===================================
@@ -18,17 +20,20 @@ if errorlevel 1 (
     exit /b 1
 )
 
-REM Check gomobile
-where gomobile >nul 2>&1
+REM Install pinned gomobile toolchain
+go install golang.org/x/mobile/cmd/gomobile@%MOBILE_TOOLS_VERSION%
+go install golang.org/x/mobile/cmd/gobind@%MOBILE_TOOLS_VERSION%
 if errorlevel 1 (
-    echo gomobile not found, installing...
-    go install golang.org/x/mobile/cmd/gomobile@latest
-    gomobile init
-    if errorlevel 1 (
-        echo ERROR: Failed to install gomobile
-        pause
-        exit /b 1
-    )
+    echo ERROR: Failed to install gomobile tools
+    pause
+    exit /b 1
+)
+
+gomobile init
+if errorlevel 1 (
+    echo ERROR: gomobile init failed
+    pause
+    exit /b 1
 )
 
 echo.

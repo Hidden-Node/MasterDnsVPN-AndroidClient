@@ -32,7 +32,9 @@ jobs:
 
       - name: Install gomobile
         run: |
-          go install golang.org/x/mobile/cmd/gomobile@latest
+          MOBILE_TOOLS_VERSION=v0.0.0-20231127183840-76ac6878050a
+          go install golang.org/x/mobile/cmd/gomobile@${MOBILE_TOOLS_VERSION}
+          go install golang.org/x/mobile/cmd/gobind@${MOBILE_TOOLS_VERSION}
           echo "$(go env GOPATH)/bin" >> "$GITHUB_PATH"
 
       - name: Build Go mobile AAR
