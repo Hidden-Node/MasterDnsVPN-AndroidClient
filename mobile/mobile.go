@@ -1,7 +1,10 @@
+//go:build mobile
+// +build mobile
+
 // ==============================================================================
 // MasterDnsVPN - Mobile Bridge
 // Thin wrapper around the Go client for Android via gomobile.
-// No client logic is modified — this only calls the existing API.
+// No client logic is modified - this only calls the existing API.
 // ==============================================================================
 
 package mobile
