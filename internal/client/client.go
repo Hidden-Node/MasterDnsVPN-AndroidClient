@@ -46,9 +46,9 @@ type Client struct {
 	resolverConns       map[string]chan *net.UDPConn
 	resolverAddrMu      sync.RWMutex
 	resolverAddrCache   map[string]*net.UDPAddr
-	resolverStatsMu     sync.Mutex
+	resolverStatsMu     sync.RWMutex
 	resolverPending     map[resolverSampleKey]resolverSample
-	resolverHealthMu    sync.Mutex
+	resolverHealthMu    sync.RWMutex
 	resolverHealth      map[string]*resolverHealthState
 	resolverRecheck     map[string]resolverRecheckState
 	runtimeDisabled     map[string]resolverDisabledState
@@ -410,9 +410,9 @@ func (c *Client) HandleStreamPacket(packet VpnProto.Packet) error {
 		return nil
 	}
 
-	c.streamsMu.Lock()
+	c.streamsMu.RLock()
 	s, ok := c.active_streams[packet.StreamID]
-	c.streamsMu.Unlock()
+	c.streamsMu.RUnlock()
 
 	if !ok || s == nil {
 		return nil

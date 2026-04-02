@@ -30,6 +30,7 @@ type Balancer struct {
 	version   atomic.Uint64
 
 	mu       sync.Mutex
+	sources  []*Connection
 	snapshot atomic.Pointer[balancerSnapshot]
 }
 
@@ -42,7 +43,7 @@ type connectionStats struct {
 
 type balancerSnapshot struct {
 	version     uint64
-	connections []*Connection
+	connections []Connection
 	valid       []int
 	indexByKey  map[string]int
 	stats       []*connectionStats
@@ -58,15 +59,18 @@ func (b *Balancer) SetConnections(connections []*Connection) {
 	b.mu.Lock()
 	defer b.mu.Unlock()
 
+	b.sources = connections
 	size := len(connections)
 	indexByKey := make(map[string]int, size)
 	stats := make([]*connectionStats, size)
+	copied := make([]Connection, size)
 	valid := make([]int, 0, size)
 
 	for idx, conn := range connections {
 		if conn == nil {
 			continue
 		}
+		copied[idx] = *conn
 		indexByKey[conn.Key] = idx
 		stats[idx] = &connectionStats{}
 		if conn.IsValid {
@@ -76,7 +80,7 @@ func (b *Balancer) SetConnections(connections []*Connection) {
 
 	b.snapshot.Store(&balancerSnapshot{
 		version:     b.version.Add(1),
-		connections: connections,
+		connections: copied,
 		valid:       valid,
 		indexByKey:  indexByKey,
 		stats:       stats,
@@ -89,6 +93,20 @@ func (b *Balancer) ValidCount() int {
 		return 0
 	}
 	return len(snap.valid)
+}
+
+func (b *Balancer) GetConnectionByKey(key string) (Connection, bool) {
+	snap := b.snapshot.Load()
+	if snap == nil || key == "" {
+		return Connection{}, false
+	}
+
+	idx, ok := snap.indexByKey[key]
+	if !ok {
+		return Connection{}, false
+	}
+
+	return derefConnection(snap.connections, idx)
 }
 
 func (b *Balancer) SetConnectionValidity(key string, valid bool) bool {
@@ -105,16 +123,65 @@ func (b *Balancer) SetConnectionValidity(key string, valid bool) bool {
 		return false
 	}
 
+	if idx < 0 || idx >= len(snap.connections) {
+		return false
+	}
 	conn := snap.connections[idx]
-	if conn == nil || conn.IsValid == valid {
+	if conn.IsValid == valid {
 		return ok
 	}
 
-	conn.IsValid = valid
+	if idx < len(b.sources) && b.sources[idx] != nil {
+		b.sources[idx].IsValid = valid
+		conn = *b.sources[idx]
+	} else {
+		conn.IsValid = valid
+	}
+
+	connections := append([]Connection(nil), snap.connections...)
+	connections[idx] = conn
 	b.snapshot.Store(&balancerSnapshot{
 		version:     b.version.Add(1),
-		connections: snap.connections,
-		valid:       rebuildValidIndices(snap.connections),
+		connections: connections,
+		valid:       rebuildValidIndices(connections),
+		indexByKey:  snap.indexByKey,
+		stats:       snap.stats,
+	})
+	return true
+}
+
+func (b *Balancer) SetConnectionMTU(key string, uploadBytes int, uploadChars int, downloadBytes int) bool {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+
+	snap := b.snapshot.Load()
+	if snap == nil {
+		return false
+	}
+
+	idx, ok := snap.indexByKey[key]
+	if !ok || idx < 0 || idx >= len(snap.connections) {
+		return false
+	}
+
+	conn := snap.connections[idx]
+	conn.UploadMTUBytes = uploadBytes
+	conn.UploadMTUChars = uploadChars
+	conn.DownloadMTUBytes = downloadBytes
+
+	if idx < len(b.sources) && b.sources[idx] != nil {
+		b.sources[idx].UploadMTUBytes = uploadBytes
+		b.sources[idx].UploadMTUChars = uploadChars
+		b.sources[idx].DownloadMTUBytes = downloadBytes
+		conn = *b.sources[idx]
+	}
+
+	connections := append([]Connection(nil), snap.connections...)
+	connections[idx] = conn
+	b.snapshot.Store(&balancerSnapshot{
+		version:     b.version.Add(1),
+		connections: connections,
+		valid:       rebuildValidIndices(connections),
 		indexByKey:  snap.indexByKey,
 		stats:       snap.stats,
 	})
@@ -130,10 +197,19 @@ func (b *Balancer) RefreshValidConnections() {
 		return
 	}
 
+	connections := make([]Connection, len(snap.connections))
+	copy(connections, snap.connections)
+	for idx, source := range b.sources {
+		if source == nil || idx >= len(connections) {
+			continue
+		}
+		connections[idx] = *source
+	}
+
 	b.snapshot.Store(&balancerSnapshot{
 		version:     b.version.Add(1),
-		connections: snap.connections,
-		valid:       rebuildValidIndices(snap.connections),
+		connections: connections,
+		valid:       rebuildValidIndices(connections),
 		indexByKey:  snap.indexByKey,
 		stats:       snap.stats,
 	})
@@ -290,10 +366,10 @@ func (b *Balancer) GetAllValidConnections() []Connection {
 	return snapshotConnections(snap.connections, snap.valid)
 }
 
-func rebuildValidIndices(connections []*Connection) []int {
+func rebuildValidIndices(connections []Connection) []int {
 	valid := make([]int, 0, len(connections))
-	for idx, conn := range connections {
-		if conn != nil && conn.IsValid {
+	for idx := range connections {
+		if connections[idx].IsValid {
 			valid = append(valid, idx)
 		}
 	}
@@ -411,13 +487,13 @@ func (b *Balancer) selectLowestScore(snap *balancerSnapshot, count int, scorer f
 	return snapshotConnections(snap.connections, indices)
 }
 
-func snapshotConnections(connections []*Connection, indices []int) []Connection {
+func snapshotConnections(connections []Connection, indices []int) []Connection {
 	selected := make([]Connection, len(indices))
 	for i, idx := range indices {
-		if idx < 0 || idx >= len(connections) || connections[idx] == nil {
+		if idx < 0 || idx >= len(connections) {
 			continue
 		}
-		selected[i] = *connections[idx]
+		selected[i] = connections[idx]
 	}
 	return selected
 }
@@ -460,11 +536,11 @@ func (b *Balancer) bestScoredConnectionExcluding(snap *balancerSnapshot, scorer 
 	return derefConnection(snap.connections, bestIndex)
 }
 
-func derefConnection(connections []*Connection, idx int) (Connection, bool) {
-	if idx < 0 || idx >= len(connections) || connections[idx] == nil {
+func derefConnection(connections []Connection, idx int) (Connection, bool) {
+	if idx < 0 || idx >= len(connections) {
 		return Connection{}, false
 	}
-	return *connections[idx], true
+	return connections[idx], true
 }
 
 func (b *Balancer) lossScore(snap *balancerSnapshot, idx int) uint64 {

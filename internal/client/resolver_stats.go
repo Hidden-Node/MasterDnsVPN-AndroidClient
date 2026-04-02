@@ -68,16 +68,12 @@ func (c *Client) trackResolverSend(packet []byte, resolverAddr string, serverKey
 	}
 
 	c.resolverStatsMu.Lock()
-	timeoutObservations := c.pruneResolverSamplesLocked(sentAt)
 	c.resolverPending[key] = resolverSample{
 		serverKey: serverKey,
 		sentAt:    sentAt,
 	}
 	c.resolverStatsMu.Unlock()
 
-	for _, observation := range timeoutObservations {
-		c.noteResolverTimeout(observation.serverKey, observation.at)
-	}
 	c.noteResolverSend(serverKey)
 }
 
@@ -92,16 +88,11 @@ func (c *Client) trackResolverSuccess(packet []byte, addr *net.UDPAddr, received
 	}
 
 	c.resolverStatsMu.Lock()
-	timeoutObservations := c.pruneResolverSamplesLocked(receivedAt)
 	sample, ok := c.resolverPending[key]
 	if ok {
 		delete(c.resolverPending, key)
 	}
 	c.resolverStatsMu.Unlock()
-
-	for _, observation := range timeoutObservations {
-		c.noteResolverTimeout(observation.serverKey, observation.at)
-	}
 
 	if !ok || sample.serverKey == "" {
 		return
@@ -125,16 +116,11 @@ func (c *Client) trackResolverFailure(packet []byte, addr *net.UDPAddr, failedAt
 	}
 
 	c.resolverStatsMu.Lock()
-	timeoutObservations := c.pruneResolverSamplesLocked(failedAt)
 	sample, ok := c.resolverPending[key]
 	if ok {
 		delete(c.resolverPending, key)
 	}
 	c.resolverStatsMu.Unlock()
-
-	for _, observation := range timeoutObservations {
-		c.noteResolverTimeout(observation.serverKey, observation.at)
-	}
 
 	if !ok || sample.serverKey == "" {
 		return

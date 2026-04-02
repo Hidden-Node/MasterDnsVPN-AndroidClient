@@ -1,23 +1,24 @@
-# Go
-/bin/
-*.exe
-*.test
-*.out
-
-# Android/Gradle
-android/.gradle/
-android/build/
-android/app/build/
-*.iml
-.idea/
-
-# Local SDK config
-android/local.properties
-
-# Generated gomobile artifacts
-android/app/libs/masterdnsvpn.aar
-android/app/libs/masterdnsvpn-sources.jar
-
-# OS
+__pycache__
+server_config.py
+client_config.py
+server_config.toml
+client_config.toml
+client_resolvers.txt
+encrypt_key.txt
+local_dns_cache.json
+local_dns_cache.bin
+*.key
+*.pem
+*.crt
+.vscode/
+.env
 .DS_Store
-Thumbs.db
+logs/
+*.log
+*.zip
+*.tar.gz
+*.bak
+*.tmp
+*.exe
+build/
+.gocache

@@ -170,7 +170,7 @@ type idleDeferredCleanup struct {
 }
 
 type sessionStore struct {
-	mu                     sync.Mutex
+	mu                     sync.RWMutex
 	nextID                 uint16
 	activeCount            uint16
 	nextReuseSweepUnixNano int64
@@ -318,8 +318,8 @@ func (s *sessionStore) expireReuseLocked(nowUnixNano int64) {
 }
 
 func (s *sessionStore) Get(sessionID uint8) (*sessionRecord, bool) {
-	s.mu.Lock()
-	defer s.mu.Unlock()
+	s.mu.RLock()
+	defer s.mu.RUnlock()
 	record := s.byID[sessionID]
 	if record == nil || record.isClosed() {
 		return nil, false
@@ -332,15 +332,15 @@ func (s *sessionStore) HasActive(sessionID uint8) bool {
 		return false
 	}
 
-	s.mu.Lock()
+	s.mu.RLock()
 	record := s.byID[sessionID]
-	s.mu.Unlock()
+	s.mu.RUnlock()
 	return record != nil && !record.isClosed()
 }
 
 func (s *sessionStore) Lookup(sessionID uint8) (sessionLookupResult, bool) {
-	s.mu.Lock()
-	defer s.mu.Unlock()
+	s.mu.RLock()
+	defer s.mu.RUnlock()
 
 	if record := s.byID[sessionID]; record != nil {
 		return sessionLookupResult{
@@ -362,7 +362,7 @@ func (s *sessionStore) Lookup(sessionID uint8) (sessionLookupResult, bool) {
 }
 
 func (s *sessionStore) ValidateAndTouch(sessionID uint8, cookie uint8, now time.Time) sessionValidationResult {
-	s.mu.Lock()
+	s.mu.RLock()
 	if record := s.byID[sessionID]; record != nil {
 		result := sessionValidationResult{
 			Lookup: sessionLookupResult{
@@ -377,7 +377,7 @@ func (s *sessionStore) ValidateAndTouch(sessionID uint8, cookie uint8, now time.
 			view := record.runtimeView()
 			result.Active = &view
 		}
-		s.mu.Unlock()
+		s.mu.RUnlock()
 		if result.Valid {
 			record.setLastActivity(now)
 		}
@@ -385,7 +385,7 @@ func (s *sessionStore) ValidateAndTouch(sessionID uint8, cookie uint8, now time.
 	}
 
 	if record, ok := s.recentClosed[sessionID]; ok {
-		s.mu.Unlock()
+		s.mu.RUnlock()
 		return sessionValidationResult{
 			Lookup: sessionLookupResult{
 				Cookie:       record.Cookie,
@@ -397,7 +397,7 @@ func (s *sessionStore) ValidateAndTouch(sessionID uint8, cookie uint8, now time.
 		}
 	}
 
-	s.mu.Unlock()
+	s.mu.RUnlock()
 	return sessionValidationResult{}
 }
 
@@ -481,14 +481,14 @@ func (s *sessionStore) Cleanup(now time.Time, idleTimeout time.Duration, closedR
 }
 
 func (s *sessionStore) SweepTerminalStreams(now time.Time, retention time.Duration) {
-	s.mu.Lock()
+	s.mu.RLock()
 	records := make([]*sessionRecord, 0, len(s.byID))
 	for _, record := range s.byID {
 		if record != nil {
 			records = append(records, record)
 		}
 	}
-	s.mu.Unlock()
+	s.mu.RUnlock()
 
 	for _, record := range records {
 		record.cleanupTerminalStreams(now, retention)
@@ -496,14 +496,14 @@ func (s *sessionStore) SweepTerminalStreams(now time.Time, retention time.Durati
 }
 
 func (s *sessionStore) SweepRecentlyClosedStreams(now time.Time) {
-	s.mu.Lock()
+	s.mu.RLock()
 	records := make([]*sessionRecord, 0, len(s.byID))
 	for _, record := range s.byID {
 		if record != nil {
 			records = append(records, record)
 		}
 	}
-	s.mu.Unlock()
+	s.mu.RUnlock()
 
 	for _, record := range records {
 		record.pruneRecentlyClosed(now)
@@ -580,8 +580,8 @@ func (r *sessionRecord) lastActivity() int64 {
 }
 
 func (s *sessionStore) CollectIdleDeferredSessions(now time.Time, idleTimeout time.Duration) []idleDeferredCleanup {
-	s.mu.Lock()
-	defer s.mu.Unlock()
+	s.mu.RLock()
+	defer s.mu.RUnlock()
 
 	if idleTimeout <= 0 {
 		return nil

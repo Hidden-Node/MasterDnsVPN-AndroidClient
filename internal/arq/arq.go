@@ -232,6 +232,7 @@ const (
 	ioRetryBackoff         = 100 * time.Millisecond
 	ioTransientReadBudget  = 3 * time.Second
 	ioTransientWriteBudget = 3
+	ioReadMaxPackets       = 5
 )
 
 func classifyIOError(err error) ioErrorClass {
@@ -915,11 +916,13 @@ func (a *ARQ) ioLoop() {
 	var errorReason string
 	var transientReadSince time.Time
 
-	buf := make([]byte, a.mtu)
+	readBufferSize := max(max(a.mtu*ioReadMaxPackets, a.mtu), 1)
+	buf := make([]byte, readBufferSize)
 
 	for !a.isClosed() {
 		a.waitWindowNotFull()
 
+		readBudget := a.mtu
 		a.mu.Lock()
 		if a.stopLocalRead || a.closed {
 			a.mu.Unlock()
@@ -943,48 +946,72 @@ func (a *ARQ) ioLoop() {
 			resetRequired = true
 			break
 		}
+		freeSlots := max(a.limit-len(a.sndBuf), 1)
+		packetsToRead := min(freeSlots, ioReadMaxPackets)
+		readBudget = min(max(packetsToRead*a.mtu, 1), len(buf))
 		a.mu.Unlock()
 
 		if c, ok := a.localConn.(interface{ SetReadDeadline(time.Time) error }); ok {
 			_ = c.SetReadDeadline(time.Now().Add(500 * time.Millisecond))
 		}
 
-		n, err := a.localConn.Read(buf)
+		n, err := a.localConn.Read(buf[:readBudget])
 		if n > 0 {
 			transientReadSince = time.Time{}
-			raw := append([]byte(nil), buf[:n]...)
+			chunkSize := a.mtu
+			if chunkSize < 1 {
+				chunkSize = n
+			}
+
+			type outboundChunk struct {
+				sn   uint16
+				data []byte
+			}
+
+			now := time.Now()
+			outbound := make([]outboundChunk, 0, (n+chunkSize-1)/chunkSize)
 
 			a.mu.Lock()
-			a.lastActivity = time.Now()
-			sn := a.sndNxt
-			a.sndNxt++
+			a.lastActivity = now
 			currentRTO := a.currentDataBaseRTO()
+			for offset := 0; offset < n; offset += chunkSize {
+				end := offset + chunkSize
+				if end > n {
+					end = n
+				}
+				raw := append([]byte(nil), buf[offset:end]...)
+				sn := a.sndNxt
+				a.sndNxt++
 
-			a.sndBuf[sn] = &arqDataItem{
-				Data:            raw,
-				CreatedAt:       time.Now(),
-				LastSentAt:      time.Time{},
-				Dispatched:      false,
-				Retries:         0,
-				CurrentRTO:      currentRTO,
-				SampleEligible:  true,
-				CompressionType: a.compressionType,
-				TTL:             0,
+				a.sndBuf[sn] = &arqDataItem{
+					Data:            raw,
+					CreatedAt:       now,
+					LastSentAt:      time.Time{},
+					Dispatched:      false,
+					Retries:         0,
+					CurrentRTO:      currentRTO,
+					SampleEligible:  true,
+					CompressionType: a.compressionType,
+					TTL:             0,
+				}
+				outbound = append(outbound, outboundChunk{sn: sn, data: raw})
 			}
 			a.mu.Unlock()
 
-			ok := a.enqueuer.PushTXPacket(
-				Enums.DefaultPacketPriority(Enums.PACKET_STREAM_DATA),
-				Enums.PACKET_STREAM_DATA,
-				sn, 0, 0, a.compressionType, 0, raw,
-			)
-			if !ok {
-				a.mu.Lock()
-				if info, exists := a.sndBuf[sn]; exists {
-					info.Dispatched = true
-					info.LastSentAt = time.Now()
+			for _, chunk := range outbound {
+				ok := a.enqueuer.PushTXPacket(
+					Enums.DefaultPacketPriority(Enums.PACKET_STREAM_DATA),
+					Enums.PACKET_STREAM_DATA,
+					chunk.sn, 0, 0, a.compressionType, 0, chunk.data,
+				)
+				if !ok {
+					a.mu.Lock()
+					if info, exists := a.sndBuf[chunk.sn]; exists {
+						info.Dispatched = true
+						info.LastSentAt = time.Now().Add(-info.CurrentRTO)
+					}
+					a.mu.Unlock()
 				}
-				a.mu.Unlock()
 			}
 		}
 
@@ -1378,6 +1405,20 @@ func (a *ARQ) writeLoop() {
 				break
 			}
 
+			// Coalesce contiguous chunks into a single write to reduce syscalls.
+			if len(toWrite) > 1 {
+				totalSize := 0
+				for _, chunk := range toWrite {
+					totalSize += len(chunk)
+				}
+				merged := make([]byte, 0, totalSize)
+				for _, chunk := range toWrite {
+					merged = append(merged, chunk...)
+				}
+				toWrite = toWrite[:1]
+				toWrite[0] = merged
+			}
+
 			shouldExit := false
 			recheckClose := false
 			func() {
@@ -1691,7 +1732,7 @@ func (a *ARQ) SendControlPacketWithTTL(packetType uint8, sequenceNum uint16, fra
 	lastSentAt := time.Time{}
 	if !ok {
 		dispatchedFlag = true
-		lastSentAt = now
+		lastSentAt = now.Add(-initialRTO)
 	}
 
 	a.controlSndBuf[key] = &arqControlItem{
@@ -1883,12 +1924,7 @@ func (a *ARQ) checkRetransmits() {
 	}
 
 	a.mu.Lock()
-	type pendingRetransmit struct {
-		sn              uint16
-		data            []byte
-		compressionType uint8
-	}
-	var jobs []pendingRetransmit
+	var jobs []rtxJob
 
 	for sn, info := range a.sndBuf {
 		if info.TTL > 0 {
@@ -1907,7 +1943,7 @@ func (a *ARQ) checkRetransmits() {
 			continue
 		}
 
-		jobs = append(jobs, pendingRetransmit{
+		jobs = append(jobs, rtxJob{
 			sn:              sn,
 			data:            info.Data,
 			compressionType: info.CompressionType,
@@ -1915,16 +1951,7 @@ func (a *ARQ) checkRetransmits() {
 	}
 	a.mu.Unlock()
 
-	rtxJobs := make([]rtxJob, 0, len(jobs))
-	for _, job := range jobs {
-		rtxJobs = append(rtxJobs, rtxJob{
-			sn:              job.sn,
-			data:            job.data,
-			compressionType: job.compressionType,
-		})
-	}
-
-	priorityKinds := a.retransmitPriorityKinds(rtxJobs)
+	priorityKinds := a.retransmitPriorityKinds(jobs)
 	for i, j := range jobs {
 		priority := Enums.DefaultPacketPriority(Enums.PACKET_STREAM_DATA)
 		packetType := uint8(Enums.PACKET_STREAM_DATA)

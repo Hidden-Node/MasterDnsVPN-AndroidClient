@@ -11,6 +11,8 @@ import (
 	"errors"
 	"fmt"
 	"net"
+	"strconv"
+	"strings"
 	"sync"
 	"time"
 )
@@ -18,7 +20,7 @@ import (
 type TCPListener struct {
 	client       *Client
 	protocolType string
-	listener     net.Listener
+	listeners    []net.Listener
 	stopChan     chan struct{}
 	stopOnce     sync.Once
 }
@@ -32,41 +34,66 @@ func NewTCPListener(c *Client, protocolType string) *TCPListener {
 }
 
 func (l *TCPListener) Start(ctx context.Context, ip string, port int) error {
-	addr := fmt.Sprintf("%s:%d", ip, port)
-	listener, err := net.Listen("tcp", addr)
-	if err != nil {
-		return err
+	addrs := listenerAddressesForBind(ip, port)
+	if len(addrs) == 0 {
+		return fmt.Errorf("invalid listener address")
 	}
-	l.listener = listener
 
-	l.client.log.Infof("🚀 <green>%s Proxy server is listening on <cyan>%s</cyan></green>", l.protocolType, addr)
-
-	go func(activeListener net.Listener) {
-		for {
-			conn, err := activeListener.Accept()
-			if err != nil {
-				if errors.Is(err, net.ErrClosed) {
-					return
+	listeners := make([]net.Listener, 0, len(addrs))
+	for i, addr := range addrs {
+		listener, err := net.Listen("tcp", addr)
+		if err != nil {
+			if i == 0 {
+				for _, opened := range listeners {
+					_ = opened.Close()
 				}
-				select {
-				case <-l.stopChan:
-					return
-				case <-ctx.Done():
-					return
-				default:
-					if listenerShouldRetryAccept(err) {
-						time.Sleep(100 * time.Millisecond)
-						continue
-					}
-					if l.client != nil && l.client.log != nil {
-						l.client.log.Warnf("⚠️ <yellow>%s listener stopped after accept error: %v</yellow>", l.protocolType, err)
-					}
-					return
-				}
+				return err
 			}
-			go l.handleConnection(ctx, conn, l.protocolType)
+			if l.client != nil && l.client.log != nil {
+				l.client.log.Debugf("Skipping optional listener bind on %s: %v", addr, err)
+			}
+			continue
 		}
-	}(listener)
+		listeners = append(listeners, listener)
+	}
+
+	if len(listeners) == 0 {
+		return fmt.Errorf("failed to bind any proxy listener")
+	}
+
+	l.listeners = listeners
+	for _, listener := range listeners {
+		if l.client != nil && l.client.log != nil {
+			l.client.log.Infof("🚀 <green>%s Proxy server is listening on <cyan>%s</cyan></green>", l.protocolType, listener.Addr().String())
+		}
+
+		go func(activeListener net.Listener) {
+			for {
+				conn, err := activeListener.Accept()
+				if err != nil {
+					if errors.Is(err, net.ErrClosed) {
+						return
+					}
+					select {
+					case <-l.stopChan:
+						return
+					case <-ctx.Done():
+						return
+					default:
+						if listenerShouldRetryAccept(err) {
+							time.Sleep(100 * time.Millisecond)
+							continue
+						}
+						if l.client != nil && l.client.log != nil {
+							l.client.log.Warnf("⚠️ <yellow>%s listener stopped after accept error: %v</yellow>", l.protocolType, err)
+						}
+						return
+					}
+				}
+				go l.handleConnection(ctx, conn, l.protocolType)
+			}
+		}(listener)
+	}
 
 	return nil
 }
@@ -77,11 +104,33 @@ func (l *TCPListener) Stop() {
 	}
 	l.stopOnce.Do(func() {
 		close(l.stopChan)
-		if l.listener != nil {
-			_ = l.listener.Close()
-			l.listener = nil
+		for _, listener := range l.listeners {
+			if listener != nil {
+				_ = listener.Close()
+			}
 		}
+		l.listeners = nil
 	})
+}
+
+func listenerAddressesForBind(ip string, port int) []string {
+	trimmed := strings.TrimSpace(ip)
+	if trimmed == "" {
+		return nil
+	}
+
+	build := func(host string) string {
+		return net.JoinHostPort(host, strconv.Itoa(port))
+	}
+
+	switch strings.ToLower(trimmed) {
+	case "127.0.0.1", "::1", "localhost":
+		// Local-only listener: try both loopback stacks so apps that resolve
+		// localhost to ::1 can still reach the proxy on platforms like macOS.
+		return []string{build("127.0.0.1"), build("::1")}
+	default:
+		return []string{build(trimmed)}
+	}
 }
 
 func listenerShouldRetryAccept(err error) bool {

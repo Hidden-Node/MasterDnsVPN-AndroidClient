@@ -1,55 +1,103 @@
-# MasterDnsVPN Android Client
-🌐 **[فارسی](README_fa.md)** 
+# MasterDnsVPN Android Client (Community Build)
 
-An Android client for the **MasterDnsVPN** ecosystem.
+A community-maintained Android client package based on the original MasterDnsVPN project.
 
-- **Upstream project (original)**: https://github.com/masterking32/MasterDnsVPN
-- **Note**: This repository is a client-side Android app built on top of the upstream Go core.
-  
+- Original project: https://github.com/masterking32/MasterDnsVPN
+- This repository includes Android app source + Go core source + CI workflows.
 
-## Download & install
+## Features of this repository
 
-1. Go to this repository’s **Releases** page.
-2. Download the latest **`universal`** APK (recommended).
-3. Install it on your phone.
+- Android app source code (`android/`)
+- Go core source code (`mobile/`, `internal/`, `cmd/`)
+- GitHub Actions for:
+  - Building Go mobile AAR
+  - Building Android APKs
+  - Running Go tests
+- APK split outputs (like SlipNet-style builds):
+  - `arm64-v8a`
+  - `armeabi-v7a`
+  - `x86`
+  - `universal`
 
-If Android blocks installation, enable **“Install unknown apps”** for your browser/file manager.
+## Uploading with GitHub website (no terminal required)
 
-## Quick start (in-app)
+1. Create a new empty repository on GitHub.
+2. Open the new repository page.
+3. Click **Add file** -> **Upload files**.
+4. Drag and drop all files/folders from this package (`github_publish_package`) into the browser.
+5. Commit the upload to `main` branch.
+6. Go to **Actions** tab and wait for workflow completion.
+7. Download APK/AAR from workflow artifacts.
 
-You need a running MasterDnsVPN server (domain + key) to use the client.
+## Build artifacts from GitHub Actions
 
-Inside the app, fill the required fields:
+Workflow: `.github/workflows/android-ci.yml`
 
-- **`DOMAINS`**: your tunnel domain (example: `v.example.com`)
-- **`ENCRYPTION_KEY`**: the shared key from the server
-- **Resolvers**: add one or more DNS resolvers (IP or IP:PORT)
+Artifacts:
+- `app-debug-apk-splits` (ABI + universal APKs)
+- `masterdnsvpn-aar` (Go mobile AAR)
 
-Then start the VPN.
 
-## What this app does
+## Manual release with your own tags
 
-- Creates an Android VPN service and routes traffic through the MasterDnsVPN tunnel
-- Provides a local proxy mode (SOCKS/TCP) depending on your configuration
+If you want to decide tags yourself, use workflow:
 
-## Security notes
+- `.github/workflows/release-manual.yml`
 
-- Only install APKs from this repository’s **Releases**.
-- Keep your **server encryption key** private.
-- If you share configuration screenshots, redact the encryption key and any credentials.
+Steps:
+1. Go to **Actions** -> **Manual Release**
+2. Click **Run workflow**
+3. Enter your tag (for example `v1.0.0`)
+4. Optionally set release title
+5. Run
 
-## Troubleshooting
+The workflow builds AAR + APK splits and publishes them to GitHub Releases under your chosen tag.
 
-- **App won’t update / “App not installed”**: uninstall older builds signed with a different key, then install the new one.
-- **Connects but no traffic**: re-check `DOMAINS`, resolver list, and that the server is reachable and correctly configured.
-- **VPN toggles off immediately**: check Android VPN permission prompts and battery restrictions.
+## Signed release APKs (recommended for safe updates)
 
-## License
+To ensure users can install and **update** the app without signature errors, publish **signed Release APKs** using a single, stable keystore.
 
-MIT. See `LICENSE`.
+This repository's manual release workflow expects these GitHub Actions secrets:
+
+- `ANDROID_KEYSTORE_BASE64`: Base64 of your `*.jks` keystore file
+- `ANDROID_KEYSTORE_PASSWORD`: keystore password
+- `ANDROID_KEY_ALIAS`: key alias
+- `ANDROID_KEY_PASSWORD`: key password
+
+PowerShell helper to copy Base64 to clipboard:
+
+```powershell
+[Convert]::ToBase64String([IO.File]::ReadAllBytes("masterdnsvpn-release.jks")) | Set-Clipboard
+```
+
+Important:
+
+- Never commit your keystore file to the repository.
+- Keep `applicationId` stable and increase `versionCode` for each update.
+
+## Local build (optional)
+
+Build Go mobile AAR:
+
+```bash
+./android/build_go_mobile.sh
+```
+
+Build Android APKs:
+
+```bash
+cd android
+./gradlew :app:assembleDebug
+```
+
+## Notes
+
+- `android/local.properties` is intentionally excluded.
+- Android SDK/NDK are required for gomobile builds.
+- CI uses Java 17 + Go + Android SDK.
 
 ## Credits
 
-Based on the upstream MasterDnsVPN project:
+This repository is based on the original MasterDnsVPN project:
 
 - https://github.com/masterking32/MasterDnsVPN

@@ -23,6 +23,7 @@ type resolverHealthState struct {
 type resolverRecheckState struct {
 	FailCount int
 	NextAt    time.Time
+	InFlight  bool
 }
 
 type resolverDisabledState struct {
@@ -120,12 +121,12 @@ func (c *Client) nextResolverHealthWait(now time.Time) time.Duration {
 		return clampResolverHealthWait(waitFor)
 	}
 
-	c.resolverHealthMu.Lock()
-	defer c.resolverHealthMu.Unlock()
+	c.resolverHealthMu.RLock()
+	defer c.resolverHealthMu.RUnlock()
 
 	for key, meta := range c.resolverRecheck {
-		conn := c.connectionPtrByKey(key)
-		if conn == nil || conn.IsValid || meta.NextAt.IsZero() {
+		conn, ok := c.GetConnectionByKey(key)
+		if !ok || conn.IsValid || meta.NextAt.IsZero() || meta.InFlight {
 			continue
 		}
 		dueIn := time.Until(meta.NextAt)
@@ -160,8 +161,8 @@ func (c *Client) recordResolverHealthEvent(serverKey string, success bool, now t
 	if c == nil || serverKey == "" {
 		return
 	}
-	conn := c.connectionPtrByKey(serverKey)
-	if conn == nil || !conn.IsValid {
+	conn, ok := c.GetConnectionByKey(serverKey)
+	if !ok || !conn.IsValid {
 		return
 	}
 
@@ -270,8 +271,8 @@ func (c *Client) runResolverAutoDisable(now time.Time) {
 		if state == nil {
 			continue
 		}
-		conn := c.connectionPtrByKey(key)
-		if conn == nil || !conn.IsValid {
+		conn, ok := c.GetConnectionByKey(key)
+		if !ok || !conn.IsValid {
 			continue
 		}
 		c.pruneResolverHealthLocked(state, now)
@@ -313,12 +314,15 @@ func (c *Client) disableResolverConnection(serverKey string, cause string) bool 
 	if c == nil || serverKey == "" {
 		return false
 	}
-	conn := c.connectionPtrByKey(serverKey)
-	if conn == nil || !conn.IsValid || c.balancer.ValidCount() <= 3 {
+	conn, ok := c.GetConnectionByKey(serverKey)
+	if !ok || !conn.IsValid || c.balancer.ValidCount() <= 3 {
 		return false
 	}
 	if !c.balancer.SetConnectionValidity(serverKey, false) {
 		return false
+	}
+	if refreshed, ok := c.GetConnectionByKey(serverKey); ok {
+		conn = refreshed
 	}
 
 	now := c.now()
@@ -346,7 +350,7 @@ func (c *Client) disableResolverConnection(serverKey string, cause string) bool 
 			cause,
 		)
 	}
-	c.appendMTURemovedServerLine(conn, cause)
+	c.appendMTURemovedServerLine(&conn, cause)
 	return true
 }
 
@@ -378,12 +382,15 @@ func (c *Client) reactivateResolverConnection(serverKey string) bool {
 	if c == nil || serverKey == "" {
 		return false
 	}
-	conn := c.connectionPtrByKey(serverKey)
-	if conn == nil || conn.IsValid {
+	conn, ok := c.GetConnectionByKey(serverKey)
+	if !ok || conn.IsValid {
 		return false
 	}
 	if !c.balancer.SetConnectionValidity(serverKey, true) {
 		return false
+	}
+	if refreshed, ok := c.GetConnectionByKey(serverKey); ok {
+		conn = refreshed
 	}
 
 	c.resolverHealthMu.Lock()
@@ -407,8 +414,22 @@ func (c *Client) reactivateResolverConnection(serverKey string) bool {
 			conn.ResolverLabel,
 		)
 	}
-	c.appendMTUAddedServerLine(conn)
+	c.appendMTUAddedServerLine(&conn)
 	return true
+}
+
+func (c *Client) clearResolverRecheckInFlight(serverKey string) {
+	if c == nil || serverKey == "" {
+		return
+	}
+
+	c.resolverHealthMu.Lock()
+	meta, ok := c.resolverRecheck[serverKey]
+	if ok && meta.InFlight {
+		meta.InFlight = false
+		c.resolverRecheck[serverKey] = meta
+	}
+	c.resolverHealthMu.Unlock()
 }
 
 func (c *Client) scheduleResolverRecheckFailure(serverKey string, runtimePriority bool, now time.Time) {
@@ -436,6 +457,7 @@ func (c *Client) scheduleResolverRecheckFailure(serverKey string, runtimePriorit
 	}
 	delay += deterministicResolverJitter(serverKey, delay)
 	meta.NextAt = now.Add(delay)
+	meta.InFlight = false
 	c.resolverRecheck[serverKey] = meta
 
 	if state, ok := c.runtimeDisabled[serverKey]; ok {
@@ -477,17 +499,33 @@ func (c *Client) runResolverRecheckBatch(ctx context.Context, now time.Time) {
 	}
 
 	for _, candidate := range candidates {
-		conn := c.connectionPtrByKey(candidate.key)
-		if conn == nil || conn.IsValid {
+		conn, ok := c.GetConnectionByKey(candidate.key)
+		if !ok || conn.IsValid {
 			continue
 		}
-
-		if c.recheckResolverConnection(ctx, conn) {
-			c.reactivateResolverConnection(candidate.key)
-			continue
+		c.resolverHealthMu.Lock()
+		if m, ok := c.resolverRecheck[candidate.key]; ok {
+			m.InFlight = true
+			c.resolverRecheck[candidate.key] = m
 		}
+		c.resolverHealthMu.Unlock()
 
-		c.scheduleResolverRecheckFailure(candidate.key, candidate.runtimePriority, now)
+		go func(cand resolverRecheckCandidate, cn Connection) {
+			defer func() {
+				if r := recover(); r != nil {
+					c.scheduleResolverRecheckFailure(cand.key, cand.runtimePriority, c.now())
+				}
+			}()
+
+			if c.recheckResolverConnection(ctx, &cn) {
+				if !c.reactivateResolverConnection(cand.key) {
+					c.clearResolverRecheckInFlight(cand.key)
+				}
+				return
+			}
+
+			c.scheduleResolverRecheckFailure(cand.key, cand.runtimePriority, c.now())
+		}(candidate, conn)
 	}
 }
 
@@ -496,14 +534,14 @@ func (c *Client) collectDueResolverRechecks(now time.Time) []resolverRecheckCand
 		return nil
 	}
 
-	c.resolverHealthMu.Lock()
-	defer c.resolverHealthMu.Unlock()
+	c.resolverHealthMu.RLock()
+	defer c.resolverHealthMu.RUnlock()
 
 	runtimeCandidates := make([]resolverRecheckCandidate, 0, len(c.runtimeDisabled))
 	normalCandidates := make([]resolverRecheckCandidate, 0, len(c.connections))
 	for key, meta := range c.resolverRecheck {
-		conn := c.connectionPtrByKey(key)
-		if conn == nil || conn.IsValid {
+		conn, ok := c.GetConnectionByKey(key)
+		if !ok || conn.IsValid || meta.InFlight {
 			continue
 		}
 		if !meta.NextAt.IsZero() && meta.NextAt.After(now) {
@@ -576,10 +614,7 @@ func (c *Client) recheckResolverConnection(ctx context.Context, conn *Connection
 		if !c.recheckConnectionFn(conn) {
 			return false
 		}
-		conn.UploadMTUBytes = c.syncedUploadMTU
-		conn.UploadMTUChars = c.encodedCharsForPayload(c.syncedUploadMTU)
-		conn.DownloadMTUBytes = c.syncedDownloadMTU
-		return true
+		return c.applyRecheckedResolverMTU(conn.Key)
 	}
 
 	transport, err := newUDPQueryTransport(conn.ResolverLabel)
@@ -588,28 +623,70 @@ func (c *Client) recheckResolverConnection(ctx context.Context, conn *Connection
 	}
 	defer transport.conn.Close()
 
-	upOK, err := c.sendUploadMTUProbe(ctx, conn, transport, c.syncedUploadMTU, mtuProbeOptions{Quiet: true})
-	if err != nil || !upOK {
-		return false
+	upOK := false
+	for attempt := 0; attempt < c.mtuTestRetries; attempt++ {
+		if err := ctx.Err(); err != nil {
+			return false
+		}
+		passed, err := c.sendUploadMTUProbe(ctx, conn, transport, c.syncedUploadMTU, mtuProbeOptions{Quiet: true, IsRetry: attempt > 0})
+		if err == nil && passed {
+			upOK = true
+			break
+		}
 	}
-	downOK, err := c.sendDownloadMTUProbe(ctx, conn, transport, c.syncedDownloadMTU, c.syncedUploadMTU, mtuProbeOptions{Quiet: true})
-	if err != nil || !downOK {
+	if !upOK {
 		return false
 	}
 
-	conn.UploadMTUBytes = c.syncedUploadMTU
-	conn.UploadMTUChars = c.encodedCharsForPayload(c.syncedUploadMTU)
-	conn.DownloadMTUBytes = c.syncedDownloadMTU
-	return true
+	downOK := false
+	for attempt := 0; attempt < c.mtuTestRetries; attempt++ {
+		if err := ctx.Err(); err != nil {
+			return false
+		}
+		passed, err := c.sendDownloadMTUProbe(ctx, conn, transport, c.syncedDownloadMTU, c.syncedUploadMTU, mtuProbeOptions{Quiet: true, IsRetry: attempt > 0})
+		if err == nil && passed {
+			downOK = true
+			break
+		}
+	}
+	if !downOK {
+		return false
+	}
+
+	return c.applyRecheckedResolverMTU(conn.Key)
+}
+
+func (c *Client) applyRecheckedResolverMTU(serverKey string) bool {
+	if c == nil || serverKey == "" {
+		return false
+	}
+
+	if c.balancer == nil {
+		conn := c.connectionPtrByKey(serverKey)
+		if conn == nil {
+			return false
+		}
+		conn.UploadMTUBytes = c.syncedUploadMTU
+		conn.UploadMTUChars = c.encodedCharsForPayload(c.syncedUploadMTU)
+		conn.DownloadMTUBytes = c.syncedDownloadMTU
+		return true
+	}
+
+	return c.balancer.SetConnectionMTU(
+		serverKey,
+		c.syncedUploadMTU,
+		c.encodedCharsForPayload(c.syncedUploadMTU),
+		c.syncedDownloadMTU,
+	)
 }
 
 func (c *Client) isRuntimeDisabledResolver(serverKey string) bool {
 	if c == nil || serverKey == "" {
 		return false
 	}
-	c.resolverHealthMu.Lock()
+	c.resolverHealthMu.RLock()
 	_, ok := c.runtimeDisabled[serverKey]
-	c.resolverHealthMu.Unlock()
+	c.resolverHealthMu.RUnlock()
 	return ok
 }
 

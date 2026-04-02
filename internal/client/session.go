@@ -158,12 +158,8 @@ func (c *Client) nextSessionInitAttempt() (Connection, []byte, [4]byte, error) {
 		idxInValid := (start + checked) % validLen
 		connIdx := snap.valid[idxInValid]
 
-		if connIdx < 0 || connIdx >= len(c.connections) {
-			continue
-		}
-
-		conn := c.connections[connIdx]
-		if !conn.IsValid {
+		conn, ok := derefConnection(snap.connections, connIdx)
+		if !ok {
 			continue
 		}
 

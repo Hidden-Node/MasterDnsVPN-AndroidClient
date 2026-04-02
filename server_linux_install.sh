@@ -31,6 +31,65 @@ version_lt() {
   [[ "$1" == "$2" ]] && return 1
   [[ "$(printf '%s\n%s\n' "$1" "$2" | sort -V | head -n1)" == "$1" ]]
 }
+detect_legacy_linux() {
+  local id="${ID:-}"
+  local version_major="${VERSION_ID%%.*}"
+
+  case "$id" in
+    ubuntu)
+      [[ "${version_major:-0}" -le 20 ]]
+      ;;
+    debian)
+      [[ "${version_major:-0}" -le 11 ]]
+      ;;
+    almalinux|rocky|rhel|centos)
+      [[ "${version_major:-0}" -le 8 ]]
+      ;;
+    *)
+      return 1
+      ;;
+  esac
+}
+select_release_artifact() {
+  local arch="$1"
+  local legacy=0
+  if detect_legacy_linux; then
+    legacy=1
+    log_info "Legacy system detected (broader Linux compatibility mode)."
+  fi
+
+  case "$arch" in
+    aarch64|arm64)
+      if [[ $legacy -eq 1 ]]; then
+        URL="https://github.com/masterking32/MasterDnsVPN/releases/latest/download/MasterDnsVPN_Server_Linux-Legacy_ARM64.zip"
+        PREFIX="MasterDnsVPN_Server_Linux-Legacy_ARM64"
+      else
+        URL="https://github.com/masterking32/MasterDnsVPN/releases/latest/download/MasterDnsVPN_Server_Linux_ARM64.zip"
+        PREFIX="MasterDnsVPN_Server_Linux_ARM64"
+      fi
+      ;;
+    armv7l|armv7|armhf)
+      URL="https://github.com/masterking32/MasterDnsVPN/releases/latest/download/MasterDnsVPN_Server_Linux_ARMV7.zip"
+      PREFIX="MasterDnsVPN_Server_Linux_ARMV7"
+      ;;
+    x86_64|amd64)
+      if [[ $legacy -eq 1 ]]; then
+        URL="https://github.com/masterking32/MasterDnsVPN/releases/latest/download/MasterDnsVPN_Server_Linux-Legacy_AMD64.zip"
+        PREFIX="MasterDnsVPN_Server_Linux-Legacy_AMD64"
+      else
+        URL="https://github.com/masterking32/MasterDnsVPN/releases/latest/download/MasterDnsVPN_Server_Linux_AMD64.zip"
+        PREFIX="MasterDnsVPN_Server_Linux_AMD64"
+      fi
+      ;;
+    i386|i486|i586|i686|x86)
+      URL="https://github.com/masterking32/MasterDnsVPN/releases/latest/download/MasterDnsVPN_Server_Linux_X86.zip"
+      PREFIX="MasterDnsVPN_Server_Linux_X86"
+      ;;
+    *)
+      log_error "Unsupported architecture: $arch"
+      ;;
+  esac
+}
 
 if [[ "${EUID}" -ne 0 ]]; then
   log_error "Run this script as root (sudo)."
@@ -102,9 +161,18 @@ check_port53() {
   return 1
 }
 
+show_port53_usage() {
+  log_warn "Current listeners on port 53:"
+  ss -lupn "sport = :53" 2>/dev/null || true
+  ss -ltpn "sport = :53" 2>/dev/null || true
+  lsof -nP -iUDP:53 -iTCP:53 2>/dev/null || true
+}
+
 get_port53_pids() {
-  local pids
-  pids="$(ss -H -lupn "sport = :53" 2>/dev/null | sed -n 's/.*pid=\([0-9]\+\).*/\1/p' | sort -u)"
+  local pids_udp pids_tcp pids
+  pids_udp="$(ss -H -lupn "sport = :53" 2>/dev/null | sed -n 's/.*pid=\([0-9]\+\).*/\1/p' | sort -u)"
+  pids_tcp="$(ss -H -ltpn "sport = :53" 2>/dev/null | sed -n 's/.*pid=\([0-9]\+\).*/\1/p' | sort -u)"
+  pids="$(printf '%s\n%s\n' "$pids_udp" "$pids_tcp" | sed '/^$/d' | sort -u)"
   if [[ -n "$pids" ]]; then
     echo "$pids"
     return 0
@@ -112,14 +180,167 @@ get_port53_pids() {
   lsof -ti :53 2>/dev/null || true
 }
 
+stop_service_if_present() {
+  local unit="$1"
+  if systemctl list-unit-files --type=service --all 2>/dev/null | awk '{print $1}' | grep -qx "$unit"; then
+    if systemctl is-active --quiet "$unit"; then
+      log_info "Stopping conflicting service: $unit"
+      systemctl stop "$unit" || true
+    fi
+    systemctl disable "$unit" >/dev/null 2>&1 || true
+  fi
+}
+
+stop_socket_if_present() {
+  local unit="$1"
+  if systemctl list-unit-files --type=socket --all 2>/dev/null | awk '{print $1}' | grep -qx "$unit"; then
+    if systemctl is-active --quiet "$unit"; then
+      log_info "Stopping conflicting socket: $unit"
+      systemctl stop "$unit" || true
+    fi
+    systemctl disable "$unit" >/dev/null 2>&1 || true
+  fi
+}
+
+terminate_port53_pid() {
+  local pid="$1"
+  [[ -n "$pid" ]] || return 0
+  if ! kill -0 "$pid" 2>/dev/null; then
+    return 0
+  fi
+
+  local cmdline
+  cmdline="$(ps -p "$pid" -o cmd= 2>/dev/null || true)"
+  log_warn "Trying to terminate PID on port 53: $pid (${cmdline:-unknown})"
+
+  kill "$pid" 2>/dev/null || true
+  for _ in 1 2 3; do
+    sleep 1
+    if ! kill -0 "$pid" 2>/dev/null; then
+      return 0
+    fi
+  done
+
+  kill -9 "$pid" 2>/dev/null || true
+  sleep 1
+  if kill -0 "$pid" 2>/dev/null; then
+    log_warn "PID $pid is still alive after SIGKILL."
+    return 1
+  fi
+  return 0
+}
+
+force_release_port53() {
+  local stubborn=0
+  local pid
+
+  while IFS= read -r pid; do
+    [[ -z "$pid" ]] && continue
+    terminate_port53_pid "$pid" || stubborn=1
+  done <<< "$(get_port53_pids)"
+
+  if command -v fuser >/dev/null 2>&1 && check_port53; then
+    log_warn "Trying fuser fallback for port 53..."
+    fuser -k 53/udp 2>/dev/null || true
+    fuser -k 53/tcp 2>/dev/null || true
+    sleep 1
+  fi
+
+  return "$stubborn"
+}
+
+remove_iptables_port53_redirects() {
+  local tool="$1"
+  command -v "$tool" >/dev/null 2>&1 || return 0
+
+  local rule delete_rule
+  while IFS= read -r rule; do
+    [[ -z "$rule" ]] && continue
+    delete_rule="${rule/-A /-D }"
+    log_warn "Removing ${tool} NAT redirect rule for port 53: $rule"
+    # shellcheck disable=SC2086
+    $tool -t nat $delete_rule >/dev/null 2>&1 || true
+  done < <("$tool" -t nat -S 2>/dev/null | grep -E '(^-A )' | grep -E -- '(-p (tcp|udp)|-p (udp|tcp)).*--dport 53([^0-9]|$)' | grep -E 'REDIRECT|DNAT' || true)
+}
+
+remove_nft_port53_redirects() {
+  command -v nft >/dev/null 2>&1 || return 0
+
+  local rule
+  while IFS= read -r rule; do
+    [[ -z "$rule" ]] && continue
+    log_warn "Removing nftables redirect rule for port 53: $rule"
+    nft delete rule $rule >/dev/null 2>&1 || true
+  done < <(nft -a list ruleset 2>/dev/null | awk '
+    / dport 53 / && ($0 ~ /redirect/ || $0 ~ /dnat/) {
+      for (i = 1; i <= NF; i++) {
+        if ($i == "table") table = $(i+1)
+        if ($i == "chain") chain = $(i+1)
+        if ($i == "handle") handle = $(i+1)
+      }
+      if (table != "" && chain != "" && handle != "") {
+        print "ip " table " " chain " handle " handle
+      }
+      table = ""; chain = ""; handle = ""
+    }
+  ' || true)
+}
+
+remove_port53_forward_rules() {
+  log_info "Checking for port 53 redirect/forward rules..."
+  remove_iptables_port53_redirects iptables
+  remove_iptables_port53_redirects ip6tables
+  remove_nft_port53_redirects
+}
+
+stop_existing_masterdnsvpn_service() {
+  local unit_present=0
+  if systemctl list-unit-files --all 2>/dev/null | grep -q '^masterdnsvpn\.service'; then
+    unit_present=1
+    log_info "Stopping existing MasterDnsVPN service..."
+    systemctl stop masterdnsvpn 2>/dev/null || true
+
+    for _ in 1 2 3 4 5; do
+      if ! systemctl is-active --quiet masterdnsvpn; then
+        break
+      fi
+      sleep 1
+    done
+
+    local main_pid
+    main_pid="$(systemctl show masterdnsvpn --property MainPID --value 2>/dev/null || true)"
+    if [[ -n "${main_pid:-}" && "$main_pid" != "0" ]] && kill -0 "$main_pid" 2>/dev/null; then
+      log_warn "masterdnsvpn service is still active. Trying to terminate MainPID: $main_pid"
+      terminate_port53_pid "$main_pid" || true
+    fi
+
+    systemctl stop masterdnsvpn 2>/dev/null || true
+    systemctl reset-failed masterdnsvpn 2>/dev/null || true
+  fi
+
+  local pid cmdline killed=0
+  while IFS= read -r pid; do
+    [[ -z "$pid" ]] && continue
+    cmdline="$(ps -p "$pid" -o cmd= 2>/dev/null || true)"
+    if echo "$cmdline" | grep -qiE 'masterdnsvpn|masterdnsvpn_server'; then
+      if [[ $killed -eq 0 && $unit_present -eq 0 ]]; then
+        log_info "Stopping existing MasterDnsVPN process that was started outside systemd..."
+      fi
+      terminate_port53_pid "$pid" || true
+      killed=1
+    fi
+  done <<< "$(get_port53_pids)"
+}
+
+log_header "Stopping Existing MasterDnsVPN"
+stop_existing_masterdnsvpn_service
+
 log_header "Managing Network Ports (Port 53)"
-if systemctl list-unit-files | grep -q '^masterdnsvpn\.service'; then
-  log_info "Stopping existing MasterDnsVPN service..."
-  systemctl stop masterdnsvpn 2>/dev/null || true
-fi
+remove_port53_forward_rules
 
 if check_port53; then
   log_warn "Port 53 is occupied. Trying auto-cleanup..."
+  show_port53_usage
 
   if systemctl is-active --quiet systemd-resolved; then
     log_info "Configuring systemd-resolved DNSStubListener=no ..."
@@ -135,46 +356,58 @@ if check_port53; then
     systemctl restart systemd-resolved || true
   fi
 
-  for srv in bind9 named named-pkcs11 dnsmasq unbound pdns knot-resolver; do
-    if systemctl is-active --quiet "$srv"; then
-      log_info "Disabling conflicting service: $srv"
-      systemctl stop "$srv" || true
-      systemctl disable "$srv" >/dev/null 2>&1 || true
-    fi
+  stop_socket_if_present systemd-resolved.socket
+  stop_socket_if_present dnsmasq.socket
+
+  for srv in \
+    bind9 bind9.service named named.service named-pkcs11 named-pkcs11.service \
+    dnsmasq dnsmasq.service unbound unbound.service pdns pdns.service \
+    knot-resolver kresd kresd@1.service dnscrypt-proxy dnscrypt-proxy.service \
+    smartdns smartdns.service coredns coredns.service pihole-FTL pihole-FTL.service; do
+    stop_service_if_present "$srv"
   done
 
-  PIDS_ON_53="$(get_port53_pids)"
-  if [[ -n "${PIDS_ON_53:-}" ]]; then
-    while IFS= read -r pid; do
-      [[ -z "$pid" ]] && continue
-      cmdline="$(ps -p "$pid" -o cmd= 2>/dev/null || true)"
-      if echo "$cmdline" | grep -qiE 'masterdnsvpn|masterdnsvpn_server'; then
-        log_info "Stopping leftover MasterDnsVPN process on :53 (PID: $pid)"
-        kill "$pid" 2>/dev/null || true
-        sleep 1
-        kill -9 "$pid" 2>/dev/null || true
-      fi
-    done <<< "$PIDS_ON_53"
+  if check_port53; then
+    log_warn "Port 53 is still busy after stopping known services. Trying direct process termination..."
+    force_release_port53 || true
+  fi
+
+  if check_port53 && systemctl is-active --quiet systemd-resolved; then
+    log_warn "Port 53 is still in use. Stopping systemd-resolved completely..."
+    systemctl stop systemd-resolved || true
+    systemctl disable systemd-resolved >/dev/null 2>&1 || true
+    stop_socket_if_present systemd-resolved.socket
+  fi
+
+  if check_port53; then
+    log_warn "Port 53 still occupied. Trying one more forced cleanup pass..."
+    force_release_port53 || true
   fi
 
   if check_port53; then
     OCC_INFO="$(ss -H -lupn 'sport = :53' 2>/dev/null | head -n1 | awk '{print $NF}' || true)"
+    [[ -z "${OCC_INFO:-}" ]] && OCC_INFO="$(ss -H -ltn 'sport = :53' 2>/dev/null | head -n1 | awk '{print $NF}' || true)"
+    show_port53_usage
     log_error "Port 53 is still occupied: ${OCC_INFO:-unknown}. Stop it manually and retry."
   fi
 fi
 log_success "Port 53 is available."
 
 log_header "Configuring Firewall (Port 53 UDP/TCP)"
+ACTIVE_FIREWALL="none"
 if command -v ufw >/dev/null 2>&1 && ufw status | grep -qw active; then
+  ACTIVE_FIREWALL="ufw"
   ufw allow 53/udp >/dev/null 2>&1 || true
   ufw allow 53/tcp >/dev/null 2>&1 || true
   log_success "Port 53 (UDP/TCP) opened via UFW."
 elif command -v firewall-cmd >/dev/null 2>&1 && systemctl is-active --quiet firewalld; then
+  ACTIVE_FIREWALL="firewalld"
   firewall-cmd --permanent --add-port=53/udp >/dev/null 2>&1 || true
   firewall-cmd --permanent --add-port=53/tcp >/dev/null 2>&1 || true
   firewall-cmd --reload >/dev/null 2>&1 || true
   log_success "Port 53 (UDP/TCP) opened via firewalld."
 elif command -v iptables >/dev/null 2>&1; then
+  ACTIVE_FIREWALL="iptables"
   iptables -C INPUT -p udp --dport 53 -j ACCEPT 2>/dev/null || iptables -I INPUT -p udp --dport 53 -j ACCEPT
   iptables -C INPUT -p tcp --dport 53 -j ACCEPT 2>/dev/null || iptables -I INPUT -p tcp --dport 53 -j ACCEPT
   if command -v ip6tables >/dev/null 2>&1; then
@@ -188,9 +421,19 @@ elif command -v iptables >/dev/null 2>&1; then
     command -v ip6tables-save >/dev/null 2>&1 && ip6tables-save > /etc/iptables/rules.v6
   fi
   log_success "Port 53 (UDP/TCP) rule is ready via iptables."
+elif command -v nft >/dev/null 2>&1; then
+  ACTIVE_FIREWALL="nftables"
+  if nft list table inet filter >/dev/null 2>&1; then
+    nft add rule inet filter input udp dport 53 accept >/dev/null 2>&1 || true
+    nft add rule inet filter input tcp dport 53 accept >/dev/null 2>&1 || true
+    log_success "Port 53 (UDP/TCP) rule is ready via nftables."
+  else
+    log_warn "nftables is present but no 'inet filter' table was found. Open port 53 manually if needed."
+  fi
 else
   log_warn "No supported firewall tool detected. Skipping firewall setup."
 fi
+log_info "Detected firewall handling: ${ACTIVE_FIREWALL}"
 
 log_header "Tuning Kernel & Limits"
 cat > /etc/sysctl.d/99-masterdnsvpn.conf <<'EOF'
@@ -221,24 +464,7 @@ log_success "Kernel and file descriptor limits configured."
 
 log_header "Fetching Latest Release"
 ARCH="$(uname -m)"
-if [[ "$ARCH" == "aarch64" || "$ARCH" == "arm64" ]]; then
-  URL="https://github.com/masterking32/MasterDnsVPN/releases/latest/download/MasterDnsVPN_Server_Linux_ARM64.zip"
-  PREFIX="MasterDnsVPN_Server_Linux_ARM64"
-elif [[ "$ARCH" == "x86_64" ]]; then
-  LEGACY=0
-  [[ "${ID:-}" == "ubuntu" && ${VERSION_ID%%.*} -le 20 ]] && LEGACY=1
-  [[ "${ID:-}" == "debian" && ${VERSION_ID%%.*} -le 11 ]] && LEGACY=1
-  if [[ $LEGACY -eq 1 ]]; then
-    log_info "Legacy system detected (GLIBC compatibility mode)."
-    URL="https://github.com/masterking32/MasterDnsVPN/releases/latest/download/MasterDnsVPN_Server_Linux-Legacy_AMD64.zip"
-    PREFIX="MasterDnsVPN_Server_Linux-Legacy_AMD64"
-  else
-    URL="https://github.com/masterking32/MasterDnsVPN/releases/latest/download/MasterDnsVPN_Server_Linux_AMD64.zip"
-    PREFIX="MasterDnsVPN_Server_Linux_AMD64"
-  fi
-else
-  log_error "Unsupported architecture: $ARCH"
-fi
+select_release_artifact "$ARCH"
 
 if [[ -f "server_config.toml" ]]; then
   mv -f server_config.toml server_config.toml.backup

@@ -11,6 +11,7 @@ func (c *Client) runtimePacketDuplicationCount(packetType uint8) int {
 	if c == nil {
 		return 1
 	}
+
 	count := c.cfg.PacketDuplicationCount
 	if count < 1 {
 		count = 1
@@ -296,6 +297,11 @@ func (c *Client) shouldTransmitQueuedStreamPacket(stream *Stream_client, item *c
 func (c *Client) GetConnectionByKey(key string) (Connection, bool) {
 	if c == nil || key == "" {
 		return Connection{}, false
+	}
+	if c.balancer != nil {
+		if conn, ok := c.balancer.GetConnectionByKey(key); ok {
+			return conn, true
+		}
 	}
 	idx, ok := c.connectionsByKey[key]
 	if !ok || idx < 0 || idx >= len(c.connections) {

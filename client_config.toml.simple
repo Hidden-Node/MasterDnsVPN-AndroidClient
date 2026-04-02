@@ -15,6 +15,7 @@
 # Tunnel domains used to build DNS queries.
 # Must match server DOMAIN values exactly.
 # At least one domain is required.
+# All domains must be handled by the same server. Do not use different domains across multiple servers.
 DOMAINS = ["v.domain.com"]
 
 # Encryption method for tunnel payloads.
@@ -47,6 +48,11 @@ ENCRYPTION_KEY = ""
 PROTOCOL_TYPE = "SOCKS5"
 
 # Local bind address for the client proxy.
+# For local-only use, "127.0.0.1" is fine.
+# On systems where apps prefer IPv6 localhost (for example some macOS setups),
+# "localhost" can be a better choice.
+# If you want other devices on your network to use this proxy, use "0.0.0.0"
+# and enable SOCKS5_AUTH.
 LISTEN_IP = "127.0.0.1"
 LISTEN_PORT = 18000
 
@@ -117,7 +123,7 @@ PACKET_DUPLICATION_COUNT = 2
 
 # Duplicate stream setup packets (STREAM_SYN / SOCKS5_SYN) this many times.
 # Clamped in code to [PACKET_DUPLICATION_COUNT, 8].
-SETUP_PACKET_DUPLICATION_COUNT = 3
+SETUP_PACKET_DUPLICATION_COUNT = 2
 
 # Stream-aware resolver failover.
 # If a stream keeps resending on the same preferred resolver, it can move.
@@ -242,8 +248,8 @@ DISPATCHER_IDLE_POLL_INTERVAL_SECONDS = 0.020
 
 # Channel sizes for async TX/RX pipelines.
 # Clamped in code to [64, 65536].
-TX_CHANNEL_SIZE = 2048
-RX_CHANNEL_SIZE = 2048
+TX_CHANNEL_SIZE = 4096
+RX_CHANNEL_SIZE = 8192
 
 # UDP connection pool size per resolver key.
 # Clamped to [1, 1024].

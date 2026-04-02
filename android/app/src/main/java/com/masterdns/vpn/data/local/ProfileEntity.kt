@@ -15,7 +15,7 @@ data class ProfileEntity(
     val resolvers: String = "",       // newline-separated list
     val resolverBalancingStrategy: Int = 0,
     val packetDuplicationCount: Int = 2,
-    val setupPacketDuplicationCount: Int = 3,
+    val setupPacketDuplicationCount: Int = 2,
     val uploadCompression: Int = 0,
     val downloadCompression: Int = 0,
     val logLevel: String = "INFO",

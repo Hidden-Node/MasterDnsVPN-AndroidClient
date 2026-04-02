@@ -15,10 +15,13 @@
 # Must match client DOMAINS.
 DOMAIN = ["v.domain.com"]
 
-# Which setup protocol this server accepts for new stream creation.
+# How this server should handle new connections.
 # Allowed values:
-# "SOCKS5" = accept only PACKET_SOCKS5_SYN
-# "TCP"    = accept only PACKET_STREAM_SYN
+# "SOCKS5" = the client/program chooses the destination for each connection.
+#            Use this when you want the server to behave like a normal SOCKS proxy.
+# "TCP"    = the client does not choose the destination.
+#            The server sends every connection to one fixed target defined by
+#            FORWARD_IP and FORWARD_PORT below.
 PROTOCOL_TYPE = "SOCKS5"
 
 # Compression types the server allows the client to request.
@@ -51,10 +54,12 @@ DNS_REQUEST_WORKERS = 4
 
 # Maximum queued requests waiting behind request workers.
 # If the queue is full, packets are dropped and rate-limited overload logs appear.
-MAX_CONCURRENT_REQUESTS = 4096
+# With the current client sample using larger RX buffering, keeping this at 8192
+# helps the server absorb short bursts without dropping front-door requests too early.
+MAX_CONCURRENT_REQUESTS = 8192
 
 # UDP socket read/write buffer size in bytes.
-SOCKET_BUFFER_SIZE = 4194304
+SOCKET_BUFFER_SIZE = 8388608
 
 # Maximum packet buffer size allocated by the server packet pool.
 MAX_PACKET_SIZE = 65535
@@ -74,7 +79,9 @@ DROP_LOG_INTERVAL_SECONDS = 2.0
 DEFERRED_SESSION_WORKERS = 2
 
 # Queue limit for deferred per-session work.
-DEFERRED_SESSION_QUEUE_LIMIT = 2048
+# Keep this a bit higher than the client-side setup pressure so bursty SYN/SOCKS/DNS
+# setup traffic is less likely to be dropped during short spikes.
+DEFERRED_SESSION_QUEUE_LIMIT = 4096
 
 # Initial queue / store capacities.
 SESSION_ORPHAN_QUEUE_INITIAL_CAPACITY = 128
@@ -137,7 +144,7 @@ DNS_UPSTREAM_TIMEOUT = 4.0
 # Wait timeout for followers sharing an inflight DNS resolution.
 # This is used when multiple identical queries arrive while one upstream lookup
 # is already in progress.
-DNS_INFLIGHT_WAIT_TIMEOUT_SECONDS = 60.0
+DNS_INFLIGHT_WAIT_TIMEOUT_SECONDS = 15.0
 
 # Fragment assembly timeout for inbound DNS query fragments.
 DNS_FRAGMENT_ASSEMBLY_TIMEOUT = 300.0
@@ -149,26 +156,39 @@ DNS_CACHE_TTL_SECONDS = 300.0
 # ------------------------------------------------------------------------------
 # 6) Upstream SOCKS / Forwarding
 # What this section does:
-# - Controls how the server opens outbound connections for accepted client streams.
-# - In SOCKS5 mode, targets come from the client's SOCKS target payload.
-# - In TCP mode, STREAM_SYN is payload-less and the server connects to FORWARD_IP:FORWARD_PORT.
-# - External SOCKS5 chaining is only used for SOCKS5 target connects.
+# - Controls how the server opens outbound connections.
+# - In SOCKS5 mode, the destination normally comes from the client request.
+# - In TCP mode, all connections go to one fixed destination.
+# - You can also tell the server to use another SOCKS5 proxy as an upstream proxy.
 # ------------------------------------------------------------------------------
 
 # Timeout for outbound connect attempts made by the server.
 SOCKS_CONNECT_TIMEOUT = 120.0
 
-# If true, the server chains outbound connections through FORWARD_IP:FORWARD_PORT.
-# If false, the server dials targets directly.
+# If true, then in SOCKS5 mode the server does not connect to the final target directly.
+# Instead, it first connects to another SOCKS5 proxy at FORWARD_IP:FORWARD_PORT
+# and asks that proxy to open the destination connection.
+# If false, SOCKS5 mode connects directly to the destination requested by the client.
+# This option does NOT change TCP mode behavior.
 USE_EXTERNAL_SOCKS5 = false
 
-# Credentials for the external SOCKS5 proxy, used only when USE_EXTERNAL_SOCKS5=true.
+# Username/password for the upstream SOCKS5 proxy.
+# Used only when:
+# - PROTOCOL_TYPE = "SOCKS5"
+# - USE_EXTERNAL_SOCKS5 = true
+# - and that upstream proxy requires username/password authentication
 SOCKS5_AUTH = false
 SOCKS5_USER = "admin"
 SOCKS5_PASS = "123456"
 
-# Fixed upstream endpoint for TCP mode, and external SOCKS5 endpoint when
-# USE_EXTERNAL_SOCKS5=true in SOCKS5 mode.
+# FORWARD_IP / FORWARD_PORT mean different things depending on how the server is used:
+# - If PROTOCOL_TYPE = "TCP":
+#   This is the final fixed target.
+#   Every client connection will be forwarded to this one address and port.
+# - If PROTOCOL_TYPE = "SOCKS5" and USE_EXTERNAL_SOCKS5 = true:
+#   This is the address and port of the upstream SOCKS5 proxy.
+# - If PROTOCOL_TYPE = "SOCKS5" and USE_EXTERNAL_SOCKS5 = false:
+#   These values are not used for normal client SOCKS connections.
 FORWARD_IP = ""
 FORWARD_PORT = 0
 
@@ -200,6 +220,8 @@ ENCRYPTION_KEY_FILE = "encrypt_key.txt"
 # ------------------------------------------------------------------------------
 
 # Maximum packable control blocks emitted in one response.
+# Keep this aligned with the client sample unless you intentionally want larger
+# packed bursts from the server.
 MAX_PACKETS_PER_BATCH = 10
 
 # Duplicate the last packed control-block response this many dispatcher turns.

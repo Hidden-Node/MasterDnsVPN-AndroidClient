@@ -87,8 +87,8 @@ object ConfigGenerator {
             appendLine("TUNNEL_WRITER_WORKERS = ${cfg("TUNNEL_WRITER_WORKERS", "2")}")
             appendLine("TUNNEL_PROCESS_WORKERS = ${cfg("TUNNEL_PROCESS_WORKERS", "2")}")
             appendLine("TUNNEL_PACKET_TIMEOUT_SECONDS = ${cfg("TUNNEL_PACKET_TIMEOUT_SECONDS", "10.0")}")
-            appendLine("TX_CHANNEL_SIZE = ${cfg("TX_CHANNEL_SIZE", "2048")}")
-            appendLine("RX_CHANNEL_SIZE = ${cfg("RX_CHANNEL_SIZE", "2048")}")
+            appendLine("TX_CHANNEL_SIZE = ${cfg("TX_CHANNEL_SIZE", "4096")}")
+            appendLine("RX_CHANNEL_SIZE = ${cfg("RX_CHANNEL_SIZE", "8192")}")
             appendLine("RESOLVER_UDP_CONNECTION_POOL_SIZE = ${cfg("RESOLVER_UDP_CONNECTION_POOL_SIZE", "128")}")
             appendLine()
 

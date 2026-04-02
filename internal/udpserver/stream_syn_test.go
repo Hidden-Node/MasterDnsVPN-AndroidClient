@@ -12,6 +12,7 @@ import (
 	"errors"
 	"io"
 	"net"
+	"strconv"
 	"testing"
 	"time"
 
@@ -38,6 +39,34 @@ type testAddr string
 
 func (a testAddr) Network() string { return "tcp" }
 func (a testAddr) String() string  { return string(a) }
+
+type scriptedSOCKS5Conn struct {
+	testNetConn
+	readBufs       [][]byte
+	readIndex      int
+	writes         [][]byte
+	deadlineActive bool
+}
+
+func (c *scriptedSOCKS5Conn) Read(p []byte) (int, error) {
+	if c.readIndex >= len(c.readBufs) {
+		return 0, io.EOF
+	}
+	chunk := c.readBufs[c.readIndex]
+	c.readIndex++
+	copy(p, chunk)
+	return len(chunk), nil
+}
+
+func (c *scriptedSOCKS5Conn) Write(p []byte) (int, error) {
+	c.writes = append(c.writes, append([]byte(nil), p...))
+	return len(p), nil
+}
+
+func (c *scriptedSOCKS5Conn) SetDeadline(t time.Time) error {
+	c.deadlineActive = !t.IsZero()
+	return nil
+}
 
 func newTestServerForStreamSyn(protocol string) *Server {
 	return &Server{
@@ -966,6 +995,91 @@ func TestDialSOCKSStreamTargetRejectsBlockedTargetBeforeDial(t *testing.T) {
 	}
 }
 
+func TestDialSOCKSStreamTargetBypassesExternalProxyForTCPModeConnects(t *testing.T) {
+	s := newTestServerForStreamSyn("TCP")
+	s.useExternalSOCKS5 = true
+	s.externalSOCKS5Address = "203.0.113.10:1080"
+
+	var gotNetwork string
+	var gotAddress string
+	s.dialStreamUpstreamFn = func(network string, address string, timeout time.Duration) (net.Conn, error) {
+		gotNetwork = network
+		gotAddress = address
+		return &testNetConn{}, nil
+	}
+
+	conn, err := s.dialTCPTargetContext(context.Background(), net.JoinHostPort(s.cfg.ForwardIP, strconv.Itoa(s.cfg.ForwardPort)))
+	if err != nil {
+		t.Fatalf("unexpected direct dial error: %v", err)
+	}
+	if conn == nil {
+		t.Fatal("expected direct TCP dial connection")
+	}
+
+	if gotNetwork != "tcp" {
+		t.Fatalf("unexpected network: got=%q want=%q", gotNetwork, "tcp")
+	}
+	wantAddress := net.JoinHostPort(s.cfg.ForwardIP, strconv.Itoa(s.cfg.ForwardPort))
+	if gotAddress != wantAddress {
+		t.Fatalf("unexpected dial address: got=%q want=%q", gotAddress, wantAddress)
+	}
+	if gotAddress == s.externalSOCKS5Address {
+		t.Fatal("expected TCP mode connect path to bypass external SOCKS5 address")
+	}
+}
+
+func TestDialSOCKSStreamTargetUsesExternalProxyWhenEnabled(t *testing.T) {
+	s := newTestServerForStreamSyn("SOCKS5")
+	s.useExternalSOCKS5 = true
+	s.externalSOCKS5Address = "203.0.113.10:1080"
+
+	conn := &scriptedSOCKS5Conn{
+		readBufs: [][]byte{
+			{0x05, 0x00},                 // greeting reply: no-auth
+			{0x05, 0x00, 0x00, 0x01},     // connect reply header
+			{203, 0, 113, 1, 0x04, 0x38}, // bound addr + port
+		},
+	}
+
+	var gotNetwork string
+	var gotAddress string
+	s.dialStreamUpstreamFn = func(network string, address string, timeout time.Duration) (net.Conn, error) {
+		gotNetwork = network
+		gotAddress = address
+		return conn, nil
+	}
+
+	targetPayload := []byte{0x03, 0x0b, 'e', 'x', 'a', 'm', 'p', 'l', 'e', '.', 'c', 'o', 'm', 0x01, 0xbb}
+	upstream, err := s.dialSOCKSStreamTargetContext(context.Background(), "example.com", 443, targetPayload)
+	if err != nil {
+		t.Fatalf("unexpected external SOCKS5 dial error: %v", err)
+	}
+	if upstream != conn {
+		t.Fatal("expected external SOCKS5 path to return the proxy-backed connection")
+	}
+	if gotNetwork != "tcp" {
+		t.Fatalf("unexpected network: got=%q want=%q", gotNetwork, "tcp")
+	}
+	if gotAddress != s.externalSOCKS5Address {
+		t.Fatalf("unexpected external proxy dial address: got=%q want=%q", gotAddress, s.externalSOCKS5Address)
+	}
+	if len(conn.writes) != 2 {
+		t.Fatalf("expected greeting and connect request writes, got %d writes", len(conn.writes))
+	}
+	if got := conn.writes[0]; len(got) != 3 || got[0] != 0x05 || got[1] != 0x01 || got[2] != 0x00 {
+		t.Fatalf("unexpected greeting bytes: %v", got)
+	}
+	if got := conn.writes[1]; len(got) != 3+len(targetPayload) || got[0] != 0x05 || got[1] != 0x01 || got[2] != 0x00 {
+		t.Fatalf("unexpected connect request header: %v", got)
+	}
+	if got := conn.writes[1][3:]; !equalBytes(got, targetPayload) {
+		t.Fatalf("unexpected target payload forwarded to external proxy: got=%v want=%v", got, targetPayload)
+	}
+	if conn.deadlineActive {
+		t.Fatal("expected SOCKS5 path to clear connection deadline after successful handshake")
+	}
+}
+
 func TestMapSOCKSConnectErrorMapsBlockedTargetToRulesetDenied(t *testing.T) {
 	s := newTestServerForStreamSyn("SOCKS5")
 	if got := s.mapSOCKSConnectError(&blockedSOCKSTargetError{host: "127.0.0.1"}); got != Enums.PACKET_SOCKS5_RULESET_DENIED {
@@ -991,4 +1105,16 @@ func viewForRecord(record *sessionRecord) *sessionRuntimeView {
 	}
 	view := record.runtimeView()
 	return &view
+}
+
+func equalBytes(a []byte, b []byte) bool {
+	if len(a) != len(b) {
+		return false
+	}
+	for i := range a {
+		if a[i] != b[i] {
+			return false
+		}
+	}
+	return true
 }
