@@ -1,60 +1,60 @@
 package com.masterdns.vpn.ui.settings
 
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.Image
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ArrowDropDown
-import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.Checkbox
-import androidx.compose.material3.FilterChip
-import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.ExposedDropdownMenuBox
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
+import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.ExposedDropdownMenuBox
+import androidx.compose.material3.FilterChip
+import androidx.compose.material3.Icon
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.SnackbarHost
+import androidx.compose.material3.SnackbarHostState
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
-import androidx.compose.material3.Icon
-import androidx.compose.material3.Surface
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.asImageBitmap
-import androidx.compose.ui.unit.dp
-import androidx.lifecycle.viewmodel.compose.viewModel
-import androidx.compose.runtime.rememberCoroutineScope
-import androidx.compose.material3.SnackbarHost
-import androidx.compose.material3.SnackbarHostState
-import kotlinx.coroutines.launch
-import androidx.compose.ui.Alignment
-import androidx.core.graphics.drawable.toBitmap
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material3.MaterialTheme
+import androidx.compose.ui.unit.dp
+import androidx.compose.ui.window.Dialog
+import androidx.core.graphics.drawable.toBitmap
+import androidx.lifecycle.viewmodel.compose.viewModel
 import com.masterdns.vpn.util.GlobalSettings
+import kotlinx.coroutines.launch
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -64,9 +64,10 @@ fun GlobalSettingsScreen(vm: GlobalSettingsViewModel = viewModel()) {
     var draft by remember(current) { mutableStateOf(current) }
     var modeExpanded by remember { mutableStateOf(false) }
     var showAppPicker by remember { mutableStateOf(false) }
-    var appQuery by remember { mutableStateOf("") }
+    var availableQuery by remember { mutableStateOf("") }
+    var selectedQuery by remember { mutableStateOf("") }
+    var activeTab by remember { mutableStateOf("AVAILABLE") }
     var draftAppSelection by remember { mutableStateOf(parseCsv(current.splitPackagesCsv).toMutableSet()) }
-    var sortMode by remember { mutableStateOf("NAME") }
     val snackbarHostState = remember { SnackbarHostState() }
     val scope = rememberCoroutineScope()
 
@@ -125,7 +126,9 @@ fun GlobalSettingsScreen(vm: GlobalSettingsViewModel = viewModel()) {
                             Card(
                                 onClick = {
                                     draftAppSelection = parseCsv(draft.splitPackagesCsv).toMutableSet()
-                                    appQuery = ""
+                                    availableQuery = ""
+                                    selectedQuery = ""
+                                    activeTab = "AVAILABLE"
                                     showAppPicker = true
                                 },
                                 modifier = Modifier.fillMaxWidth()
@@ -134,7 +137,7 @@ fun GlobalSettingsScreen(vm: GlobalSettingsViewModel = viewModel()) {
                                     Text("Split Tunnel Apps")
                                     Text(
                                         "${parseCsv(draft.splitPackagesCsv).size} selected apps - tap to choose",
-                                        style = androidx.compose.material3.MaterialTheme.typography.bodySmall
+                                        style = MaterialTheme.typography.bodySmall
                                     )
                                 }
                             }
@@ -156,99 +159,129 @@ fun GlobalSettingsScreen(vm: GlobalSettingsViewModel = viewModel()) {
     }
 
     if (showAppPicker) {
-        val orderedApps = when (sortMode) {
-            "RECENT" -> installedApps.sortedByDescending { it.firstInstallTime }
-            else -> installedApps.sortedWith(compareBy({ it.label.lowercase() }, { it.packageName }))
-        }
-        val filteredApps = orderedApps.filter {
-            val q = appQuery.trim().lowercase()
+        val selectedApps = installedApps.filter { draftAppSelection.contains(it.packageName) }
+        val availableApps = installedApps.filterNot { draftAppSelection.contains(it.packageName) }
+
+        val selectedFiltered = selectedApps.filter {
+            val q = selectedQuery.trim().lowercase()
             q.isEmpty() ||
                 it.label.lowercase().contains(q) ||
                 it.packageName.lowercase().contains(q)
-        }
-        val selectedApps = filteredApps.filter { draftAppSelection.contains(it.packageName) }
-        val unselectedApps = filteredApps.filterNot { draftAppSelection.contains(it.packageName) }
-        AlertDialog(
-            onDismissRequest = { showAppPicker = false },
-            title = {
-                Column {
-                    Text("Select Split-Tunnel Apps")
+        }.sortedWith(compareBy({ it.label.lowercase() }, { it.packageName }))
+
+        val availableFiltered = availableApps.filter {
+            val q = availableQuery.trim().lowercase()
+            q.isEmpty() ||
+                it.label.lowercase().contains(q) ||
+                it.packageName.lowercase().contains(q)
+        }.sortedWith(compareBy({ it.label.lowercase() }, { it.packageName }))
+
+        Dialog(onDismissRequest = { showAppPicker = false }) {
+            Surface(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .heightIn(max = 560.dp),
+                shape = RoundedCornerShape(16.dp),
+                color = MaterialTheme.colorScheme.surface
+            ) {
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(12.dp),
+                    verticalArrangement = Arrangement.spacedBy(10.dp)
+                ) {
+                    Text("Select Split-Tunnel Apps", style = MaterialTheme.typography.titleMedium)
                     Text(
                         "Choose apps that should use VPN tunnel",
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f)
                     )
-                }
-            },
-            text = {
-                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                    OutlinedTextField(
-                        value = appQuery,
-                        onValueChange = { appQuery = it },
-                        label = { Text("Search apps") },
-                        modifier = Modifier.fillMaxWidth()
-                    )
+
                     Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                        OutlinedButton(
-                            onClick = { sortMode = "NAME" },
-                            modifier = Modifier.weight(1f)
-                        ) {
-                            Text(if (sortMode == "NAME") "Sort: Name *" else "Sort: Name")
-                        }
-                        OutlinedButton(
-                            onClick = { sortMode = "RECENT" },
-                            modifier = Modifier.weight(1f)
-                        ) {
-                            Text(if (sortMode == "RECENT") "Sort: Recent *" else "Sort: Recent")
-                        }
+                        FilterChip(
+                            selected = activeTab == "SELECTED",
+                            onClick = { activeTab = "SELECTED" },
+                            label = { Text("Selected ${selectedApps.size}") }
+                        )
+                        FilterChip(
+                            selected = activeTab == "AVAILABLE",
+                            onClick = { activeTab = "AVAILABLE" },
+                            label = { Text("Available ${availableApps.size}") }
+                        )
                     }
+
+                    if (activeTab == "SELECTED") {
+                        OutlinedTextField(
+                            value = selectedQuery,
+                            onValueChange = { selectedQuery = it },
+                            label = { Text("Search selected apps") },
+                            modifier = Modifier.fillMaxWidth()
+                        )
+                    } else {
+                        OutlinedTextField(
+                            value = availableQuery,
+                            onValueChange = { availableQuery = it },
+                            label = { Text("Search available apps") },
+                            modifier = Modifier.fillMaxWidth()
+                        )
+                    }
+
                     Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                         OutlinedButton(
                             onClick = {
                                 draftAppSelection = draftAppSelection.toMutableSet().apply {
-                                    addAll(filteredApps.map { it.packageName })
+                                    addAll(availableFiltered.map { it.packageName })
                                 }
                             },
                             modifier = Modifier.weight(1f)
                         ) {
-                            Text("Select All")
+                            Text("Select Visible")
                         }
                         OutlinedButton(
-                            onClick = {
-                                draftAppSelection = draftAppSelection.toMutableSet().apply {
-                                    removeAll(filteredApps.map { it.packageName }.toSet())
-                                }
-                            },
+                            onClick = { draftAppSelection = mutableSetOf() },
                             modifier = Modifier.weight(1f)
                         ) {
-                            Text("Clear Visible")
+                            Text("Select None")
                         }
                     }
-                    OutlinedButton(
-                        onClick = { draftAppSelection = mutableSetOf() },
-                        modifier = Modifier.fillMaxWidth()
+
+                    Surface(
+                        modifier = Modifier.fillMaxWidth(),
+                        shape = RoundedCornerShape(12.dp),
+                        color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f)
                     ) {
-                        Text("Select None (Global)")
-                    }
-                    val recentApps = orderedApps.take(8)
-                    if (recentApps.isNotEmpty()) {
-                        Surface(
-                            modifier = Modifier.fillMaxWidth(),
-                            shape = RoundedCornerShape(12.dp),
-                            color = MaterialTheme.colorScheme.secondaryContainer.copy(alpha = 0.4f)
+                        Column(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(10.dp)
                         ) {
-                            Column(modifier = Modifier.padding(10.dp)) {
+                            val appsToShow = if (activeTab == "SELECTED") selectedFiltered else availableFiltered
+                            val emptyText = if (activeTab == "SELECTED") {
+                                "No selected app matches your search"
+                            } else {
+                                "No available app matches your search"
+                            }
+
+                            Text(
+                                if (activeTab == "SELECTED") "Selected Apps" else "Available Apps",
+                                style = MaterialTheme.typography.labelLarge,
+                                color = MaterialTheme.colorScheme.primary
+                            )
+
+                            if (appsToShow.isEmpty()) {
                                 Text(
-                                    "Recently Installed",
-                                    style = MaterialTheme.typography.labelLarge,
-                                    color = MaterialTheme.colorScheme.primary
+                                    emptyText,
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f),
+                                    modifier = Modifier.padding(top = 8.dp)
                                 )
+                            } else {
                                 LazyColumn(
                                     modifier = Modifier
                                         .fillMaxWidth()
-                                        .height(120.dp)
+                                        .heightIn(min = 180.dp, max = 260.dp)
                                 ) {
-                                    items(recentApps, key = { "recent_${it.packageName}" }) { app ->
+                                    items(appsToShow, key = { it.packageName }) { app ->
                                         AppRow(
                                             app = app,
                                             checked = draftAppSelection.contains(app.packageName),
@@ -263,109 +296,26 @@ fun GlobalSettingsScreen(vm: GlobalSettingsViewModel = viewModel()) {
                             }
                         }
                     }
-                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                        FilterChip(
-                            selected = true,
-                            onClick = {},
-                            label = { Text("Selected ${selectedApps.size}") }
-                        )
-                        FilterChip(
-                            selected = false,
-                            onClick = {},
-                            label = { Text("Available ${unselectedApps.size}") }
-                        )
-                    }
 
-                    Surface(
+                    Row(
                         modifier = Modifier.fillMaxWidth(),
-                        shape = RoundedCornerShape(12.dp),
-                        color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f)
+                        horizontalArrangement = Arrangement.End
                     ) {
-                        Column(modifier = Modifier.padding(10.dp)) {
-                            Text(
-                                "Selected Apps",
-                                style = MaterialTheme.typography.labelLarge,
-                                color = MaterialTheme.colorScheme.primary
-                            )
-                            if (selectedApps.isEmpty()) {
-                                Text(
-                                    "No app selected yet",
-                                    style = MaterialTheme.typography.bodySmall,
-                                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f)
-                                )
-                            } else {
-                                LazyColumn(
-                                    modifier = Modifier
-                                        .fillMaxWidth()
-                                        .height(150.dp)
-                                ) {
-                                    items(selectedApps, key = { it.packageName }) { app ->
-                                        AppRow(
-                                            app = app,
-                                            checked = true,
-                                            onToggle = {
-                                                draftAppSelection = draftAppSelection.toMutableSet().apply {
-                                                    remove(app.packageName)
-                                                }
-                                            }
-                                        )
-                                    }
-                                }
+                        TextButton(onClick = { showAppPicker = false }) {
+                            Text("Cancel")
+                        }
+                        Button(
+                            onClick = {
+                                draft = draft.copy(splitPackagesCsv = draftAppSelection.sorted().joinToString(","))
+                                showAppPicker = false
                             }
+                        ) {
+                            Text("Apply")
                         }
                     }
-
-                    Surface(
-                        modifier = Modifier.fillMaxWidth(),
-                        shape = RoundedCornerShape(12.dp),
-                        color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f)
-                    ) {
-                        Column(modifier = Modifier.padding(10.dp)) {
-                            Text(
-                                "Available Apps",
-                                style = MaterialTheme.typography.labelLarge,
-                                color = MaterialTheme.colorScheme.primary
-                            )
-                            LazyColumn(
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .height(220.dp)
-                            ) {
-                                items(unselectedApps.take(300), key = { it.packageName }) { app ->
-                                    AppRow(
-                                        app = app,
-                                        checked = false,
-                                        onToggle = {
-                                            draftAppSelection = draftAppSelection.toMutableSet().apply {
-                                                add(app.packageName)
-                                            }
-                                        }
-                                    )
-                                }
-                            }
-                        }
-                    }
-                    if (filteredApps.isEmpty()) {
-                        Text("No apps found. Check search text or package visibility.")
-                    }
-                }
-            },
-            confirmButton = {
-                Button(
-                    onClick = {
-                        draft = draft.copy(splitPackagesCsv = draftAppSelection.sorted().joinToString(","))
-                        showAppPicker = false
-                    }
-                ) {
-                    Text("Apply")
-                }
-            },
-            dismissButton = {
-                TextButton(onClick = { showAppPicker = false }) {
-                    Text("Cancel")
                 }
             }
-        )
+        }
     }
 }
 

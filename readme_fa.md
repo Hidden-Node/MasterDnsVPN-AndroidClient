@@ -60,7 +60,7 @@
 
 <ul>
   <li><b>خطای نصب (App not installed):</b> اگر قبلاً نسخه‌ای با امضای متفاوت نصب کرده‌اید، ابتدا آن را پاک کرده و سپس نسخه جدید را نصب کنید.</li>
-  <li><b>اتصال برقرار است اما اینترنت نیست:</b> مقدار <code>DOMAINS</code>، لیست resolverها و کانفیگ سمت سرور را مجدداً بررسی کنید.</li>
+  <li><b>اتصال برقرار است ام�� اینترنت نیست:</b> مقدار <code>DOMAINS</code>، لیست resolverها و کانفیگ سمت سرور را مجدداً بررسی کنید.</li>
   <li><b>خاموش شدن خودکار VPN:</b> تنظیمات بهینه‌سازی باتری (Battery Optimization) را برای این اپلیکیشن غیرفعال کنید.</li>
 </ul>
 
@@ -79,4 +79,3 @@
 <a href="https://github.com/masterking32/MasterDnsVPN">https://github.com/masterking32/MasterDnsVPN</a>
 
 </div>
-
