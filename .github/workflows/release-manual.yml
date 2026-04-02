@@ -1,0 +1,94 @@
+name: Manual Release
+
+on:
+  workflow_dispatch:
+    inputs:
+      tag_name:
+        description: 'Release tag (example: v1.0.0)'
+        required: true
+        type: string
+      release_name:
+        description: 'Release title (optional)'
+        required: false
+        type: string
+      make_latest:
+        description: 'Mark as latest release'
+        required: true
+        default: true
+        type: boolean
+
+permissions:
+  contents: write
+
+jobs:
+  build-and-release:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+
+      - name: Set up Android SDK
+        uses: android-actions/setup-android@v3
+
+      - name: Accept Android licenses
+        run: yes | sdkmanager --licenses
+
+      - name: Decode Android signing keystore
+        env:
+          ANDROID_KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+        run: |
+          if [ -z "$ANDROID_KEYSTORE_BASE64" ]; then
+            echo "Missing secret ANDROID_KEYSTORE_BASE64"
+            exit 1
+          fi
+          echo "$ANDROID_KEYSTORE_BASE64" | base64 -d > android/release.jks
+          ls -la android/release.jks
+
+      - name: Install gomobile
+        run: |
+          go install golang.org/x/mobile/cmd/gomobile@latest
+          go install golang.org/x/mobile/cmd/gobind@latest
+          echo "$(go env GOPATH)/bin" >> "$GITHUB_PATH"
+
+      - name: Build Go mobile AAR
+        run: ./android/build_go_mobile.sh
+
+      - name: Build Signed Release APKs (split + universal)
+        working-directory: android
+        env:
+          ANDROID_SIGNING_ENABLED: "true"
+          ANDROID_KEYSTORE_PATH: ${{ github.workspace }}/android/release.jks
+          ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+          ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
+        run: chmod +x gradlew && ./gradlew :app:assembleRelease --stacktrace
+
+      - name: Prepare release files
+        run: |
+          mkdir -p release-artifacts
+          cp android/app/libs/masterdnsvpn.aar release-artifacts/
+          cp android/app/build/outputs/apk/release/*.apk release-artifacts/
+          ls -la release-artifacts
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ inputs.tag_name }}
+          name: ${{ inputs.release_name != '' && inputs.release_name || inputs.tag_name }}
+          generate_release_notes: true
+          make_latest: ${{ inputs.make_latest && 'true' || 'false' }}
+          files: |
+            release-artifacts/*.aar
+            release-artifacts/*.apk

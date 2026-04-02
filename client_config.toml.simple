@@ -1,0 +1,336 @@
+# ==============================================================================
+# MasterDnsVPN Go Client Configuration (Sample)
+# This sample is written for the current Go client implementation.
+# Every key below is read by code or intentionally kept as an active runtime knob.
+# Profile below is biased toward lossy / high-latency links with many resolvers.
+# ==============================================================================
+
+# ------------------------------------------------------------------------------
+# 1) Tunnel Identity & Security
+# What this section does:
+# - Defines which tunnel domains this client will use.
+# - Defines payload encryption and the shared key that must match the server.
+# ------------------------------------------------------------------------------
+
+# Tunnel domains used to build DNS queries.
+# Must match server DOMAIN values exactly.
+# At least one domain is required.
+DOMAINS = ["v.domain.com"]
+
+# Encryption method for tunnel payloads.
+# Allowed values:
+# 0 = None
+# 1 = XOR
+# 2 = ChaCha20
+# 3 = AES-128-GCM
+# 4 = AES-192-GCM
+# 5 = AES-256-GCM
+# Must match server DATA_ENCRYPTION_METHOD.
+DATA_ENCRYPTION_METHOD = 1
+
+# Shared encryption key.
+# Required on the client.
+# Must match the server-side key file contents.
+ENCRYPTION_KEY = ""
+
+# ------------------------------------------------------------------------------
+# 2) Local Proxy Listener
+# What this section does:
+# - Controls where the local client proxy listens.
+# - Controls whether local SOCKS authentication is required.
+# ------------------------------------------------------------------------------
+
+# Local mode.
+# Allowed values:
+# "SOCKS5" = normal proxy mode for browsers/apps
+# "TCP"    = raw TCP tunnel mode
+PROTOCOL_TYPE = "SOCKS5"
+
+# Local bind address for the client proxy.
+LISTEN_IP = "127.0.0.1"
+LISTEN_PORT = 18000
+
+# Local SOCKS5 authentication.
+# This protects the local proxy itself, not the remote server.
+SOCKS5_AUTH = false
+SOCKS5_USER = "master_dns_vpn"
+SOCKS5_PASS = "master_dns_vpn"
+
+# ------------------------------------------------------------------------------
+# 3) Local DNS Service
+# What this section does:
+# - Controls the optional built-in local DNS listener.
+# - Controls local DNS cache size, TTL, pending timeout, and fragment assembly.
+# ------------------------------------------------------------------------------
+
+# When true, the client exposes a local DNS server on LOCAL_DNS_IP:LOCAL_DNS_PORT.
+LOCAL_DNS_ENABLED = false
+LOCAL_DNS_IP = "127.0.0.1"
+LOCAL_DNS_PORT = 53
+
+# Local DNS cache sizing.
+# Must be >= 1.
+LOCAL_DNS_CACHE_MAX_RECORDS = 10000
+
+# TTL used by the local DNS cache in seconds.
+# If <= 0, code falls back to a default.
+LOCAL_DNS_CACHE_TTL_SECONDS = 14400.0
+
+# Maximum time a local DNS request is allowed to remain pending before it is
+# treated as expired locally.
+LOCAL_DNS_PENDING_TIMEOUT_SECONDS = 300.0
+
+# Timeout for reassembling fragmented DNS tunnel responses.
+# Used when DNS_QUERY_RES packets arrive in multiple fragments.
+# Clamped in code to [1s, 600s].
+DNS_RESPONSE_FRAGMENT_TIMEOUT_SECONDS = 60.0
+
+# Persist local DNS cache to disk.
+LOCAL_DNS_CACHE_PERSIST_TO_FILE = true
+
+# Flush interval for persisted local DNS cache.
+LOCAL_DNS_CACHE_FLUSH_INTERVAL_SECONDS = 60.0
+
+# ------------------------------------------------------------------------------
+# 4) Resolver Selection, Duplication, and Health
+# What this section does:
+# - Chooses how resolvers are selected.
+# - Controls packet duplication for lossy networks.
+# - Controls stream-aware resolver failover.
+# - Controls background recheck and auto-disable of bad resolvers.
+# ------------------------------------------------------------------------------
+
+# Resolver balancing strategy.
+# Allowed values:
+# 0 = Round Robin
+# 1 = Random
+# 2 = Round Robin
+# 3 = Least Loss
+# 4 = Lowest Latency
+# Modes 3 and 4 use runtime feedback from sends/successes.
+RESOLVER_BALANCING_STRATEGY = 0
+
+# Duplicate each normal outgoing tunnel packet this many times.
+# Clamped in code to [1, 8].
+# Higher values improve resilience but increase bandwidth and CPU usage.
+PACKET_DUPLICATION_COUNT = 2
+
+# Duplicate stream setup packets (STREAM_SYN / SOCKS5_SYN) this many times.
+# Clamped in code to [PACKET_DUPLICATION_COUNT, 8].
+SETUP_PACKET_DUPLICATION_COUNT = 3
+
+# Stream-aware resolver failover.
+# If a stream keeps resending on the same preferred resolver, it can move.
+# Threshold is clamped to [1, 128].
+STREAM_RESOLVER_FAILOVER_RESEND_THRESHOLD = 3
+
+# Minimum seconds between preferred-resolver switches for the same stream.
+# Clamped to [0.1s, 120s].
+STREAM_RESOLVER_FAILOVER_COOLDOWN = 8.0
+
+# If true, resolvers rejected during initial MTU testing are rechecked in the
+# background using the current synced upload/download MTUs.
+RECHECK_INACTIVE_SERVERS_ENABLED = true
+
+# Full background recheck cycle interval.
+# Clamped to [60s, 86400s].
+RECHECK_INACTIVE_INTERVAL_SECONDS = 60.0
+
+# Delay between background rechecks of individual resolver entries.
+# Clamped to [1s, 600s].
+RECHECK_SERVER_INTERVAL_SECONDS = 3.0
+
+# Number of inactive/runtime-disabled resolver entries rechecked per cycle.
+# Clamped to [1, 1024].
+RECHECK_BATCH_SIZE = 5
+
+# If true, a resolver is runtime-disabled when it stays timeout-only across the
+# configured window and enough observations have been collected.
+AUTO_DISABLE_TIMEOUT_SERVERS = true
+
+# Timeout-only observation window in seconds.
+# Clamped to [1s, 86400s].
+AUTO_DISABLE_TIMEOUT_WINDOW_SECONDS = 90.0
+
+# Minimum observations required before auto-disable can trigger.
+# Clamped to [1, 10000].
+AUTO_DISABLE_MIN_OBSERVATIONS = 8
+
+# Frequency of auto-disable evaluation.
+# Clamped to [0.25s, 600s].
+AUTO_DISABLE_CHECK_INTERVAL_SECONDS = 4.0
+
+# If true, payload labels are base-encoded before tunneling.
+# Usually keep false unless a specific resolver path behaves better with it.
+BASE_ENCODE_DATA = false
+
+# ------------------------------------------------------------------------------
+# 5) Compression
+# What this section does:
+# - Controls payload compression negotiation for upload and download directions.
+# ------------------------------------------------------------------------------
+
+# Allowed values:
+# 0 = OFF
+# 1 = ZSTD
+# 2 = LZ4
+# 3 = ZLIB
+UPLOAD_COMPRESSION_TYPE = 0
+DOWNLOAD_COMPRESSION_TYPE = 0
+
+# Minimum payload size before compression is attempted.
+# Must be >= 1.
+COMPRESSION_MIN_SIZE = 120
+
+# ------------------------------------------------------------------------------
+# 6) MTU Discovery
+# What this section does:
+# - Controls initial resolver validation and MTU discovery.
+# - Controls optional export/logging of working resolver MTUs.
+# ------------------------------------------------------------------------------
+
+# Minimum accepted upload/download MTUs after testing.
+# 0 can be used to effectively disable a bound, but keep realistic values.
+MIN_UPLOAD_MTU = 40
+MIN_DOWNLOAD_MTU = 100
+
+# Initial maximum MTU search bounds.
+# Must be >= the matching MIN value if both are set.
+MAX_UPLOAD_MTU = 150
+MAX_DOWNLOAD_MTU = 500
+
+# MTU probe retries, timeout, and parallelism.
+# Retries and parallelism must be >= 1.
+MTU_TEST_RETRIES = 2
+MTU_TEST_TIMEOUT = 2.0
+MTU_TEST_PARALLELISM = 32
+
+# Export successful MTU-tested resolvers to a file.
+SAVE_MTU_SERVERS_TO_FILE = false
+
+# Output file naming / formatting.
+# Supported placeholders depend on the logger path:
+# {time}, {IP}, {UP_MTU}, {DOWN_MTU}, {DOWN-MTU}, {CAUSE}, {TIME}
+MTU_SERVERS_FILE_NAME = "masterdnsvpn_success_test_{time}.log"
+MTU_SERVERS_FILE_FORMAT = "{IP} - UP: {UP_MTU} DOWN: {DOWN-MTU}"
+MTU_USING_SECTION_SEPARATOR_TEXT = ""
+MTU_REMOVED_SERVER_LOG_FORMAT = "Resolver {IP} removed at {TIME} due to {CAUSE}"
+MTU_ADDED_SERVER_LOG_FORMAT = "Resolver {IP} added back at {TIME} (UP {UP_MTU}, DOWN {DOWN_MTU})"
+
+# ------------------------------------------------------------------------------
+# 7) Runtime Workers, Queues, and Timers
+# What this section does:
+# - Controls async reader/writer/processor worker counts.
+# - Controls queue sizes and dispatcher polling.
+# - Controls stream cleanup retention and local UDP associate timeout.
+# ------------------------------------------------------------------------------
+
+# Async tunnel runtime worker counts.
+# Each must be >= 1.
+TUNNEL_READER_WORKERS = 2
+TUNNEL_WRITER_WORKERS = 2
+TUNNEL_PROCESS_WORKERS = 2
+
+# Per-packet tunnel timeout used in async runtime paths.
+# Clamped to [0.5s, 120s].
+TUNNEL_PACKET_TIMEOUT_SECONDS = 10.0
+
+# Dispatcher idle polling interval.
+# Lower values reduce wake latency but consume more CPU.
+# Clamped to [0.001s, 1s].
+DISPATCHER_IDLE_POLL_INTERVAL_SECONDS = 0.020
+
+# Channel sizes for async TX/RX pipelines.
+# Clamped in code to [64, 65536].
+TX_CHANNEL_SIZE = 2048
+RX_CHANNEL_SIZE = 2048
+
+# UDP connection pool size per resolver key.
+# Clamped to [1, 1024].
+RESOLVER_UDP_CONNECTION_POOL_SIZE = 128
+
+# Initial queue/store capacities.
+# These reduce reallocations under many active streams.
+STREAM_QUEUE_INITIAL_CAPACITY = 256
+ORPHAN_QUEUE_INITIAL_CAPACITY = 64
+DNS_RESPONSE_FRAGMENT_STORE_CAPACITY = 512
+
+# Local UDP ASSOCIATE read timeout.
+# Clamped to [1s, 3600s].
+SOCKS_UDP_ASSOCIATE_READ_TIMEOUT_SECONDS = 30.0
+
+# How long terminal streams are retained before cleanup.
+# Clamped to [1s, 3600s].
+CLIENT_TERMINAL_STREAM_RETENTION_SECONDS = 45.0
+
+# How long cancelled setup streams are retained before cleanup.
+# Clamped to [1s, 3600s].
+CLIENT_CANCELLED_SETUP_RETENTION_SECONDS = 120.0
+
+# Session init retry profile.
+# These shape retry delays after failed init/reset attempts.
+# Base/step/max are durations; linear_after is a count threshold.
+SESSION_INIT_RETRY_BASE_SECONDS = 1.0
+SESSION_INIT_RETRY_STEP_SECONDS = 1.0
+SESSION_INIT_RETRY_LINEAR_AFTER = 5
+SESSION_INIT_RETRY_MAX_SECONDS = 60.0
+
+# Retry delay after SESSION_BUSY.
+# Clamped to [1s, 3600s].
+SESSION_INIT_BUSY_RETRY_INTERVAL_SECONDS = 60.0
+
+# Ping/keepalive pacing.
+# These control how aggressively the client sends ping traffic depending on
+# recent activity.
+PING_AGGRESSIVE_INTERVAL_SECONDS = 0.200
+PING_LAZY_INTERVAL_SECONDS = 0.750
+PING_COOLDOWN_INTERVAL_SECONDS = 2.0
+PING_COLD_INTERVAL_SECONDS = 15.0
+PING_WARM_THRESHOLD_SECONDS = 5.0
+PING_COOL_THRESHOLD_SECONDS = 15.0
+PING_COLD_THRESHOLD_SECONDS = 30.0
+
+# ------------------------------------------------------------------------------
+# 8) ARQ Reliability & Packing
+# What this section does:
+# - Controls data/control retransmission behavior.
+# - Controls per-stream buffering limits and batch packing.
+# ------------------------------------------------------------------------------
+
+# Maximum control blocks packed together in one outgoing batch.
+# Clamped to [1, 64].
+MAX_PACKETS_PER_BATCH = 5
+
+# ARQ data/control behavior.
+# These values are clamped in code and should stay internally consistent.
+ARQ_WINDOW_SIZE = 600
+ARQ_INITIAL_RTO_SECONDS = 1
+ARQ_MAX_RTO_SECONDS = 5.0
+ARQ_CONTROL_INITIAL_RTO_SECONDS = 0.5
+ARQ_CONTROL_MAX_RTO_SECONDS = 3.0
+ARQ_MAX_CONTROL_RETRIES = 300
+ARQ_INACTIVITY_TIMEOUT_SECONDS = 1800.0
+ARQ_DATA_PACKET_TTL_SECONDS = 2400.0
+ARQ_CONTROL_PACKET_TTL_SECONDS = 1200.0
+ARQ_MAX_DATA_RETRIES = 1200
+
+# Maximum out-of-order gap ahead of rcvNxt that can trigger STREAM_DATA_NACK.
+# 0 disables NACK generation entirely.
+# Keep this small so only near-miss gaps cause early resend requests.
+ARQ_DATA_NACK_MAX_GAP = 64
+
+# Minimum seconds between repeated NACKs for the same missing sequence number.
+# Clamped to [0.1s, 30s].
+ARQ_DATA_NACK_REPEAT_SECONDS = 0.5
+
+ARQ_TERMINAL_DRAIN_TIMEOUT_SECONDS = 120.0
+ARQ_TERMINAL_ACK_WAIT_TIMEOUT_SECONDS = 90.0
+
+# ------------------------------------------------------------------------------
+# 9) Logging
+# What this section does:
+# - Controls console/file logger verbosity.
+# ------------------------------------------------------------------------------
+
+# Typical values: DEBUG, INFO, WARN, ERROR
+LOG_LEVEL = "INFO"

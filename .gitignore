@@ -1,0 +1,23 @@
+# Go
+/bin/
+*.exe
+*.test
+*.out
+
+# Android/Gradle
+android/.gradle/
+android/build/
+android/app/build/
+*.iml
+.idea/
+
+# Local SDK config
+android/local.properties
+
+# Generated gomobile artifacts
+android/app/libs/masterdnsvpn.aar
+android/app/libs/masterdnsvpn-sources.jar
+
+# OS
+.DS_Store
+Thumbs.db

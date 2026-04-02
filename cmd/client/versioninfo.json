@@ -1,0 +1,40 @@
+{
+    "FixedFileInfo": {
+        "FileVersion": {
+            "Major": 1,
+            "Minor": 0,
+            "Patch": 0,
+            "Build": 0
+        },
+        "ProductVersion": {
+            "Major": 1,
+            "Minor": 0,
+            "Patch": 0,
+            "Build": 0
+        },
+        "FileFlagsMask": "3f",
+        "FileFlags ": "00",
+        "FileOS": "040004",
+        "FileType": "01",
+        "FileSubtype": "00"
+    },
+    "StringFileInfo": {
+        "Comments": "MasterDnsVPN Client",
+        "CompanyName": "MasterkinG32",
+        "FileDescription": "MasterDnsVPN Client",
+        "FileVersion": "1.0.0.0",
+        "InternalName": "MasterDnsVPN_Client",
+        "LegalCopyright": "Copyright (c) 2026 MasterkinG32",
+        "LegalTrademarks": "",
+        "OriginalFilename": "MasterDnsVPN_Client.exe",
+        "ProductName": "MasterDnsVPN",
+        "ProductVersion": "1.0.0.0"
+    },
+    "VarFileInfo": {
+        "Translation": {
+            "LangID": "0409",
+            "CharsetID": "04B0"
+        }
+    },
+    "IconPath": "../../assets/masterdnsvpn.ico"
+}

@@ -1,0 +1,7 @@
+<resources>
+    <string name="app_name">MasterDnsVPN</string>
+    <string name="channel_vpn_service">VPN Service</string>
+    <string name="notification_connected">VPN is connected</string>
+    <string name="notification_connecting">Connecting…</string>
+    <string name="notification_disconnected">VPN disconnected</string>
+</resources>
