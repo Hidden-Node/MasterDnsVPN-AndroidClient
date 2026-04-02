@@ -17,5 +17,5 @@ jobs:
         with:
           go-version-file: go.mod
 
-      - name: Run Go tests
-        run: go test ./...
+      - name: Run Go tests (exclude gomobile bridge)
+        run: go test $(go list ./... | grep -v '^masterdnsvpn-go/mobile$')

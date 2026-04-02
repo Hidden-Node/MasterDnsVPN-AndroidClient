@@ -7,7 +7,6 @@ cd "$ROOT_DIR"
 if ! command -v gomobile >/dev/null 2>&1; then
   echo "gomobile not found. installing..."
   go install golang.org/x/mobile/cmd/gomobile@latest
-  go install golang.org/x/mobile/cmd/gobind@latest
 fi
 
 export PATH="$(go env GOPATH)/bin:$PATH"

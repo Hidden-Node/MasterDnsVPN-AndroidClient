@@ -23,7 +23,6 @@ where gomobile >nul 2>&1
 if errorlevel 1 (
     echo gomobile not found, installing...
     go install golang.org/x/mobile/cmd/gomobile@latest
-    go install golang.org/x/mobile/cmd/gobind@latest
     gomobile init
     if errorlevel 1 (
         echo ERROR: Failed to install gomobile
