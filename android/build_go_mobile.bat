@@ -4,7 +4,7 @@ REM MasterDnsVPN - Build Go Mobile Library for Android
 REM Prerequisites: Go 1.25+, gomobile, Android NDK
 REM ============================================================================
 
-set MOBILE_TOOLS_VERSION=v0.0.0-20231127183840-76ac6878050a
+set MOBILE_TOOLS_VERSION=b56b379
 
 echo ===================================
 echo MasterDnsVPN - Android Build Script
