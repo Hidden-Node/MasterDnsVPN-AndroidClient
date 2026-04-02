@@ -87,8 +87,8 @@ object ConfigGenerator {
             appendLine("TUNNEL_WRITER_WORKERS = ${cfg("TUNNEL_WRITER_WORKERS", "2")}")
             appendLine("TUNNEL_PROCESS_WORKERS = ${cfg("TUNNEL_PROCESS_WORKERS", "2")}")
             appendLine("TUNNEL_PACKET_TIMEOUT_SECONDS = ${cfg("TUNNEL_PACKET_TIMEOUT_SECONDS", "10.0")}")
-            appendLine("TX_CHANNEL_SIZE = ${cfg("TX_CHANNEL_SIZE", "4096")}")
-            appendLine("RX_CHANNEL_SIZE = ${cfg("RX_CHANNEL_SIZE", "8192")}")
+            appendLine("TX_CHANNEL_SIZE = ${cfg("TX_CHANNEL_SIZE", "8192")}")
+            appendLine("RX_CHANNEL_SIZE = ${cfg("RX_CHANNEL_SIZE", "12288")}")
             appendLine("RESOLVER_UDP_CONNECTION_POOL_SIZE = ${cfg("RESOLVER_UDP_CONNECTION_POOL_SIZE", "128")}")
             appendLine()
 
@@ -97,6 +97,8 @@ object ConfigGenerator {
             appendLine("ARQ_INITIAL_RTO_SECONDS = ${cfg("ARQ_INITIAL_RTO_SECONDS", "1")}")
             appendLine("ARQ_MAX_RTO_SECONDS = ${cfg("ARQ_MAX_RTO_SECONDS", "5.0")}")
             appendLine("ARQ_MAX_DATA_RETRIES = ${cfg("ARQ_MAX_DATA_RETRIES", "1200")}")
+            appendLine("ARQ_DATA_NACK_INITIAL_DELAY_SECONDS = ${cfg("ARQ_DATA_NACK_INITIAL_DELAY_SECONDS", "0.4")}")
+            appendLine("ARQ_DATA_NACK_REPEAT_SECONDS = ${cfg("ARQ_DATA_NACK_REPEAT_SECONDS", "1.0")}")
             appendLine("ARQ_INACTIVITY_TIMEOUT_SECONDS = ${cfg("ARQ_INACTIVITY_TIMEOUT_SECONDS", "1800.0")}")
             appendLine()
 

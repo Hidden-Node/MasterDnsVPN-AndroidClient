@@ -89,7 +89,7 @@ func ParseFromLabels(labels string, codec *security.Codec) (Packet, error) {
 		return Packet{}, ErrInvalidEncodedData
 	}
 
-	raw, err := codec.DecodeLowerBase36StringAndDecrypt(labels)
+	raw, err := codec.DecodeLowerBase32StringAndDecrypt(labels)
 	if err != nil {
 		return Packet{}, err
 	}
@@ -227,7 +227,10 @@ func buildPacketFlags() [256]uint8 {
 		Enums.PACKET_PING,
 		Enums.PACKET_PONG,
 		Enums.PACKET_ERROR_DROP,
+		Enums.PACKET_MTU_UP_REQ,
+		Enums.PACKET_MTU_DOWN_RES,
 	}
+
 	for _, packetType := range validOnly {
 		setValid(packetType)
 	}
@@ -280,6 +283,7 @@ func buildPacketFlags() [256]uint8 {
 		Enums.PACKET_DNS_QUERY_REQ_ACK,
 		Enums.PACKET_DNS_QUERY_RES_ACK,
 	}
+
 	for _, packetType := range streamAndSeq {
 		set(packetType, packetFlagStream|packetFlagSequence)
 	}
@@ -294,6 +298,8 @@ func buildPacketFlags() [256]uint8 {
 		Enums.PACKET_DNS_QUERY_RES,
 		Enums.PACKET_DNS_QUERY_REQ_ACK,
 		Enums.PACKET_DNS_QUERY_RES_ACK,
+		Enums.PACKET_MTU_UP_REQ,
+		Enums.PACKET_MTU_DOWN_RES,
 	}
 	for _, packetType := range frag {
 		flags[packetType] |= packetFlagFragment
@@ -305,7 +311,10 @@ func buildPacketFlags() [256]uint8 {
 		Enums.PACKET_PACKED_CONTROL_BLOCKS,
 		Enums.PACKET_DNS_QUERY_REQ,
 		Enums.PACKET_DNS_QUERY_RES,
+		Enums.PACKET_MTU_UP_REQ,
+		Enums.PACKET_MTU_DOWN_RES,
 	}
+
 	for _, packetType := range comp {
 		flags[packetType] |= packetFlagValid | packetFlagCompression
 	}

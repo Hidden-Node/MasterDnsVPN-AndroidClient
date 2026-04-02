@@ -52,3 +52,22 @@ func TestUnavailableCompressionFallsBackToOff(t *testing.T) {
 		t.Fatal("unsupported compression must return original data")
 	}
 }
+
+func TestDecompressZSTDDecoderCanBeReusedFromPool(t *testing.T) {
+	data := bytes.Repeat([]byte("zstd-roundtrip-"), 128)
+
+	compressed, err := compressZSTD(data)
+	if err != nil {
+		t.Fatalf("compressZSTD failed: %v", err)
+	}
+
+	for i := 0; i < 2; i++ {
+		decoded, err := decompressZSTD(compressed)
+		if err != nil {
+			t.Fatalf("decompressZSTD failed on pass %d: %v", i+1, err)
+		}
+		if !bytes.Equal(decoded, data) {
+			t.Fatalf("decoded payload mismatch on pass %d", i+1)
+		}
+	}
+}

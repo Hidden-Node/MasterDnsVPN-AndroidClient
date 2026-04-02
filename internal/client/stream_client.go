@@ -138,24 +138,25 @@ func (c *Client) new_stream(streamID uint16, conn net.Conn, targetPayload []byte
 	}
 
 	arqCfg := arq.Config{
-		WindowSize:               c.cfg.ARQWindowSize,
-		RTO:                      c.cfg.ARQInitialRTOSeconds,
-		MaxRTO:                   c.cfg.ARQMaxRTOSeconds,
-		StartPaused:              conn != nil && streamID != 0 && (c.cfg.ProtocolType == "SOCKS5" || c.cfg.ProtocolType == "TCP"),
-		EnableControlReliability: true,
-		ControlRTO:               c.cfg.ARQControlInitialRTOSeconds,
-		ControlMaxRTO:            c.cfg.ARQControlMaxRTOSeconds,
-		ControlMaxRetries:        c.cfg.ARQMaxControlRetries,
-		InactivityTimeout:        c.cfg.ARQInactivityTimeoutSeconds,
-		DataPacketTTL:            c.cfg.ARQDataPacketTTLSeconds,
-		MaxDataRetries:           c.cfg.ARQMaxDataRetries,
-		DataNackMaxGap:           c.cfg.ARQDataNackMaxGap,
-		DataNackRepeatSeconds:    c.cfg.ARQDataNackRepeatSeconds,
-		ControlPacketTTL:         c.cfg.ARQControlPacketTTLSeconds,
-		TerminalDrainTimeout:     c.cfg.ARQTerminalDrainTimeoutSec,
-		TerminalAckWaitTimeout:   c.cfg.ARQTerminalAckWaitTimeoutSec,
-		CompressionType:          c.uploadCompression,
-		IsClient:                 true,
+		WindowSize:                  c.cfg.ARQWindowSize,
+		RTO:                         c.cfg.ARQInitialRTOSeconds,
+		MaxRTO:                      c.cfg.ARQMaxRTOSeconds,
+		StartPaused:                 conn != nil && streamID != 0 && (c.cfg.ProtocolType == "SOCKS5" || c.cfg.ProtocolType == "TCP"),
+		EnableControlReliability:    true,
+		ControlRTO:                  c.cfg.ARQControlInitialRTOSeconds,
+		ControlMaxRTO:               c.cfg.ARQControlMaxRTOSeconds,
+		ControlMaxRetries:           c.cfg.ARQMaxControlRetries,
+		InactivityTimeout:           c.cfg.ARQInactivityTimeoutSeconds,
+		DataPacketTTL:               c.cfg.ARQDataPacketTTLSeconds,
+		MaxDataRetries:              c.cfg.ARQMaxDataRetries,
+		DataNackMaxGap:              c.cfg.ARQDataNackMaxGap,
+		DataNackInitialDelaySeconds: c.cfg.ARQDataNackInitialDelaySeconds,
+		DataNackRepeatSeconds:       c.cfg.ARQDataNackRepeatSeconds,
+		ControlPacketTTL:            c.cfg.ARQControlPacketTTLSeconds,
+		TerminalDrainTimeout:        c.cfg.ARQTerminalDrainTimeoutSec,
+		TerminalAckWaitTimeout:      c.cfg.ARQTerminalAckWaitTimeoutSec,
+		CompressionType:             c.uploadCompression,
+		IsClient:                    true,
 	}
 
 	a := arq.NewARQ(streamID, c.sessionID, s, conn, mtu, c.log, arqCfg)
@@ -196,7 +197,7 @@ func (s *Stream_client) PushTXPacket(priority int, packetType uint8, sequenceNum
 	priority = Enums.NormalizePacketPriority(packetType, priority)
 
 	// Skip Ping packets if the queue is already congested (prevent bloat)
-	if packetType == Enums.PACKET_PING && s.txQueue != nil && s.txQueue.FastSize() > 200 {
+	if packetType == Enums.PACKET_PING && s.txQueue != nil && s.txQueue.FastSize() > 500 {
 		return false
 	}
 
@@ -571,23 +572,24 @@ func (c *Client) InitVirtualStream0() {
 	}
 
 	arqCfg := arq.Config{
-		WindowSize:               c.cfg.ARQWindowSize,
-		RTO:                      c.cfg.ARQInitialRTOSeconds,
-		MaxRTO:                   c.cfg.ARQMaxRTOSeconds,
-		IsVirtual:                true, // Bypasses internal timeout closures
-		EnableControlReliability: true,
-		ControlRTO:               c.cfg.ARQControlInitialRTOSeconds,
-		ControlMaxRTO:            c.cfg.ARQControlMaxRTOSeconds,
-		ControlMaxRetries:        c.cfg.ARQMaxControlRetries,
-		InactivityTimeout:        999999.0, // Infinite
-		DataPacketTTL:            999999.0,
-		MaxDataRetries:           99999,
-		DataNackMaxGap:           0,
-		DataNackRepeatSeconds:    c.cfg.ARQDataNackRepeatSeconds,
-		ControlPacketTTL:         999999.0,
-		TerminalDrainTimeout:     c.cfg.ARQTerminalDrainTimeoutSec,
-		TerminalAckWaitTimeout:   c.cfg.ARQTerminalAckWaitTimeoutSec,
-		CompressionType:          c.uploadCompression,
+		WindowSize:                  c.cfg.ARQWindowSize,
+		RTO:                         c.cfg.ARQInitialRTOSeconds,
+		MaxRTO:                      c.cfg.ARQMaxRTOSeconds,
+		IsVirtual:                   true, // Bypasses internal timeout closures
+		EnableControlReliability:    true,
+		ControlRTO:                  c.cfg.ARQControlInitialRTOSeconds,
+		ControlMaxRTO:               c.cfg.ARQControlMaxRTOSeconds,
+		ControlMaxRetries:           c.cfg.ARQMaxControlRetries,
+		InactivityTimeout:           999999.0, // Infinite
+		DataPacketTTL:               999999.0,
+		MaxDataRetries:              99999,
+		DataNackMaxGap:              0,
+		DataNackInitialDelaySeconds: c.cfg.ARQDataNackInitialDelaySeconds,
+		DataNackRepeatSeconds:       c.cfg.ARQDataNackRepeatSeconds,
+		ControlPacketTTL:            999999.0,
+		TerminalDrainTimeout:        c.cfg.ARQTerminalDrainTimeoutSec,
+		TerminalAckWaitTimeout:      c.cfg.ARQTerminalAckWaitTimeoutSec,
+		CompressionType:             c.uploadCompression,
 	}
 
 	conn := newFakeConn()

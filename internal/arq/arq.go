@@ -59,11 +59,11 @@ type Logger interface {
 	Errorf(format string, args ...any)
 }
 
-type dummyLogger struct{}
+type DummyLogger struct{}
 
-func (d *dummyLogger) Debugf(f string, a ...any) {}
-func (d *dummyLogger) Infof(f string, a ...any)  {}
-func (d *dummyLogger) Errorf(f string, a ...any) {}
+func (d *DummyLogger) Debugf(f string, a ...any) {}
+func (d *DummyLogger) Infof(f string, a ...any)  {}
+func (d *DummyLogger) Errorf(f string, a ...any) {}
 
 type arqDataItem struct {
 	Data            []byte
@@ -106,6 +106,10 @@ type rtxJob struct {
 	sn              uint16
 	data            []byte
 	compressionType uint8
+}
+type rxPayload struct {
+	sn   uint16
+	data []byte
 }
 
 var setupControlPacketTypes = map[uint8]bool{
@@ -195,19 +199,23 @@ type ARQ struct {
 	dataAdaptiveRTO          adaptiveRTOState
 	controlAdaptiveRTO       adaptiveRTOState
 	dataNackMaxGap           int
+	dataNackInitialDelay     time.Duration
 	dataNackRepeatInterval   time.Duration
 
 	// Virtual streams do not emit local close side effects.
 	isVirtual bool
 
-	dataNackMu       sync.Mutex
-	lastDataNackSent map[uint16]time.Time
+	dataNackMu        sync.Mutex
+	firstDataNackSeen map[uint16]time.Time
+	lastDataNackSent  map[uint16]time.Time
 
 	// Concurrency
 	ctx         context.Context
 	cancel      context.CancelFunc
 	wg          sync.WaitGroup
 	flushSignal chan struct{}
+	rxChan      chan rxPayload
+	pendingInbound int
 }
 
 type closeWriter interface {
@@ -232,7 +240,6 @@ const (
 	ioRetryBackoff         = 100 * time.Millisecond
 	ioTransientReadBudget  = 3 * time.Second
 	ioTransientWriteBudget = 3
-	ioReadMaxPackets       = 5
 )
 
 func classifyIOError(err error) ioErrorClass {
@@ -265,25 +272,27 @@ func classifyIOError(err error) ioErrorClass {
 
 // Config represents the extensive ARQ tuning configuration identically ported from Python
 type Config struct {
-	WindowSize               int
-	RTO                      float64
-	MaxRTO                   float64
-	IsVirtual                bool
-	StartPaused              bool
-	EnableControlReliability bool
-	ControlRTO               float64
-	ControlMaxRTO            float64
-	ControlMaxRetries        int
-	InactivityTimeout        float64
-	DataPacketTTL            float64
-	MaxDataRetries           int
-	ControlPacketTTL         float64
-	DataNackMaxGap           int
-	DataNackRepeatSeconds    float64
-	TerminalDrainTimeout     float64
-	TerminalAckWaitTimeout   float64
-	CompressionType          uint8
-	IsClient                 bool
+	WindowSize                  int
+	RTO                         float64
+	MaxRTO                      float64
+	IsVirtual                   bool
+	StartPaused                 bool
+	EnableControlReliability    bool
+	ControlRTO                  float64
+	ControlMaxRTO               float64
+	ControlMaxRetries           int
+	InactivityTimeout           float64
+	DataPacketTTL               float64
+	MaxDataRetries              int
+	ControlPacketTTL            float64
+	DataNackMaxGap              int
+	DataNackInitialDelaySeconds float64
+	DataNackRepeatSeconds       float64
+	TerminalDrainTimeout        float64
+	TerminalAckWaitTimeout      float64
+	CompressionType             uint8
+	IsClient                    bool
+	InboundQueueSize            int
 }
 
 type CloseOptions struct {
@@ -317,7 +326,7 @@ func (a *ARQ) HasPendingSequence(sn uint16) bool {
 // NewARQ instantiates a pristine reliable streaming overlay suitable for client or server
 func NewARQ(streamID uint16, sessionID uint8, enqueuer PacketEnqueuer, localConn io.ReadWriteCloser, mtu int, logger Logger, cfg Config) *ARQ {
 	if logger == nil {
-		logger = &dummyLogger{}
+		logger = &DummyLogger{}
 	}
 
 	windowSize := max(cfg.WindowSize, 300)
@@ -356,11 +365,20 @@ func NewARQ(streamID uint16, sessionID uint8, enqueuer PacketEnqueuer, localConn
 		controlMaxRetries:        maxI(5, cfg.ControlMaxRetries),
 		controlPacketTTL:         time.Duration(maxF(120.0, cfg.ControlPacketTTL) * float64(time.Second)),
 		dataNackMaxGap:           maxI(0, cfg.DataNackMaxGap),
+		dataNackInitialDelay:     time.Duration(maxF(0.0, cfg.DataNackInitialDelaySeconds) * float64(time.Second)),
 		dataNackRepeatInterval:   time.Duration(maxF(0.1, cfg.DataNackRepeatSeconds) * float64(time.Second)),
 
-		isVirtual:        cfg.IsVirtual,
-		compressionType:  cfg.CompressionType,
-		lastDataNackSent: make(map[uint16]time.Time),
+		isVirtual:         cfg.IsVirtual,
+		compressionType:   cfg.CompressionType,
+		firstDataNackSeen: make(map[uint16]time.Time),
+		lastDataNackSent:  make(map[uint16]time.Time),
+
+		rxChan: make(chan rxPayload, func() int {
+			if cfg.InboundQueueSize > 0 {
+				return cfg.InboundQueueSize
+			}
+			return windowSize * 4
+		}()),
 	}
 
 	a.streamWorkersStarted = false
@@ -387,6 +405,9 @@ func NewARQ(streamID uint16, sessionID uint8, enqueuer PacketEnqueuer, localConn
 func (a *ARQ) Start() {
 	a.wg.Add(1)
 	go a.retransmitLoop()
+
+	a.wg.Add(1)
+	go a.rxLoop()
 
 	if a.ioReady {
 		a.startStreamWorkers()
@@ -531,6 +552,7 @@ func (a *ARQ) signalWindowNotFull() {
 
 func (a *ARQ) waitWindowNotFull() {
 	timer := time.NewTimer(200 * time.Millisecond)
+	waitStarted := time.Time{}
 	defer func() {
 		if !timer.Stop() {
 			select {
@@ -542,11 +564,17 @@ func (a *ARQ) waitWindowNotFull() {
 
 	for {
 		a.mu.RLock()
-		if len(a.sndBuf) < a.limit || a.closed {
+		sndBufLen := len(a.sndBuf)
+		if sndBufLen < a.limit || a.closed {
 			a.mu.RUnlock()
 			return
 		}
 		a.mu.RUnlock()
+
+		now := time.Now()
+		if waitStarted.IsZero() {
+			waitStarted = now
+		}
 
 		if !timer.Stop() {
 			select {
@@ -602,6 +630,7 @@ func (a *ARQ) clearAllQueues(clearControl bool) {
 		a.controlSndBuf = make(map[uint32]*arqControlItem)
 	}
 	a.dataNackMu.Lock()
+	clear(a.firstDataNackSeen)
 	clear(a.lastDataNackSent)
 	a.dataNackMu.Unlock()
 
@@ -688,15 +717,12 @@ func (a *ARQ) MarkCloseReadReceived() {
 
 	if a.closeReadSent {
 		a.setState(StateClosing)
-		a.mu.Unlock()
-		a.halfCloseLocalWriter()
-		a.tryFinalizeRemoteEOF()
-		return
+	} else {
+		a.setState(StateHalfClosedRemote)
 	}
-
-	a.setState(StateHalfClosedRemote)
 	a.mu.Unlock()
-	a.halfCloseLocalWriter()
+
+	a.signalFlushReady()
 	a.tryFinalizeRemoteEOF()
 }
 
@@ -853,7 +879,7 @@ func (a *ARQ) clearTrackedControlPacket(packetType uint8, sequenceNum uint16, fr
 func (a *ARQ) tryFinalizeRemoteEOF() {
 	a.mu.Lock()
 	waitingForCloseReadAck := a.waitingAck && a.waitingAckFor == Enums.PACKET_STREAM_CLOSE_READ
-	receiveDrained := len(a.rcvBuf) == 0 || a.localWriterBroken
+	receiveDrained := (len(a.rcvBuf) == 0 && a.pendingInbound == 0) || a.localWriterBroken
 	writeSideSettled := (!a.localWriterBroken && (!a.closeWriteSent || a.closeWriteAcked)) ||
 		(a.localWriterBroken && (a.closeWriteSent || a.closeWriteAcked || a.closeWriteReceived))
 	shouldClose := !a.closed &&
@@ -916,13 +942,11 @@ func (a *ARQ) ioLoop() {
 	var errorReason string
 	var transientReadSince time.Time
 
-	readBufferSize := max(max(a.mtu*ioReadMaxPackets, a.mtu), 1)
-	buf := make([]byte, readBufferSize)
+	buf := make([]byte, max(a.mtu, 1))
 
 	for !a.isClosed() {
 		a.waitWindowNotFull()
 
-		readBudget := a.mtu
 		a.mu.Lock()
 		if a.stopLocalRead || a.closed {
 			a.mu.Unlock()
@@ -946,72 +970,47 @@ func (a *ARQ) ioLoop() {
 			resetRequired = true
 			break
 		}
-		freeSlots := max(a.limit-len(a.sndBuf), 1)
-		packetsToRead := min(freeSlots, ioReadMaxPackets)
-		readBudget = min(max(packetsToRead*a.mtu, 1), len(buf))
 		a.mu.Unlock()
 
 		if c, ok := a.localConn.(interface{ SetReadDeadline(time.Time) error }); ok {
 			_ = c.SetReadDeadline(time.Now().Add(500 * time.Millisecond))
 		}
 
-		n, err := a.localConn.Read(buf[:readBudget])
+		n, err := a.localConn.Read(buf)
 		if n > 0 {
 			transientReadSince = time.Time{}
-			chunkSize := a.mtu
-			if chunkSize < 1 {
-				chunkSize = n
-			}
-
-			type outboundChunk struct {
-				sn   uint16
-				data []byte
-			}
-
-			now := time.Now()
-			outbound := make([]outboundChunk, 0, (n+chunkSize-1)/chunkSize)
+			raw := append([]byte(nil), buf[:n]...)
 
 			a.mu.Lock()
-			a.lastActivity = now
+			a.lastActivity = time.Now()
+			sn := a.sndNxt
+			a.sndNxt++
 			currentRTO := a.currentDataBaseRTO()
-			for offset := 0; offset < n; offset += chunkSize {
-				end := offset + chunkSize
-				if end > n {
-					end = n
-				}
-				raw := append([]byte(nil), buf[offset:end]...)
-				sn := a.sndNxt
-				a.sndNxt++
-
-				a.sndBuf[sn] = &arqDataItem{
-					Data:            raw,
-					CreatedAt:       now,
-					LastSentAt:      time.Time{},
-					Dispatched:      false,
-					Retries:         0,
-					CurrentRTO:      currentRTO,
-					SampleEligible:  true,
-					CompressionType: a.compressionType,
-					TTL:             0,
-				}
-				outbound = append(outbound, outboundChunk{sn: sn, data: raw})
+			a.sndBuf[sn] = &arqDataItem{
+				Data:            raw,
+				CreatedAt:       time.Now(),
+				LastSentAt:      time.Time{},
+				Dispatched:      false,
+				Retries:         0,
+				CurrentRTO:      currentRTO,
+				SampleEligible:  true,
+				CompressionType: a.compressionType,
+				TTL:             0,
 			}
 			a.mu.Unlock()
 
-			for _, chunk := range outbound {
-				ok := a.enqueuer.PushTXPacket(
-					Enums.DefaultPacketPriority(Enums.PACKET_STREAM_DATA),
-					Enums.PACKET_STREAM_DATA,
-					chunk.sn, 0, 0, a.compressionType, 0, chunk.data,
-				)
-				if !ok {
-					a.mu.Lock()
-					if info, exists := a.sndBuf[chunk.sn]; exists {
-						info.Dispatched = true
-						info.LastSentAt = time.Now().Add(-info.CurrentRTO)
-					}
-					a.mu.Unlock()
+			ok := a.enqueuer.PushTXPacket(
+				Enums.DefaultPacketPriority(Enums.PACKET_STREAM_DATA),
+				Enums.PACKET_STREAM_DATA,
+				sn, 0, 0, a.compressionType, 0, raw,
+			)
+			if !ok {
+				a.mu.Lock()
+				if info, exists := a.sndBuf[sn]; exists {
+					info.Dispatched = true
+					info.LastSentAt = time.Now().Add(-info.CurrentRTO)
 				}
+				a.mu.Unlock()
 			}
 		}
 
@@ -1297,13 +1296,15 @@ func (a *ARQ) retransmitLoop() {
 
 // ReceiveData handles inbound STREAM_DATA and emit STREAM_DATA_ACK.
 func (a *ARQ) ReceiveData(sn uint16, data []byte) bool {
-	if a.isClosed() || a.IsReset() {
+	a.mu.RLock()
+	if a.closed || a.rstReceived || a.rstSent {
+		a.mu.RUnlock()
 		return false
 	}
 
-	now := time.Now()
-	a.mu.Lock()
-	if a.localWriterBroken || a.closeWriteSent || a.closeWriteAcked {
+	if a.localWriterBroken {
+		a.mu.RUnlock()
+		a.mu.Lock()
 		needCloseWrite := a.localWriterBroken &&
 			!a.closeWriteSent &&
 			!(a.waitingAck && a.waitingAckFor == Enums.PACKET_STREAM_CLOSE_WRITE) &&
@@ -1316,37 +1317,93 @@ func (a *ARQ) ReceiveData(sn uint16, data []byte) bool {
 		}
 		return false
 	}
+
+	a.mu.RUnlock()
+
+	safeData := append([]byte(nil), data...)
+	a.mu.Lock()
+	a.pendingInbound++
+	a.mu.Unlock()
+
+	select {
+	case a.rxChan <- rxPayload{sn: sn, data: safeData}:
+		return true
+	default:
+		a.mu.Lock()
+		if a.pendingInbound > 0 {
+			a.pendingInbound--
+		}
+		a.mu.Unlock()
+		return false
+	}
+}
+
+func (a *ARQ) rxLoop() {
+	defer a.wg.Done()
+
+	for {
+		select {
+		case <-a.ctx.Done():
+			return
+		case payload := <-a.rxChan:
+			a.processReceivedData(payload.sn, payload.data)
+		}
+	}
+}
+
+func (a *ARQ) processReceivedData(sn uint16, data []byte) {
+	now := time.Now()
+
+	a.mu.Lock()
+	if a.pendingInbound > 0 {
+		a.pendingInbound--
+	}
+	if a.localWriterBroken || a.closeWriteSent || a.closeWriteAcked {
+		needCloseWrite := a.localWriterBroken &&
+			!a.closeWriteSent &&
+			!(a.waitingAck && a.waitingAckFor == Enums.PACKET_STREAM_CLOSE_WRITE) &&
+			!a.closed &&
+			!a.rstReceived &&
+			!a.rstSent
+
+		a.mu.Unlock()
+		if needCloseWrite {
+			a.Close("Inbound data received after local writer closed", CloseOptions{SendCloseWrite: true})
+		}
+		return
+	}
+
 	a.lastActivity = now
 	diff := sn - a.rcvNxt
 
-	if diff >= 32768 { // Packet is older than rcvNxt
+	if diff >= 32768 {
 		a.mu.Unlock()
 		a.enqueuer.PushTXPacket(
 			Enums.DefaultPacketPriority(Enums.PACKET_STREAM_DATA_ACK),
 			Enums.PACKET_STREAM_DATA_ACK,
 			sn, 0, 0, 0, 0, nil,
 		)
-		return true
+		return
 	}
 
 	if int(diff) > a.windowSize {
 		a.mu.Unlock()
-		return true
+		return
 	}
 
 	_, exists := a.rcvBuf[sn]
-
 	if !exists && len(a.rcvBuf) >= a.windowSize && sn != a.rcvNxt {
 		a.mu.Unlock()
-		return true
+		return
 	}
 
 	if !exists {
-		a.rcvBuf[sn] = append([]byte(nil), data...)
+		a.rcvBuf[sn] = data
 	}
 	a.mu.Unlock()
 
 	a.clearSentDataNack(sn)
+
 	a.enqueuer.PushTXPacket(
 		Enums.DefaultPacketPriority(Enums.PACKET_STREAM_DATA_ACK),
 		Enums.PACKET_STREAM_DATA_ACK,
@@ -1354,11 +1411,8 @@ func (a *ARQ) ReceiveData(sn uint16, data []byte) bool {
 	)
 
 	a.maybeSendDataNacks(sn)
-
 	a.signalFlushReady()
-	return true
 }
-
 func (a *ARQ) writeLoop() {
 	defer a.wg.Done()
 
@@ -1401,6 +1455,13 @@ func (a *ARQ) writeLoop() {
 			a.mu.Unlock()
 
 			if len(toWrite) == 0 {
+				a.mu.Lock()
+				cr := a.closeReadReceived
+				pendingInbound := a.pendingInbound
+				a.mu.Unlock()
+				if cr && pendingInbound == 0 {
+					a.halfCloseLocalWriter()
+				}
 				a.tryFinalizeRemoteEOF()
 				break
 			}
@@ -1627,25 +1688,46 @@ func (a *ARQ) maybeSendDataNacks(sn uint16) {
 	}
 
 	windowSpan := uint16(a.dataNackMaxGap)
-	start := rcvNxt
-	if diff > windowSpan {
-		start = sn - windowSpan
-	}
-
 	a.mu.RLock()
 	missingSeqs := make([]uint16, 0, a.dataNackMaxGap)
-	for missing := start; missing != sn; missing++ {
-		if _, buffered := a.rcvBuf[missing]; buffered {
-			continue
+	if diff <= windowSpan {
+		for missing := rcvNxt; missing != sn; missing++ {
+			if _, buffered := a.rcvBuf[missing]; buffered {
+				continue
+			}
+			missingSeqs = append(missingSeqs, missing)
 		}
-		missingSeqs = append(missingSeqs, missing)
+	} else {
+		seen := make(map[uint16]struct{}, maxI(2, a.dataNackMaxGap/20+1))
+		sampleCount := maxI(1, (a.dataNackMaxGap+19)/20) // ~5% of configured gap, at least 1
+
+		for missing, added := rcvNxt, 0; missing != sn && added < sampleCount; missing++ {
+			if _, buffered := a.rcvBuf[missing]; buffered {
+				continue
+			}
+			missingSeqs = append(missingSeqs, missing)
+			seen[missing] = struct{}{}
+			added++
+		}
+
+		frontier := uint16(uint32(rcvNxt) + uint32(windowSpan) - 1)
+		for candidate := frontier; ; candidate-- {
+			if _, buffered := a.rcvBuf[candidate]; !buffered {
+				if _, exists := seen[candidate]; !exists {
+					missingSeqs = append(missingSeqs, candidate)
+				}
+				break
+			}
+			if candidate == rcvNxt {
+				break
+			}
+		}
 	}
 	a.mu.RUnlock()
 
 	now := time.Now()
-	minInterval := a.dataNackRepeatInterval
 	for _, missing := range missingSeqs {
-		if !a.shouldSendDataNack(missing, now, minInterval) {
+		if !a.shouldSendDataNack(missing, now) {
 			continue
 		}
 		if !a.enqueuer.PushTXPacket(
@@ -1659,15 +1741,24 @@ func (a *ARQ) maybeSendDataNacks(sn uint16) {
 	}
 }
 
-func (a *ARQ) shouldSendDataNack(sn uint16, now time.Time, minInterval time.Duration) bool {
+func (a *ARQ) shouldSendDataNack(sn uint16, now time.Time) bool {
 	a.dataNackMu.Lock()
 	defer a.dataNackMu.Unlock()
+
+	firstSeenAt, exists := a.firstDataNackSeen[sn]
+	if !exists {
+		a.firstDataNackSeen[sn] = now
+		return a.dataNackInitialDelay <= 0
+	}
+	if a.dataNackInitialDelay > 0 && now.Sub(firstSeenAt) < a.dataNackInitialDelay {
+		return false
+	}
 
 	lastSentAt, exists := a.lastDataNackSent[sn]
 	if !exists {
 		return true
 	}
-	return now.Sub(lastSentAt) >= minInterval
+	return now.Sub(lastSentAt) >= a.dataNackRepeatInterval
 }
 
 func (a *ARQ) noteDataNackSent(sn uint16, now time.Time) {
@@ -1678,6 +1769,7 @@ func (a *ARQ) noteDataNackSent(sn uint16, now time.Time) {
 
 func (a *ARQ) clearSentDataNack(sn uint16) {
 	a.dataNackMu.Lock()
+	delete(a.firstDataNackSeen, sn)
 	delete(a.lastDataNackSent, sn)
 	a.dataNackMu.Unlock()
 

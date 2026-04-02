@@ -56,7 +56,7 @@ DNS_REQUEST_WORKERS = 4
 # If the queue is full, packets are dropped and rate-limited overload logs appear.
 # With the current client sample using larger RX buffering, keeping this at 8192
 # helps the server absorb short bursts without dropping front-door requests too early.
-MAX_CONCURRENT_REQUESTS = 8192
+MAX_CONCURRENT_REQUESTS = 12288
 
 # UDP socket read/write buffer size in bytes.
 SOCKET_BUFFER_SIZE = 8388608
@@ -254,7 +254,8 @@ ARQ_DATA_NACK_MAX_GAP = 64
 
 # Minimum seconds between repeated NACKs for the same missing sequence number.
 # Clamped to [0.1s, 30s].
-ARQ_DATA_NACK_REPEAT_SECONDS = 0.5
+ARQ_DATA_NACK_INITIAL_DELAY_SECONDS = 0.4
+ARQ_DATA_NACK_REPEAT_SECONDS = 1.0
 
 ARQ_TERMINAL_DRAIN_TIMEOUT_SECONDS = 120.0
 ARQ_TERMINAL_ACK_WAIT_TIMEOUT_SECONDS = 90.0

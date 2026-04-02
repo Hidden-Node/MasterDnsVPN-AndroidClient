@@ -10,7 +10,6 @@ package udpserver
 import (
 	"io"
 	"sync"
-	"sync/atomic"
 	"time"
 
 	"masterdnsvpn-go/internal/arq"
@@ -23,6 +22,7 @@ type Stream_server struct {
 	mu        sync.RWMutex
 	txQueueMu sync.Mutex
 	cleanupMu sync.Once
+	rxQueueMu sync.Mutex
 
 	ID        uint16
 	SessionID uint8
@@ -39,12 +39,7 @@ type Stream_server struct {
 	TargetPort   uint16
 	Connected    bool
 	onClosed     func(uint16, time.Time, string)
-	onQueueStateChanged func(uint16, bool)
-	txHasItems         atomic.Uint32
-
-	// Tracking for deduplication (similar to Python's _track_stream_packet_once)
-	// Key: packetType << 16 | sequenceNum
-	// For data packets, we might also want to track by sequence if multiple types exist.
+	log          arq.Logger
 }
 
 func NewStreamServer(streamID uint16, sessionID uint8, arqConfig arq.Config, localConn io.ReadWriteCloser, mtu int, queueInitialCapacity int, logger arq.Logger) *Stream_server {
@@ -58,11 +53,25 @@ func NewStreamServer(streamID uint16, sessionID uint8, arqConfig arq.Config, loc
 		Status:       "PENDING",
 		CreatedAt:    time.Now(),
 		LastActivity: time.Now(),
+		log:          logger,
 	}
 
-	s.ARQ = arq.NewARQ(streamID, sessionID, s, localConn, mtu, logger, arqConfig)
+	if s.log == nil {
+		s.log = &arq.DummyLogger{}
+	}
+
+	s.ARQ = arq.NewARQ(streamID, sessionID, s, localConn, mtu, s.log, arqConfig)
 	s.ARQ.Start()
+
 	return s
+}
+
+func (s *Stream_server) enqueueInboundData(packetType uint8, sequenceNum uint16, fragmentID uint8, payload []byte) bool {
+	if s == nil || s.ARQ == nil {
+		return false
+	}
+
+	return s.ARQ.ReceiveData(sequenceNum, payload)
 }
 
 // PushTXPacket implements arq.PacketEnqueuer.
@@ -89,7 +98,6 @@ func (s *Stream_server) PushTXPacket(priority int, packetType uint8, sequenceNum
 	pkt.TTL = ttl
 
 	s.txQueueMu.Lock()
-	wasEmpty := s.TXQueue.FastSize() == 0
 
 	switch packetType {
 	case Enums.PACKET_STREAM_DATA:
@@ -98,6 +106,7 @@ func (s *Stream_server) PushTXPacket(priority int, packetType uint8, sequenceNum
 			putTXPacketToPool(pkt)
 			return false
 		}
+
 		if _, exists := s.TXQueue.Get(resendKey); exists {
 			s.txQueueMu.Unlock()
 			putTXPacketToPool(pkt)
@@ -113,7 +122,6 @@ func (s *Stream_server) PushTXPacket(priority int, packetType uint8, sequenceNum
 
 	ok := s.TXQueue.Push(priority, key, pkt)
 	if !ok {
-		// Packet already in queue or failed to push
 		s.txQueueMu.Unlock()
 		putTXPacketToPool(pkt)
 		return false
@@ -127,37 +135,17 @@ func (s *Stream_server) PushTXPacket(priority int, packetType uint8, sequenceNum
 		}
 	}
 
-	isEmpty := s.TXQueue.FastSize() == 0
 	s.txQueueMu.Unlock()
-
-	if wasEmpty && !isEmpty {
-		s.setTXQueueReady(true)
-	}
 
 	// Notify session that this stream is active (handled by the caller or session management)
 	return true
-}
-
-func (s *Stream_server) setTXQueueReady(hasItems bool) {
-	if s == nil {
-		return
-	}
-	var next uint32
-	if hasItems {
-		next = 1
-	}
-	if s.txHasItems.Swap(next) == next {
-		return
-	}
-	if s.onQueueStateChanged != nil {
-		s.onQueueStateChanged(s.ID, hasItems)
-	}
 }
 
 func (s *Stream_server) NoteTXPacketDequeued(packet *serverStreamTXPacket) {
 	if s == nil || packet == nil || s.ARQ == nil {
 		return
 	}
+
 	s.ARQ.NoteTXPacketDequeued(packet.PacketType, packet.SequenceNum, packet.FragmentID)
 }
 
@@ -178,11 +166,9 @@ func (s *Stream_server) RemoveQueuedData(sequenceNum uint16) bool {
 			removedAny = true
 		}
 	}
-	isEmpty := s.TXQueue.FastSize() == 0
+
 	s.txQueueMu.Unlock()
-	if removedAny && isEmpty {
-		s.setTXQueueReady(false)
-	}
+
 	return removedAny
 }
 
@@ -196,17 +182,14 @@ func (s *Stream_server) RemoveQueuedDataNack(sequenceNum uint16) bool {
 	pkt, ok := s.TXQueue.RemoveByKey(key, func(p *serverStreamTXPacket) uint64 {
 		return Enums.PacketIdentityKey(s.ID, p.PacketType, p.SequenceNum, p.FragmentID)
 	})
+
 	if !ok {
 		s.txQueueMu.Unlock()
 		return false
 	}
 
 	putTXPacketToPool(pkt)
-	isEmpty := s.TXQueue.FastSize() == 0
 	s.txQueueMu.Unlock()
-	if isEmpty {
-		s.setTXQueueReady(false)
-	}
 	return true
 }
 
@@ -216,20 +199,19 @@ func (s *Stream_server) ClearTXQueue() {
 	}
 
 	s.txQueueMu.Lock()
-	hadItems := s.TXQueue.FastSize() > 0
 	s.TXQueue.Clear(func(pkt *serverStreamTXPacket) {
 		putTXPacketToPool(pkt)
 	})
+
 	s.txQueueMu.Unlock()
-	if hadItems {
-		s.setTXQueueReady(false)
-	}
+
 }
 
 func (s *Stream_server) FastTXQueueSize() int {
 	if s == nil || s.TXQueue == nil {
 		return 0
 	}
+
 	return s.TXQueue.FastSize()
 }
 
@@ -237,15 +219,13 @@ func (s *Stream_server) PopNextTXPacket() (*serverStreamTXPacket, int, bool) {
 	if s == nil || s.TXQueue == nil {
 		return nil, 0, false
 	}
+
 	s.txQueueMu.Lock()
 	packet, priority, ok := s.TXQueue.Pop(func(p *serverStreamTXPacket) uint64 {
 		return Enums.PacketIdentityKey(s.ID, p.PacketType, p.SequenceNum, p.FragmentID)
 	})
-	isEmpty := s.TXQueue.FastSize() == 0
 	s.txQueueMu.Unlock()
-	if ok && isEmpty {
-		s.setTXQueueReady(false)
-	}
+
 	return packet, priority, ok
 }
 
@@ -253,15 +233,13 @@ func (s *Stream_server) PopAnyTXPacket(maxPriority int, predicate func(*serverSt
 	if s == nil || s.TXQueue == nil {
 		return nil, false
 	}
+
 	s.txQueueMu.Lock()
 	packet, ok := s.TXQueue.PopAnyIf(maxPriority, predicate, func(p *serverStreamTXPacket) uint64 {
 		return Enums.PacketIdentityKey(s.ID, p.PacketType, p.SequenceNum, p.FragmentID)
 	})
-	isEmpty := s.TXQueue.FastSize() == 0
 	s.txQueueMu.Unlock()
-	if ok && isEmpty {
-		s.setTXQueueReady(false)
-	}
+
 	return packet, ok
 }
 
@@ -295,6 +273,7 @@ func (s *Stream_server) attachUpstreamConn(conn io.ReadWriteCloser, host string,
 		s.Status = status
 	}
 	s.LastActivity = time.Now()
+	// worker is already started in NewStreamServer
 	return true
 }
 

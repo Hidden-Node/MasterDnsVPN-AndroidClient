@@ -799,7 +799,7 @@ func (s *Server) handleStreamDataRequest(vpnPacket VpnProto.Packet) bool {
 		return true
 	}
 
-	_ = stream.ARQ.ReceiveData(vpnPacket.SequenceNum, vpnPacket.Payload)
+	stream.enqueueInboundData(vpnPacket.PacketType, vpnPacket.SequenceNum, vpnPacket.FragmentID, vpnPacket.Payload)
 	return true
 }
 
@@ -872,12 +872,14 @@ func (s *Server) handleStreamRSTRequest(vpnPacket VpnProto.Packet) bool {
 	stream, ok := record.getStream(vpnPacket.StreamID)
 	if ok && stream != nil {
 		record.enqueueOrphanReset(Enums.PACKET_STREAM_RST_ACK, vpnPacket.StreamID, vpnPacket.SequenceNum)
+
 		if stream.ARQ != nil && stream.ARQ.IsClosed() {
 			stream.ClearTXQueue()
 			record.deactivateStream(vpnPacket.StreamID)
 			s.clearDeferredPacketsForStream(vpnPacket.SessionID, vpnPacket.StreamID)
 			return true
 		}
+
 		stream.ClearTXQueue()
 		record.deactivateStream(vpnPacket.StreamID)
 		s.clearDeferredPacketsForStream(vpnPacket.SessionID, vpnPacket.StreamID)

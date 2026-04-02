@@ -35,10 +35,11 @@ type Balancer struct {
 }
 
 type connectionStats struct {
-	sent         atomic.Uint64
-	acked        atomic.Uint64
-	rttMicrosSum atomic.Uint64
-	rttCount     atomic.Uint64
+	mu           sync.RWMutex
+	sent         uint64
+	acked        uint64
+	rttMicrosSum uint64
+	rttCount     uint64
 }
 
 type balancerSnapshot struct {
@@ -225,7 +226,9 @@ func (b *Balancer) SnapshotVersion() uint64 {
 
 func (b *Balancer) ReportSend(serverKey string) {
 	if stats := b.statsForKey(serverKey); stats != nil {
-		stats.sent.Add(1)
+		stats.mu.Lock()
+		stats.sent++
+		stats.mu.Unlock()
 	}
 }
 
@@ -235,21 +238,23 @@ func (b *Balancer) ReportSuccess(serverKey string, rtt time.Duration) {
 		return
 	}
 
-	stats.acked.Add(1)
+	stats.mu.Lock()
+	stats.acked++
 	if rtt > 0 {
-		stats.rttMicrosSum.Add(uint64(rtt / time.Microsecond))
-		stats.rttCount.Add(1)
+		stats.rttMicrosSum += uint64(rtt / time.Microsecond)
+		stats.rttCount++
 	}
 
-	sent := stats.sent.Load()
-	if sent <= 1000 {
+	if stats.sent <= 1000 {
+		stats.mu.Unlock()
 		return
 	}
 
-	stats.sent.Store(sent / 2)
-	stats.acked.Store(stats.acked.Load() / 2)
-	stats.rttMicrosSum.Store(stats.rttMicrosSum.Load() / 2)
-	stats.rttCount.Store(stats.rttCount.Load() / 2)
+	stats.sent /= 2
+	stats.acked /= 2
+	stats.rttMicrosSum /= 2
+	stats.rttCount /= 2
+	stats.mu.Unlock()
 }
 
 func (b *Balancer) ResetServerStats(serverKey string) {
@@ -258,10 +263,12 @@ func (b *Balancer) ResetServerStats(serverKey string) {
 		return
 	}
 
-	stats.sent.Store(0)
-	stats.acked.Store(0)
-	stats.rttMicrosSum.Store(0)
-	stats.rttCount.Store(0)
+	stats.mu.Lock()
+	stats.sent = 0
+	stats.acked = 0
+	stats.rttMicrosSum = 0
+	stats.rttCount = 0
+	stats.mu.Unlock()
 }
 
 func (b *Balancer) GetBestConnection() (Connection, bool) {
@@ -548,12 +555,11 @@ func (b *Balancer) lossScore(snap *balancerSnapshot, idx int) uint64 {
 	if stats == nil {
 		return 500
 	}
-	sent := stats.sent.Load()
+	sent, acked, _, _ := stats.snapshot()
 	if sent < 5 {
 		return 500
 	}
 
-	acked := stats.acked.Load()
 	if acked >= sent {
 		return 0
 	}
@@ -566,11 +572,11 @@ func (b *Balancer) latencyScore(snap *balancerSnapshot, idx int) uint64 {
 	if stats == nil {
 		return 999000
 	}
-	count := stats.rttCount.Load()
+	_, _, sum, count := stats.snapshot()
 	if count < 5 {
 		return 999000
 	}
-	return stats.rttMicrosSum.Load() / count
+	return sum / count
 }
 
 func (b *Balancer) roundRobinBestConnection(snap *balancerSnapshot) (Connection, bool) {
@@ -618,7 +624,11 @@ func (b *Balancer) hasLossSignal(snap *balancerSnapshot) bool {
 	}
 	for _, idx := range snap.valid {
 		stats := statsByIndex(snap, idx)
-		if stats != nil && stats.sent.Load() >= 5 {
+		if stats == nil {
+			continue
+		}
+		sent, _, _, _ := stats.snapshot()
+		if sent >= 5 {
 			return true
 		}
 	}
@@ -631,7 +641,11 @@ func (b *Balancer) hasLatencySignal(snap *balancerSnapshot) bool {
 	}
 	for _, idx := range snap.valid {
 		stats := statsByIndex(snap, idx)
-		if stats != nil && stats.rttCount.Load() >= 5 {
+		if stats == nil {
+			continue
+		}
+		_, _, _, count := stats.snapshot()
+		if count >= 5 {
 			return true
 		}
 	}
@@ -643,6 +657,20 @@ func statsByIndex(snap *balancerSnapshot, idx int) *connectionStats {
 		return nil
 	}
 	return snap.stats[idx]
+}
+
+func (s *connectionStats) snapshot() (sent uint64, acked uint64, rttMicrosSum uint64, rttCount uint64) {
+	if s == nil {
+		return 0, 0, 0, 0
+	}
+
+	s.mu.RLock()
+	sent = s.sent
+	acked = s.acked
+	rttMicrosSum = s.rttMicrosSum
+	rttCount = s.rttCount
+	s.mu.RUnlock()
+	return sent, acked, rttMicrosSum, rttCount
 }
 
 func (b *Balancer) nextRandom() uint64 {

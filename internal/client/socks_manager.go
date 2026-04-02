@@ -67,6 +67,15 @@ func (c *Client) supportsSOCKS4() bool {
 
 // HandleSOCKS5 manages the local SOCKS handshake and supports SOCKS4/4a and SOCKS5.
 func (c *Client) HandleSOCKS5(ctx context.Context, conn net.Conn) {
+	// Rate-limit check: reject immediately if IP is banned.
+	if c.socksRateLimit != nil {
+		ip := extractIP(conn)
+		if c.socksRateLimit.IsBlocked(ip) {
+			_ = conn.Close()
+			return
+		}
+	}
+
 	version := make([]byte, 1)
 	if _, err := io.ReadFull(conn, version); err != nil {
 		_ = conn.Close()
@@ -150,10 +159,24 @@ func (c *Client) handleSOCKS5Request(ctx context.Context, conn net.Conn) {
 
 		if string(user) != c.cfg.SOCKS5User || string(pass) != c.cfg.SOCKS5Pass {
 			_, _ = conn.Write([]byte{SOCKS5_USER_AUTH_VERSION, SOCKS5_USER_AUTH_FAILURE})
-			c.log.Warnf("🔒 <yellow>SOCKS5 Authentication failed for user: <cyan>%s</cyan></yellow>", string(user))
+			ip := extractIP(conn)
+			banned := false
+			if c.socksRateLimit != nil {
+				banned = c.socksRateLimit.RecordFailure(ip)
+			}
+			if banned {
+				c.log.Warnf("🔒 <red>SOCKS5 brute-force detected from <cyan>%s</cyan>, IP temporarily banned</red>", ip)
+			} else {
+				c.log.Warnf("🔒 <yellow>SOCKS5 Authentication failed for user: <cyan>%s</cyan> from <cyan>%s</cyan></yellow>", string(user), ip)
+			}
 			_ = conn.Close()
 			return
 		}
+
+		if c.socksRateLimit != nil {
+			c.socksRateLimit.RecordSuccess(extractIP(conn))
+		}
+
 		_, _ = conn.Write([]byte{SOCKS5_USER_AUTH_VERSION, SOCKS5_USER_AUTH_SUCCESS})
 	}
 
@@ -252,9 +275,18 @@ func (c *Client) handleSOCKS4Request(ctx context.Context, conn net.Conn) {
 	}
 
 	if c.cfg.SOCKS5Auth && c.cfg.SOCKS5User != string(userID) {
+		if c.socksRateLimit != nil {
+			ip := extractIP(conn)
+			if c.socksRateLimit.RecordFailure(ip) {
+				c.log.Warnf("🔒 <red>SOCKS4 brute-force detected from <cyan>%s</cyan>, IP temporarily banned</red>", ip)
+			}
+		}
 		_ = c.sendSocks4Reply(conn, false)
 		_ = conn.Close()
 		return
+	}
+	if c.cfg.SOCKS5Auth && c.socksRateLimit != nil {
+		c.socksRateLimit.RecordSuccess(extractIP(conn))
 	}
 
 	atyp := byte(SOCKS5_ATYP_IPV4)

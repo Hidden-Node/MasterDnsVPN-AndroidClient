@@ -139,7 +139,7 @@ func (s *Server) readLoop(ctx context.Context, conn *net.UDPConn, reqCh chan<- r
 			return nil
 		default:
 			s.packetPool.Put(buffer)
-			s.onDrop(addr)
+			s.onDrop(addr, len(reqCh), cap(reqCh))
 		}
 	}
 }
@@ -187,7 +187,7 @@ func (s *Server) safeHandlePacket(packet []byte) (response []byte) {
 	return s.handlePacket(packet)
 }
 
-func (s *Server) onDrop(addr *net.UDPAddr) {
+func (s *Server) onDrop(addr *net.UDPAddr, queueLen int, queueCap int) {
 	total := s.droppedPackets.Add(1)
 
 	now := logger.NowUnixNano()
@@ -204,8 +204,10 @@ func (s *Server) onDrop(addr *net.UDPAddr) {
 	}
 
 	s.log.Warnf(
-		"\U0001F6A8 <yellow>Request Queue Overloaded</yellow> <magenta>|</magenta> <blue>Dropped</blue>: <magenta>%d</magenta> <magenta>|</magenta> <blue>Remote</blue>: <cyan>%v</cyan>",
+		"\U0001F6A8 <yellow>Request Queue Overloaded</yellow> <magenta>|</magenta> <blue>Dropped</blue>: <magenta>%d</magenta> <magenta>|</magenta> <blue>Queue</blue>: <cyan>%d/%d</cyan> <magenta>|</magenta> <blue>Remote</blue>: <cyan>%v</cyan>",
 		total,
+		queueLen,
+		queueCap,
 		addr,
 	)
 }

@@ -19,6 +19,7 @@ import (
 	dnsCache "masterdnsvpn-go/internal/dnscache"
 	dnsParser "masterdnsvpn-go/internal/dnsparser"
 	Enums "masterdnsvpn-go/internal/enums"
+	"masterdnsvpn-go/internal/netutil"
 	VpnProto "masterdnsvpn-go/internal/vpnproto"
 )
 
@@ -53,6 +54,14 @@ func (l *DNSListener) Start(ctx context.Context, ip string, port int) error {
 	l.conn = conn
 
 	l.client.log.Infof("🚀 <green>DNS server is listening on <cyan>%s:%d</cyan></green>", ip, port)
+	actualPort := port
+	if localAddr, ok := conn.LocalAddr().(*net.UDPAddr); ok && localAddr != nil && localAddr.Port > 0 {
+		actualPort = localAddr.Port
+	}
+
+	if hint := netutil.FormatListenHint(ip, actualPort); hint != "" {
+		l.client.log.Infof("🌐 <green>DNS Server %s</green>", hint)
+	}
 
 	go func() {
 		buf := make([]byte, 4096)

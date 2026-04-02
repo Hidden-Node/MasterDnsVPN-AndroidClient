@@ -180,6 +180,8 @@ class SettingsViewModel @Inject constructor(
             "ARQ_INITIAL_RTO_SECONDS",
             "ARQ_MAX_RTO_SECONDS",
             "ARQ_MAX_DATA_RETRIES",
+            "ARQ_DATA_NACK_INITIAL_DELAY_SECONDS",
+            "ARQ_DATA_NACK_REPEAT_SECONDS",
             "ARQ_INACTIVITY_TIMEOUT_SECONDS",
             "LOG_LEVEL"
         )
@@ -215,6 +217,8 @@ class SettingsViewModel @Inject constructor(
             "ARQ_INITIAL_RTO_SECONDS",
             "ARQ_MAX_RTO_SECONDS",
             "ARQ_MAX_DATA_RETRIES",
+            "ARQ_DATA_NACK_INITIAL_DELAY_SECONDS",
+            "ARQ_DATA_NACK_REPEAT_SECONDS",
             "ARQ_INACTIVITY_TIMEOUT_SECONDS"
         )
     }

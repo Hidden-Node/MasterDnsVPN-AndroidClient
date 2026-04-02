@@ -186,6 +186,7 @@ func (s *Server) queueSessionPacket(sessionID uint8, packet VpnProto.Packet) boo
 		if !exists || stream == nil {
 			return false
 		}
+
 		return stream.PushTXPacket(getEffectivePriority(packet.PacketType, 3), packet.PacketType, packet.SequenceNum, packet.FragmentID, packet.TotalFragments, packet.CompressionType, 0, packet.Payload)
 	}
 
@@ -199,22 +200,23 @@ func (s *Server) queueSessionPacket(sessionID uint8, packet VpnProto.Packet) boo
 
 func (s *Server) streamARQConfig(compressionType uint8) arq.Config {
 	return arq.Config{
-		WindowSize:               s.cfg.ARQWindowSize,
-		RTO:                      s.cfg.ARQInitialRTOSeconds,
-		MaxRTO:                   s.cfg.ARQMaxRTOSeconds,
-		EnableControlReliability: true,
-		ControlRTO:               s.cfg.ARQControlInitialRTOSeconds,
-		ControlMaxRTO:            s.cfg.ARQControlMaxRTOSeconds,
-		ControlMaxRetries:        s.cfg.ARQMaxControlRetries,
-		InactivityTimeout:        s.cfg.ARQInactivityTimeoutSeconds,
-		DataPacketTTL:            s.cfg.ARQDataPacketTTLSeconds,
-		MaxDataRetries:           s.cfg.ARQMaxDataRetries,
-		DataNackMaxGap:           s.cfg.ARQDataNackMaxGap,
-		DataNackRepeatSeconds:    s.cfg.ARQDataNackRepeatSeconds,
-		ControlPacketTTL:         s.cfg.ARQControlPacketTTLSeconds,
-		TerminalDrainTimeout:     s.cfg.ARQTerminalDrainTimeoutSec,
-		TerminalAckWaitTimeout:   s.cfg.ARQTerminalAckWaitTimeoutSec,
-		CompressionType:          compressionType,
+		WindowSize:                  s.cfg.ARQWindowSize,
+		RTO:                         s.cfg.ARQInitialRTOSeconds,
+		MaxRTO:                      s.cfg.ARQMaxRTOSeconds,
+		EnableControlReliability:    true,
+		ControlRTO:                  s.cfg.ARQControlInitialRTOSeconds,
+		ControlMaxRTO:               s.cfg.ARQControlMaxRTOSeconds,
+		ControlMaxRetries:           s.cfg.ARQMaxControlRetries,
+		InactivityTimeout:           s.cfg.ARQInactivityTimeoutSeconds,
+		DataPacketTTL:               s.cfg.ARQDataPacketTTLSeconds,
+		MaxDataRetries:              s.cfg.ARQMaxDataRetries,
+		DataNackMaxGap:              s.cfg.ARQDataNackMaxGap,
+		DataNackInitialDelaySeconds: s.cfg.ARQDataNackInitialDelaySeconds,
+		DataNackRepeatSeconds:       s.cfg.ARQDataNackRepeatSeconds,
+		ControlPacketTTL:            s.cfg.ARQControlPacketTTLSeconds,
+		TerminalDrainTimeout:        s.cfg.ARQTerminalDrainTimeoutSec,
+		TerminalAckWaitTimeout:      s.cfg.ARQTerminalAckWaitTimeoutSec,
+		CompressionType:             compressionType,
 	}
 }
 
@@ -278,6 +280,7 @@ func (s *Server) serveQueuedOrPong(questionPacket []byte, requestName string, re
 	if record == nil {
 		return nil
 	}
+
 	sessionID := record.ID
 
 	if pkt, ok := s.dequeueSessionResponse(sessionID, now); ok {
@@ -305,12 +308,14 @@ func (s *Server) dequeueSessionResponse(sessionID uint8, now time.Time) (*VpnPro
 	rrStreamID := record.RRStreamID
 	record.mu.Unlock()
 
-	readyIDs, readyStreams := record.readyStreamSnapshot()
+	readyIDs, readyStreams := record.activeStreamSnapshot()
 	hasOrphan := record.OrphanQueue != nil && record.OrphanQueue.FastSize() > 0
 	totalCandidates := len(readyIDs)
+
 	if hasOrphan {
 		totalCandidates++
 	}
+
 	if totalCandidates == 0 {
 		return nil, false
 	}
@@ -361,7 +366,7 @@ func (s *Server) dequeueSessionResponse(sessionID uint8, now time.Time) (*VpnPro
 				ok = true
 			}
 		} else {
-			if stream == nil || stream.TXQueue == nil {
+			if stream == nil || stream.TXQueue == nil || stream.FastTXQueueSize() == 0 {
 				continue
 			}
 			if stream.ARQ != nil && stream.ARQ.IsClosed() {
@@ -453,7 +458,7 @@ func (s *Server) packControlBlocks(record *sessionRecord, first *serverStreamTXP
 	payload = VpnProto.AppendPackedControlBlock(payload, first.PacketType, initialStreamID, first.SequenceNum, first.FragmentID, first.TotalFragments)
 	blocks := 1
 
-	readyIDs, readyStreams := record.readyStreamSnapshot()
+	readyIDs, readyStreams := record.activeStreamSnapshot()
 	hasOrphan := record.OrphanQueue != nil && record.OrphanQueue.FastSize() > 0
 
 	processID := func(id int32, stream *Stream_server) bool {
@@ -553,6 +558,7 @@ func (s *Server) packControlBlocks(record *sessionRecord, first *serverStreamTXP
 buildResult:
 	if blocks <= 1 {
 		pkt := vpnPacketFromTX(first, initialStreamID)
+
 		if initialID != -1 {
 			putTXPacketToPool(first)
 		}

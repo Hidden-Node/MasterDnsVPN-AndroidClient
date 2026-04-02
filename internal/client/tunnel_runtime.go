@@ -23,7 +23,18 @@ import (
 const (
 	// RuntimeUDPReadBufferSize defines the maximum size of the UDP read buffer.
 	RuntimeUDPReadBufferSize = 65535
+
+	// pooledConnMaxAge is the maximum time a UDP connection can remain idle in
+	// the resolver pool before it is discarded and re-dialed. Stale connections can have their
+	// NAT mappings expired, causing silent packet loss (writes succeed but
+	// responses route to a dead port).
+	pooledConnMaxAge = 90 * time.Second
 )
+
+type pooledUDPConn struct {
+	conn     *net.UDPConn
+	pooledAt time.Time
+}
 
 // exchangeUDPQueryWithConn sends one UDP packet through the provided connection
 // and waits for a response with a matching DNS transaction ID.
@@ -88,16 +99,23 @@ func (c *Client) getUDPConn(resolverLabel string) (*net.UDPConn, error) {
 	c.resolverConnsMu.Lock()
 	pool, ok := c.resolverConns[resolverLabel]
 	if !ok {
-		pool = make(chan *net.UDPConn, c.cfg.ResolverUDPConnectionPoolSize)
+		pool = make(chan pooledUDPConn, c.cfg.ResolverUDPConnectionPoolSize)
 		c.resolverConns[resolverLabel] = pool
 	}
 	c.resolverConnsMu.Unlock()
 
-	select {
-	case conn := <-pool:
-		return conn, nil
-	default:
-		return dialUDPResolver(resolverLabel)
+	now := time.Now()
+	for {
+		select {
+		case pc := <-pool:
+			if now.Sub(pc.pooledAt) > pooledConnMaxAge {
+				_ = pc.conn.Close()
+				continue // discard stale, try next
+			}
+			return pc.conn, nil
+		default:
+			return dialUDPResolver(resolverLabel)
+		}
 	}
 }
 
@@ -118,7 +136,7 @@ func (c *Client) putUDPConn(resolverLabel string, conn *net.UDPConn) {
 	}
 
 	select {
-	case pool <- conn:
+	case pool <- pooledUDPConn{conn: conn, pooledAt: time.Now()}:
 	default:
 		_ = conn.Close()
 	}
@@ -131,15 +149,15 @@ func (c *Client) closeResolverConnPools() {
 
 	c.resolverConnsMu.Lock()
 	pools := c.resolverConns
-	c.resolverConns = make(map[string]chan *net.UDPConn)
+	c.resolverConns = make(map[string]chan pooledUDPConn)
 	c.resolverConnsMu.Unlock()
 
 	for _, pool := range pools {
 		for {
 			select {
-			case conn := <-pool:
-				if conn != nil {
-					_ = conn.Close()
+			case pc := <-pool:
+				if pc.conn != nil {
+					_ = pc.conn.Close()
 				}
 			default:
 				goto nextPool

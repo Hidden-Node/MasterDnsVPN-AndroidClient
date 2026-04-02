@@ -72,8 +72,14 @@ func TestCleanupClosedSessionClosesStreamsAndClearsQueues(t *testing.T) {
 	record.streamCleanup = s.cleanupStreamArtifacts
 
 	upstream := &testReadWriteCloser{}
-	stream := record.getOrCreateStream(1, arq.Config{}, nil, nil)
+	cfg := arq.Config{WindowSize: 32, RTO: 1.0, MaxRTO: 5.0}
+	stream := record.getOrCreateStream(1, cfg, nil, nil)
 	stream.UpstreamConn = upstream
+	stream.Connected = true
+
+	if !stream.enqueueInboundData(Enums.PACKET_STREAM_DATA, 1, 0, []byte("inbound")) {
+		t.Fatal("expected inbound packet to queue")
+	}
 	if !stream.PushTXPacket(Enums.DefaultPacketPriority(Enums.PACKET_STREAM_RST), Enums.PACKET_STREAM_RST, 12, 0, 0, 0, 0, nil) {
 		t.Fatalf("expected TX packet to be queued")
 	}
@@ -101,11 +107,14 @@ func TestCleanupClosedSessionClosesStreamsAndClearsQueues(t *testing.T) {
 	if !upstream.closed {
 		t.Fatalf("expected upstream connection to be closed")
 	}
+	if stream.Status != "CLOSED" {
+		t.Fatalf("expected stream status CLOSED, got %q", stream.Status)
+	}
 	if stream.TXQueue.Size() != 0 {
 		t.Fatalf("expected stream TX queue to be cleared, got %d", stream.TXQueue.Size())
 	}
-	if stream.Status != "CLOSED" {
-		t.Fatalf("expected stream status CLOSED, got %q", stream.Status)
+	if stream.ARQ != nil && !stream.ARQ.IsClosed() {
+		t.Fatal("expected ARQ to be closed after cleanup")
 	}
 
 	record.StreamsMu.RLock()
@@ -139,6 +148,33 @@ func TestCleanupClosedSessionClosesStreamsAndClearsQueues(t *testing.T) {
 		5*time.Minute,
 	); !ready || completed {
 		t.Fatal("expected closed session cleanup to clear SOCKS5 fragment state")
+	}
+}
+
+func TestFinalizeAfterARQCloseClearsTXQueue(t *testing.T) {
+	record := newTestSessionRecord(44)
+	cfg := arq.Config{WindowSize: 32, RTO: 1.0, MaxRTO: 5.0}
+	stream := record.getOrCreateStream(5, cfg, nil, nil)
+	if stream == nil {
+		t.Fatal("expected stream to be created")
+	}
+
+	stream.Connected = true
+	if !stream.PushTXPacket(Enums.DefaultPacketPriority(Enums.PACKET_STREAM_RST), Enums.PACKET_STREAM_RST, 5, 0, 0, 0, 0, nil) {
+		t.Fatal("expected queued TX packet before finalize")
+	}
+	if stream.ARQ != nil {
+		stream.ARQ.Close("test close", arq.CloseOptions{Force: true})
+	}
+	stream.finalizeAfterARQClose("test close")
+	if stream.Status != "CLOSED" {
+		t.Fatalf("expected stream status CLOSED, got %q", stream.Status)
+	}
+	if stream.TXQueue.Size() != 0 {
+		t.Fatalf("expected TX queue to be cleared, got %d", stream.TXQueue.Size())
+	}
+	if stream.ARQ != nil && !stream.ARQ.IsClosed() {
+		t.Fatal("expected ARQ to be closed")
 	}
 }
 
@@ -269,50 +305,28 @@ func TestCollectIdleDeferredSessionsMarksIdleActiveSessionOncePerActivityWindow(
 	}
 }
 
-func TestSessionReadyStreamSnapshotTracksQueueTransitions(t *testing.T) {
-	record := newTestSessionRecord(41)
-	record.DownloadCompression = 0
-
-	stream1 := record.getOrCreateStream(1, arq.Config{}, nil, nil)
-	stream2 := record.getOrCreateStream(2, arq.Config{}, nil, nil)
-	if stream1 == nil || stream2 == nil {
-		t.Fatal("expected streams to be created")
+func TestDequeueSessionResponseScansActiveStreams(t *testing.T) {
+	s := &Server{
+		sessions: newSessionStore(8, 32),
 	}
 
-	if ids, _ := record.readyStreamSnapshot(); len(ids) != 0 {
-		t.Fatalf("expected no ready streams initially, got %v", ids)
+	record := newTestSessionRecord(43)
+	stream := record.getOrCreateStream(1, arq.Config{}, nil, nil)
+	if stream == nil {
+		t.Fatal("expected stream to be created")
+	}
+	if !stream.PushTXPacket(Enums.DefaultPacketPriority(Enums.PACKET_STREAM_CONNECTED), Enums.PACKET_STREAM_CONNECTED, 12, 0, 0, 0, 0, nil) {
+		t.Fatal("expected stream packet to queue")
 	}
 
-	if !stream1.PushTXPacket(Enums.DefaultPacketPriority(Enums.PACKET_STREAM_SYN_ACK), Enums.PACKET_STREAM_SYN_ACK, 10, 0, 0, 0, 0, nil) {
-		t.Fatal("expected stream1 packet to queue")
-	}
-	if !stream2.PushTXPacket(Enums.DefaultPacketPriority(Enums.PACKET_STREAM_CLOSE_READ_ACK), Enums.PACKET_STREAM_CLOSE_READ_ACK, 11, 0, 0, 0, 0, nil) {
-		t.Fatal("expected stream2 packet to queue")
-	}
+	s.sessions.byID[record.ID] = record
 
-	ids, _ := record.readyStreamSnapshot()
-	if len(ids) != 2 || ids[0] != 1 || ids[1] != 2 {
-		t.Fatalf("expected ready stream snapshot [1 2], got %v", ids)
+	pkt, ok := s.dequeueSessionResponse(record.ID, time.Now())
+	if !ok || pkt == nil {
+		t.Fatal("expected dequeue to find queued packet from active streams")
 	}
-
-	popped, _, ok := stream1.PopNextTXPacket()
-	if !ok || popped == nil {
-		t.Fatal("expected stream1 packet to pop")
-	}
-	putTXPacketToPool(popped)
-
-	ids, _ = record.readyStreamSnapshot()
-	if len(ids) != 1 || ids[0] != 2 {
-		t.Fatalf("expected only stream2 to remain ready, got %v", ids)
-	}
-
-	if !stream1.PushTXPacket(Enums.DefaultPacketPriority(Enums.PACKET_STREAM_CONNECTED), Enums.PACKET_STREAM_CONNECTED, 12, 0, 0, 0, 0, nil) {
-		t.Fatal("expected stream1 packet to requeue")
-	}
-
-	ids, _ = record.readyStreamSnapshot()
-	if len(ids) != 2 || ids[0] != 1 || ids[1] != 2 {
-		t.Fatalf("expected ready stream snapshot to recover to [1 2], got %v", ids)
+	if pkt.PacketType != Enums.PACKET_STREAM_CONNECTED || pkt.StreamID != 1 || pkt.SequenceNum != 12 {
+		t.Fatalf("unexpected dequeued packet: %#v", pkt)
 	}
 }
 

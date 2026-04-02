@@ -574,6 +574,8 @@ func TestARQ_ReceiveDataSendsBoundedNackForNearGap(t *testing.T) {
 		DataNackMaxGap:        2,
 		DataNackRepeatSeconds: 2.0,
 	})
+	a.Start()
+	defer a.Close("test end", CloseOptions{Force: true})
 
 	a.ReceiveData(1, []byte("packet 1"))
 
@@ -599,6 +601,8 @@ func TestARQ_ReceiveDataDoesNotNackFarGap(t *testing.T) {
 		DataNackMaxGap:        2,
 		DataNackRepeatSeconds: 2.0,
 	})
+	a.Start()
+	defer a.Close("test end", CloseOptions{Force: true})
 
 	a.ReceiveData(3, []byte("packet 3"))
 
@@ -609,11 +613,11 @@ func TestARQ_ReceiveDataDoesNotNackFarGap(t *testing.T) {
 
 	firstNack := <-enqueuer.Packets
 	secondNack := <-enqueuer.Packets
-	if firstNack.packetType != Enums.PACKET_STREAM_DATA_NACK || firstNack.sequenceNum != 1 {
-		t.Fatalf("expected first DATA_NACK for seq 1, got %s seq=%d", Enums.PacketTypeName(firstNack.packetType), firstNack.sequenceNum)
+	if firstNack.packetType != Enums.PACKET_STREAM_DATA_NACK || firstNack.sequenceNum != 0 {
+		t.Fatalf("expected first sampled DATA_NACK for seq 0, got %s seq=%d", Enums.PacketTypeName(firstNack.packetType), firstNack.sequenceNum)
 	}
-	if secondNack.packetType != Enums.PACKET_STREAM_DATA_NACK || secondNack.sequenceNum != 2 {
-		t.Fatalf("expected second DATA_NACK for seq 2, got %s seq=%d", Enums.PacketTypeName(secondNack.packetType), secondNack.sequenceNum)
+	if secondNack.packetType != Enums.PACKET_STREAM_DATA_NACK || secondNack.sequenceNum != 1 {
+		t.Fatalf("expected frontier DATA_NACK for seq 1, got %s seq=%d", Enums.PacketTypeName(secondNack.packetType), secondNack.sequenceNum)
 	}
 	select {
 	case extra := <-enqueuer.Packets:
@@ -721,6 +725,8 @@ func TestARQ_ReceiveDataSuppressesRepeatedNackUntilInterval(t *testing.T) {
 		DataNackMaxGap:        2,
 		DataNackRepeatSeconds: 2.0,
 	})
+	a.Start()
+	defer a.Close("test end", CloseOptions{Force: true})
 
 	a.ReceiveData(1, []byte("packet 1"))
 	<-enqueuer.Packets
@@ -739,6 +745,82 @@ func TestARQ_ReceiveDataSuppressesRepeatedNackUntilInterval(t *testing.T) {
 	}
 }
 
+func TestARQ_ReceiveDataWaitsForInitialNackDelay(t *testing.T) {
+	enqueuer := NewMockPacketEnqueuer()
+	a := NewARQ(1, 1, enqueuer, nil, 1000, &testLogger{t}, Config{
+		WindowSize:                  64,
+		RTO:                         0.2,
+		MaxRTO:                      1.0,
+		DataNackMaxGap:              2,
+		DataNackInitialDelaySeconds: 0.2,
+		DataNackRepeatSeconds:       1.0,
+	})
+	a.Start()
+	defer a.Close("test end", CloseOptions{Force: true})
+
+	a.ReceiveData(1, []byte("packet 1"))
+
+	first := <-enqueuer.Packets
+	if first.packetType != Enums.PACKET_STREAM_DATA_ACK {
+		t.Fatalf("expected DATA_ACK, got %s", Enums.PacketTypeName(first.packetType))
+	}
+
+	select {
+	case extra := <-enqueuer.Packets:
+		t.Fatalf("expected no immediate DATA_NACK before initial delay, got %s seq=%d", Enums.PacketTypeName(extra.packetType), extra.sequenceNum)
+	case <-time.After(50 * time.Millisecond):
+	}
+
+	time.Sleep(220 * time.Millisecond)
+	a.ReceiveData(1, []byte("packet 1"))
+
+	second := <-enqueuer.Packets
+	if second.packetType != Enums.PACKET_STREAM_DATA_ACK {
+		t.Fatalf("expected second DATA_ACK, got %s", Enums.PacketTypeName(second.packetType))
+	}
+
+	nack := <-enqueuer.Packets
+	if nack.packetType != Enums.PACKET_STREAM_DATA_NACK || nack.sequenceNum != 0 {
+		t.Fatalf("expected delayed DATA_NACK for seq 0, got %s seq=%d", Enums.PacketTypeName(nack.packetType), nack.sequenceNum)
+	}
+}
+
+func TestARQ_ReceiveDataClearsPendingInitialNackDelayWhenGapArrives(t *testing.T) {
+	enqueuer := NewMockPacketEnqueuer()
+	a := NewARQ(1, 1, enqueuer, nil, 1000, &testLogger{t}, Config{
+		WindowSize:                  64,
+		RTO:                         0.2,
+		MaxRTO:                      1.0,
+		DataNackMaxGap:              3,
+		DataNackInitialDelaySeconds: 0.2,
+		DataNackRepeatSeconds:       1.0,
+	})
+	a.Start()
+	defer a.Close("test end", CloseOptions{Force: true})
+
+	a.ReceiveData(2, []byte("packet 2"))
+	if p := <-enqueuer.Packets; p.packetType != Enums.PACKET_STREAM_DATA_ACK {
+		t.Fatalf("expected DATA_ACK for seq 2, got %s", Enums.PacketTypeName(p.packetType))
+	}
+
+	a.ReceiveData(0, []byte("packet 0"))
+	if p := <-enqueuer.Packets; p.packetType != Enums.PACKET_STREAM_DATA_ACK {
+		t.Fatalf("expected DATA_ACK for seq 0, got %s", Enums.PacketTypeName(p.packetType))
+	}
+
+	time.Sleep(220 * time.Millisecond)
+	a.ReceiveData(1, []byte("packet 1"))
+	if p := <-enqueuer.Packets; p.packetType != Enums.PACKET_STREAM_DATA_ACK {
+		t.Fatalf("expected DATA_ACK for seq 1, got %s", Enums.PacketTypeName(p.packetType))
+	}
+
+	select {
+	case extra := <-enqueuer.Packets:
+		t.Fatalf("expected resolved gap to suppress delayed NACK, got %s seq=%d", Enums.PacketTypeName(extra.packetType), extra.sequenceNum)
+	case <-time.After(50 * time.Millisecond):
+	}
+}
+
 func TestARQ_ReceiveDataDoesNotNackAlreadyBufferedGap(t *testing.T) {
 	enqueuer := NewMockPacketEnqueuer()
 	a := NewARQ(1, 1, enqueuer, nil, 1000, &testLogger{t}, Config{
@@ -748,6 +830,8 @@ func TestARQ_ReceiveDataDoesNotNackAlreadyBufferedGap(t *testing.T) {
 		DataNackMaxGap:        4,
 		DataNackRepeatSeconds: 0.1,
 	})
+	a.Start()
+	defer a.Close("test end", CloseOptions{Force: true})
 
 	a.ReceiveData(2, []byte("packet 2"))
 	<-enqueuer.Packets
@@ -792,19 +876,56 @@ func TestARQ_ReceiveDataNacksRecentWindowWhenRcvNxtStalls(t *testing.T) {
 		DataNackMaxGap:        4,
 		DataNackRepeatSeconds: 0.1,
 	})
+	a.Start()
+	defer a.Close("test end", CloseOptions{Force: true})
 
 	a.ReceiveData(10, []byte("packet 10"))
 	<-enqueuer.Packets // DATA_ACK
-	for expected := uint16(6); expected < 10; expected++ {
-		nack := <-enqueuer.Packets
-		if nack.packetType != Enums.PACKET_STREAM_DATA_NACK || nack.sequenceNum != expected {
-			t.Fatalf("expected recent-window NACK for seq %d, got %s seq=%d", expected, Enums.PacketTypeName(nack.packetType), nack.sequenceNum)
-		}
+	first := <-enqueuer.Packets
+	if first.packetType != Enums.PACKET_STREAM_DATA_NACK || first.sequenceNum != 0 {
+		t.Fatalf("expected first sampled NACK for seq 0, got %s seq=%d", Enums.PacketTypeName(first.packetType), first.sequenceNum)
+	}
+	second := <-enqueuer.Packets
+	if second.packetType != Enums.PACKET_STREAM_DATA_NACK || second.sequenceNum != 3 {
+		t.Fatalf("expected frontier NACK for seq 3, got %s seq=%d", Enums.PacketTypeName(second.packetType), second.sequenceNum)
 	}
 
 	select {
 	case extra := <-enqueuer.Packets:
 		t.Fatalf("expected no NACKs outside recent window, got %s seq=%d", Enums.PacketTypeName(extra.packetType), extra.sequenceNum)
+	case <-time.After(50 * time.Millisecond):
+	}
+}
+
+func TestARQ_ReceiveDataLargeGapSamplesFrontierInsteadOfFloodingNacks(t *testing.T) {
+	enqueuer := NewMockPacketEnqueuer()
+	a := NewARQ(1, 1, enqueuer, nil, 1000, &testLogger{t}, Config{
+		WindowSize:            256,
+		RTO:                   0.2,
+		MaxRTO:                1.0,
+		DataNackMaxGap:        100,
+		DataNackRepeatSeconds: 0.1,
+	})
+	a.Start()
+	defer a.Close("test end", CloseOptions{Force: true})
+
+	a.ReceiveData(140, []byte("packet 140"))
+	ack := <-enqueuer.Packets
+	if ack.packetType != Enums.PACKET_STREAM_DATA_ACK || ack.sequenceNum != 140 {
+		t.Fatalf("expected DATA_ACK for seq 140, got %s seq=%d", Enums.PacketTypeName(ack.packetType), ack.sequenceNum)
+	}
+
+	expected := []uint16{0, 1, 2, 3, 4, 99}
+	for _, seq := range expected {
+		nack := <-enqueuer.Packets
+		if nack.packetType != Enums.PACKET_STREAM_DATA_NACK || nack.sequenceNum != seq {
+			t.Fatalf("expected NACK for seq %d, got %s seq=%d", seq, Enums.PacketTypeName(nack.packetType), nack.sequenceNum)
+		}
+	}
+
+	select {
+	case extra := <-enqueuer.Packets:
+		t.Fatalf("expected bounded NACK sampling, got extra %s seq=%d", Enums.PacketTypeName(extra.packetType), extra.sequenceNum)
 	case <-time.After(50 * time.Millisecond):
 	}
 }
@@ -818,6 +939,8 @@ func TestARQ_ReceiveDataClearsQueuedNackWhenMissingDataArrives(t *testing.T) {
 		DataNackMaxGap:        2,
 		DataNackRepeatSeconds: 2.0,
 	})
+	a.Start()
+	defer a.Close("test end", CloseOptions{Force: true})
 
 	a.ReceiveData(1, []byte("packet 1"))
 	<-enqueuer.Packets
@@ -1467,65 +1590,6 @@ func TestARQ_IOReadDataWithEOFStillQueuesFinalChunk(t *testing.T) {
 	}
 }
 
-func TestARQ_IOReadLargerChunkSegmentsByMTUAndDefersCloseRead(t *testing.T) {
-	enqueuer := NewMockPacketEnqueuer()
-	cfg := Config{
-		WindowSize:               100,
-		RTO:                      0.1,
-		MaxRTO:                   0.5,
-		EnableControlReliability: true,
-		IsClient:                 true,
-	}
-
-	payload := []byte("hello world")
-	conn := &eofAfterDataConn{data: payload}
-	a := NewARQ(1, 1, enqueuer, conn, 4, &testLogger{t}, cfg)
-	a.Start()
-	defer a.Close("test end", CloseOptions{Force: true})
-
-	var got [][]byte
-	timeout := time.After(1 * time.Second)
-	for len(got) < 3 {
-		select {
-		case p := <-enqueuer.Packets:
-			if p.packetType != Enums.PACKET_STREAM_DATA {
-				continue
-			}
-			got = append(got, append([]byte(nil), p.payload...))
-		case <-timeout:
-			t.Fatalf("timed out waiting for segmented data packets, got=%d", len(got))
-		}
-	}
-
-	expected := [][]byte{
-		[]byte("hell"),
-		[]byte("o wo"),
-		[]byte("rld"),
-	}
-	for i := range expected {
-		if !bytes.Equal(got[i], expected[i]) {
-			t.Fatalf("expected chunk %d to be %q, got %q", i, expected[i], got[i])
-		}
-		if !a.HasPendingSequence(uint16(i)) {
-			t.Fatalf("expected sequence %d to remain tracked in sndBuf", i)
-		}
-	}
-
-	deadline := time.Now().Add(1 * time.Second)
-	for time.Now().Before(deadline) {
-		a.mu.Lock()
-		deferred := a.deferredClose
-		deferredPacket := a.deferredPacket
-		a.mu.Unlock()
-		if deferred && deferredPacket == Enums.PACKET_STREAM_CLOSE_READ {
-			return
-		}
-		time.Sleep(10 * time.Millisecond)
-	}
-
-	t.Fatal("expected segmented EOF read to arm deferred CLOSE_READ")
-}
-
 func TestARQ_ClientIOReadDataWithEOFQueuesFinalChunkAndEntersResetPath(t *testing.T) {
 	enqueuer := NewMockPacketEnqueuer()
 	cfg := Config{
@@ -1633,74 +1697,6 @@ func TestARQ_IOReadDataWithErrorDefersRSTUntilDrain(t *testing.T) {
 		}
 		time.Sleep(10 * time.Millisecond)
 	}
-}
-
-func TestARQ_IOReadLargerChunkSegmentsByMTUAndDefersRSTUntilDrain(t *testing.T) {
-	enqueuer := NewMockPacketEnqueuer()
-	cfg := Config{
-		WindowSize:               100,
-		RTO:                      0.1,
-		MaxRTO:                   0.5,
-		EnableControlReliability: true,
-	}
-
-	payload := []byte("chunk before read error")
-	conn := &errAfterDataConn{data: payload, err: errors.New("boom")}
-	a := NewARQ(1, 1, enqueuer, conn, 5, &testLogger{t}, cfg)
-	a.Start()
-	defer a.Close("test end", CloseOptions{Force: true})
-
-	var got [][]byte
-	timeout := time.After(1 * time.Second)
-	for len(got) < 5 {
-		select {
-		case p := <-enqueuer.Packets:
-			if p.packetType != Enums.PACKET_STREAM_DATA {
-				continue
-			}
-			got = append(got, append([]byte(nil), p.payload...))
-		case <-timeout:
-			t.Fatalf("timed out waiting for segmented error-path data packets, got=%d", len(got))
-		}
-	}
-
-	expected := [][]byte{
-		[]byte("chunk"),
-		[]byte(" befo"),
-		[]byte("re re"),
-		[]byte("ad er"),
-		[]byte("ror"),
-	}
-	for i := range expected {
-		if !bytes.Equal(got[i], expected[i]) {
-			t.Fatalf("expected chunk %d to be %q, got %q", i, expected[i], got[i])
-		}
-		if !a.HasPendingSequence(uint16(i)) {
-			t.Fatalf("expected sequence %d to remain pending for drain", i)
-		}
-	}
-
-	select {
-	case p := <-enqueuer.Packets:
-		if p.packetType == Enums.PACKET_STREAM_RST {
-			t.Fatal("expected segmented read error not to emit RST immediately before drain")
-		}
-	default:
-	}
-
-	deadline := time.Now().Add(1 * time.Second)
-	for time.Now().Before(deadline) {
-		a.mu.Lock()
-		deferred := a.deferredClose
-		deferredPacket := a.deferredPacket
-		a.mu.Unlock()
-		if deferred && deferredPacket == Enums.PACKET_STREAM_RST {
-			return
-		}
-		time.Sleep(10 * time.Millisecond)
-	}
-
-	t.Fatal("expected segmented read error to arm deferred RST drain path")
 }
 
 func TestARQ_IOTransientReadErrorDoesNotResetStream(t *testing.T) {

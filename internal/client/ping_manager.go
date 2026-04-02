@@ -23,6 +23,7 @@ type PingManager struct {
 	lastPongReceivedAt    atomic.Int64
 	lastNonPingSentAt     atomic.Int64
 	lastNonPongReceivedAt atomic.Int64
+	nextPingSeq           atomic.Uint32
 
 	ctx        context.Context
 	cancel     context.CancelFunc
@@ -162,7 +163,16 @@ func (p *PingManager) pingLoop() {
 					p.client.streamsMu.RUnlock()
 
 					if s0 != nil {
-						s0.PushTXPacket(Enums.DefaultPacketPriority(Enums.PACKET_PING), Enums.PACKET_PING, 0, 0, 0, 0, 0, payload)
+						s0.PushTXPacket(
+							Enums.DefaultPacketPriority(Enums.PACKET_PING),
+							Enums.PACKET_PING,
+							p.nextPingSequence(),
+							0,
+							0,
+							0,
+							0,
+							payload,
+						)
 					}
 				}
 			}
@@ -184,6 +194,13 @@ func (p *PingManager) pingLoop() {
 		}
 		timer.Reset(checkInterval)
 	}
+}
+
+func (p *PingManager) nextPingSequence() uint16 {
+	if p == nil {
+		return 0
+	}
+	return uint16(p.nextPingSeq.Add(1))
 }
 
 func buildClientPingPayload() ([]byte, error) {

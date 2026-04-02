@@ -25,10 +25,11 @@ import (
 const clientRXDropLogInterval = 2 * time.Second
 
 type asyncPacket struct {
-	conn       Connection
-	payload    []byte
-	packetType uint8
-	streamID   uint16
+	conn        Connection
+	payload     []byte
+	packetType  uint8
+	streamID    uint16
+	sequenceNum uint16
 }
 
 type asyncReadPacket struct {
@@ -84,8 +85,15 @@ func (c *Client) resetRuntimeBindings(resetSession bool) {
 	c.bumpStreamSetVersion()
 
 	c.dnsResponses = fragmentStore.New[dnsFragmentKey](c.cfg.DNSResponseFragmentStoreCap)
+
 	if c.localDNSCache != nil {
 		c.localDNSCache.ClearPending()
+	}
+
+	if c.socksRateLimit == nil {
+		c.socksRateLimit = newSocksRateLimiter()
+	} else {
+		c.socksRateLimit.Reset()
 	}
 
 	c.closeResolverConnPools()
@@ -131,6 +139,16 @@ func (c *Client) signalTxSpace() {
 	case c.txSpaceSignal <- struct{}{}:
 	default:
 	}
+}
+
+func (c *Client) encodeChannelHasCapacity(needed int) bool {
+	if c == nil || c.encodeChannel == nil {
+		return false
+	}
+	if needed <= 0 {
+		needed = 1
+	}
+	return cap(c.encodeChannel)-len(c.encodeChannel) >= needed
 }
 
 func (c *Client) txChannelHasCapacity(needed int) bool {
@@ -231,6 +249,27 @@ func (c *Client) StartAsyncRuntime(parentCtx context.Context) error {
 	// 2. Setup session context.
 	runtimeCtx, cancel := context.WithCancel(parentCtx)
 	c.asyncCancel = cancel
+	started := false
+	defer func() {
+		if started {
+			return
+		}
+		cancel()
+		if c.tcpListener != nil {
+			c.tcpListener.Stop()
+			c.tcpListener = nil
+		}
+		if c.dnsListener != nil {
+			c.dnsListener.Stop()
+			c.dnsListener = nil
+		}
+		if c.tunnelConn != nil {
+			_ = c.tunnelConn.Close()
+			c.tunnelConn = nil
+		}
+		c.asyncCancel = nil
+		c.resetRuntimeBindings(false)
+	}()
 
 	// 3. Open shared UDP socket.
 	conn, err := net.ListenUDP("udp", &net.UDPAddr{IP: net.IPv4zero, Port: 0})
@@ -279,7 +318,13 @@ func (c *Client) StartAsyncRuntime(parentCtx context.Context) error {
 		go c.asyncWriterWorker(runtimeCtx, i, conn)
 	}
 
-	// 7. Spawn Dispatcher (Fair Queuing & Packing)
+	// 7. Spawn Encoder Workers
+	for i := 0; i < c.tunnelProcessWorkers; i++ {
+		c.asyncWG.Add(1)
+		go c.asyncEncoderWorker(runtimeCtx, i)
+	}
+
+	// 8. Spawn Dispatcher (Fair Queuing & Packing)
 	c.asyncWG.Add(1)
 	go c.asyncStreamDispatcher(runtimeCtx)
 
@@ -304,6 +349,7 @@ func (c *Client) StartAsyncRuntime(parentCtx context.Context) error {
 		conn.Close()
 	}()
 
+	started = true
 	return nil
 }
 
@@ -313,12 +359,24 @@ func (c *Client) asyncStreamCleanupWorker(ctx context.Context) {
 	ticker := time.NewTicker(1 * time.Second)
 	defer ticker.Stop()
 
+	fragmentPurgeCounter := 0
+
 	for {
 		select {
 		case <-ctx.Done():
 			return
 		case now := <-ticker.C:
 			c.cleanupRecentlyClosedStreams(now)
+
+			// Purge stale DNS response fragments every 10 seconds to prevent
+			// memory leaks when no new fragments arrive for a given key.
+			fragmentPurgeCounter++
+			if fragmentPurgeCounter >= 10 {
+				fragmentPurgeCounter = 0
+				if c.dnsResponses != nil {
+					c.dnsResponses.Purge(now, c.cfg.DNSResponseFragmentTimeout())
+				}
+			}
 
 			c.streamsMu.RLock()
 			streams := make([]*Stream_client, 0, len(c.active_streams))
@@ -511,12 +569,12 @@ func (c *Client) handleInboundPacket(data []byte, addr *net.UDPAddr) {
 	if err != nil {
 		if errors.Is(err, DnsParser.ErrTXTAnswerMissing) {
 			receivedAt := time.Now()
-			// summary := DnsParser.DescribeResponseWithoutTunnelPayload(data)
 			if parsed, parseErr := DnsParser.ParsePacketLite(data); parseErr == nil && parsed.Header.RCode != 0 {
 				c.trackResolverFailure(data, addr, receivedAt)
 			} else {
 				c.trackResolverSuccess(data, addr, receivedAt)
 			}
+			// summary := DnsParser.DescribeResponseWithoutTunnelPayload(data)
 			// c.log.Debugf("DNS response from %v had no tunnel TXT payload | %s", addr, summary)
 			return
 		}
@@ -524,12 +582,15 @@ func (c *Client) handleInboundPacket(data []byte, addr *net.UDPAddr) {
 		return
 	}
 
-	// packedSummary := ""
-	// if vpnPacket.PacketType == Enums.PACKET_PACKED_CONTROL_BLOCKS {
-	// 	packedSummary = " | " + VpnProto.DescribePackedControlBlocks(vpnPacket.Payload, 4)
-	// }
-	// c.logInboundPacket(vpnPacket.PacketType, vpnPacket.SessionID, len(vpnPacket.Payload), vpnPacket.StreamID, vpnPacket.SequenceNum, vpnPacket.FragmentID, vpnPacket.TotalFragments, packedSummary)
 	c.trackResolverSuccess(data, addr, time.Now())
+	// if c.log != nil && c.log.Enabled(logger.LevelDebug) && vpnPacket.PacketType != Enums.PACKET_PONG {
+	// 	if vpnPacket.PacketType == Enums.PACKET_STREAM_DATA_ACK {
+	// 		c.log.Debugf("Client received ACK | Stream: %d | Seq: %d", vpnPacket.StreamID, vpnPacket.SequenceNum)
+	// 	} else {
+	// 		c.log.Debugf("Client received inbound VPN packet | Packet: %s | Stream: %d | Seq: %d | Payload: %d | Frag: %d/%d",
+	// 			Enums.PacketTypeName(vpnPacket.PacketType), vpnPacket.StreamID, vpnPacket.SequenceNum, len(vpnPacket.Payload), vpnPacket.FragmentID, vpnPacket.TotalFragments)
+	// 	}
+	// }
 
 	// 2. Notify activity monitor (PingManager)
 	c.NotifyPacket(vpnPacket.PacketType, true)
@@ -544,4 +605,75 @@ func (c *Client) handleInboundPacket(data []byte, addr *net.UDPAddr) {
 		c.log.Warnf("\U0001F6A8 <red>Handler execution failed: %v</red>", err)
 	}
 
+}
+
+// asyncEncoderWorker pulls from encodeChannel, performs the heavy DNS building and crypto, and pushes to txChannel.
+func (c *Client) asyncEncoderWorker(ctx context.Context, id int) {
+	defer c.asyncWG.Done()
+	c.log.Debugf("\U0001F5A5 <green>Encoder Worker <cyan>#%d</cyan> started</green>", id)
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case task, ok := <-c.encodeChannel:
+			c.signalTxSpace()
+			if !ok {
+				return
+			}
+
+			conns := task.conns
+			if len(conns) == 0 {
+				if !task.wasPacked && task.selected != nil {
+					task.selected.ReleaseTXPacket(task.item)
+				}
+				continue
+			}
+
+			encoded, err := c.buildEncodedAutoWithCompressionTrace(task.opts)
+			if err != nil {
+				if !task.wasPacked && task.selected != nil {
+					task.selected.ReleaseTXPacket(task.item)
+				}
+				continue
+			}
+
+			packetByDomain := make(map[string][]byte, len(conns))
+			for _, conn := range conns {
+				domain := conn.Domain
+				if domain == "" {
+					domain = c.cfg.Domains[0]
+				}
+
+				dnsPacket, ok := packetByDomain[domain]
+				if !ok {
+					dnsPacket, err = buildTunnelTXTQuestion(domain, encoded)
+					if err != nil {
+						continue
+					}
+					packetByDomain[domain] = dnsPacket
+				}
+
+				pkt := asyncPacket{
+					packetType:  task.packetType,
+					streamID:    task.opts.StreamID,
+					payload:     dnsPacket,
+					conn:        conn,
+					sequenceNum: task.opts.SequenceNum,
+				}
+
+				select {
+				case c.txChannel <- pkt:
+				case <-ctx.Done():
+					if !task.wasPacked && task.selected != nil {
+						task.selected.ReleaseTXPacket(task.item)
+					}
+					return
+				}
+			}
+
+			if !task.wasPacked && task.selected != nil {
+				task.selected.ReleaseTXPacket(task.item)
+			}
+		}
+	}
 }

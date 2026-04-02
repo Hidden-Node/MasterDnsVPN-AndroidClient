@@ -43,7 +43,7 @@ type Client struct {
 	successMTUChecks    bool
 	udpBufferPool       sync.Pool
 	resolverConnsMu     sync.Mutex
-	resolverConns       map[string]chan *net.UDPConn
+	resolverConns       map[string]chan pooledUDPConn
 	resolverAddrMu      sync.RWMutex
 	resolverAddrCache   map[string]*net.UDPAddr
 	resolverStatsMu     sync.RWMutex
@@ -103,6 +103,7 @@ type Client struct {
 	tunnelConn           *net.UDPConn
 	txChannel            chan asyncPacket
 	rxChannel            chan asyncReadPacket
+	encodeChannel        chan rawOutboundTask
 	tunnelReaderWorkers  int
 	tunnelWriterWorkers  int
 	tunnelProcessWorkers int
@@ -136,6 +137,9 @@ type Client struct {
 	localDNSCacheFlushTick time.Duration
 	localDNSCacheLoadOnce  sync.Once
 	localDNSCacheFlushOnce sync.Once
+
+	// SOCKS5 brute-force rate limiter
+	socksRateLimit *socksRateLimiter
 }
 
 // clientStreamTXPacket represents a queued packet pending transmission or retransmission.
@@ -153,6 +157,17 @@ type clientStreamTXPacket struct {
 	RetryAt         time.Time
 	RetryCount      int
 	Scheduled       bool
+}
+
+// rawOutboundTask holds payload and stream information for parallel packet encoding.
+type rawOutboundTask struct {
+	packetType uint8
+	payload    []byte
+	opts       VpnProto.BuildOptions
+	wasPacked  bool
+	item       *clientStreamTXPacket
+	selected   *Stream_client
+	conns      []Connection
 }
 
 // Connection represents a unique domain-resolver pair with its associated metadata and MTU states.
@@ -220,7 +235,7 @@ func New(cfg config.ClientConfig, log *logger.Logger, codec *security.Codec) *Cl
 				return make([]byte, RuntimeUDPReadBufferSize)
 			},
 		},
-		resolverConns:                         make(map[string]chan *net.UDPConn),
+		resolverConns:                         make(map[string]chan pooledUDPConn),
 		resolverAddrCache:                     make(map[string]*net.UDPAddr),
 		resolverPending:                       make(map[resolverSampleKey]resolverSample),
 		resolverHealth:                        make(map[string]*resolverHealthState),
@@ -244,6 +259,7 @@ func New(cfg config.ClientConfig, log *logger.Logger, codec *security.Codec) *Cl
 		tunnelPacketTimeout:   time.Duration(cfg.TunnelPacketTimeoutSec * float64(time.Second)),
 		txChannel:             make(chan asyncPacket, cfg.TXChannelSize),
 		rxChannel:             make(chan asyncReadPacket, cfg.RXChannelSize),
+		encodeChannel:         make(chan rawOutboundTask, cfg.TXChannelSize),
 		active_streams:        make(map[uint16]*Stream_client),
 		recentlyClosedStreams: make(map[uint16]time.Time),
 		txSignal:              make(chan struct{}, 1),
@@ -261,6 +277,7 @@ func New(cfg config.ClientConfig, log *logger.Logger, codec *security.Codec) *Cl
 		localDNSCacheFlushTick: time.Duration(cfg.LocalDNSCacheFlushSec) * time.Second,
 		orphanQueue:            mlq.New[VpnProto.Packet](cfg.OrphanQueueInitialCapacity),
 		sessionResetSignal:     make(chan struct{}, 1),
+		socksRateLimit:         newSocksRateLimiter(),
 	}
 
 	if c.streamResolverFailoverResendThreshold < 1 {

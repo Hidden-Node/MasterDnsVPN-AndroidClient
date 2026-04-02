@@ -142,6 +142,8 @@ private val configFields = listOf(
     SettingField("ARQ", "ARQ_INITIAL_RTO_SECONDS", "ARQ_INITIAL_RTO_SECONDS", "Initial RTO seconds", keyboardType = KeyboardType.Decimal),
     SettingField("ARQ", "ARQ_MAX_RTO_SECONDS", "ARQ_MAX_RTO_SECONDS", "Maximum RTO seconds", keyboardType = KeyboardType.Decimal),
     SettingField("ARQ", "ARQ_MAX_DATA_RETRIES", "ARQ_MAX_DATA_RETRIES", "Maximum retries per data packet", keyboardType = KeyboardType.Number),
+    SettingField("ARQ", "ARQ_DATA_NACK_INITIAL_DELAY_SECONDS", "ARQ_DATA_NACK_INITIAL_DELAY_SECONDS", "Initial delay before first NACK seconds", keyboardType = KeyboardType.Decimal),
+    SettingField("ARQ", "ARQ_DATA_NACK_REPEAT_SECONDS", "ARQ_DATA_NACK_REPEAT_SECONDS", "NACK repeat interval seconds", keyboardType = KeyboardType.Decimal),
     SettingField("ARQ", "ARQ_INACTIVITY_TIMEOUT_SECONDS", "ARQ_INACTIVITY_TIMEOUT_SECONDS", "Inactivity timeout seconds", keyboardType = KeyboardType.Decimal),
     SettingField(
         "Logging",
@@ -492,13 +494,15 @@ private fun defaultValuesFor(profile: ProfileEntity): Map<String, String> {
         put("TUNNEL_WRITER_WORKERS", adv("TUNNEL_WRITER_WORKERS", "2"))
         put("TUNNEL_PROCESS_WORKERS", adv("TUNNEL_PROCESS_WORKERS", "2"))
         put("TUNNEL_PACKET_TIMEOUT_SECONDS", adv("TUNNEL_PACKET_TIMEOUT_SECONDS", "10.0"))
-        put("TX_CHANNEL_SIZE", adv("TX_CHANNEL_SIZE", "4096"))
-        put("RX_CHANNEL_SIZE", adv("RX_CHANNEL_SIZE", "8192"))
+        put("TX_CHANNEL_SIZE", adv("TX_CHANNEL_SIZE", "8192"))
+        put("RX_CHANNEL_SIZE", adv("RX_CHANNEL_SIZE", "12288"))
         put("RESOLVER_UDP_CONNECTION_POOL_SIZE", adv("RESOLVER_UDP_CONNECTION_POOL_SIZE", "128"))
         put("ARQ_WINDOW_SIZE", adv("ARQ_WINDOW_SIZE", "600"))
         put("ARQ_INITIAL_RTO_SECONDS", adv("ARQ_INITIAL_RTO_SECONDS", "1"))
         put("ARQ_MAX_RTO_SECONDS", adv("ARQ_MAX_RTO_SECONDS", "5.0"))
         put("ARQ_MAX_DATA_RETRIES", adv("ARQ_MAX_DATA_RETRIES", "1200"))
+        put("ARQ_DATA_NACK_INITIAL_DELAY_SECONDS", adv("ARQ_DATA_NACK_INITIAL_DELAY_SECONDS", "0.4"))
+        put("ARQ_DATA_NACK_REPEAT_SECONDS", adv("ARQ_DATA_NACK_REPEAT_SECONDS", "1.0"))
         put("ARQ_INACTIVITY_TIMEOUT_SECONDS", adv("ARQ_INACTIVITY_TIMEOUT_SECONDS", "1800.0"))
         put("LOG_LEVEL", profile.logLevel)
     }
