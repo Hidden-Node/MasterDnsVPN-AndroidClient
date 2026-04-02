@@ -4,7 +4,7 @@ set -euo pipefail
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$ROOT_DIR"
 
-MOBILE_TOOLS_VERSION="b56b379"
+MOBILE_TOOLS_VERSION="v0.0.0-20231127183840-76ac6878050a"
 
 # Always install a pinned, known-good gomobile/gobind pair.
 go install "golang.org/x/mobile/cmd/gomobile@${MOBILE_TOOLS_VERSION}"
