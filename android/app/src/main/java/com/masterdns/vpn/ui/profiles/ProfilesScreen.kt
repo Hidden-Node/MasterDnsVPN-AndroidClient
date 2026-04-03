@@ -22,14 +22,14 @@ import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
+import com.google.gson.Gson
 import com.masterdns.vpn.data.local.ProfileEntity
 import com.masterdns.vpn.ui.theme.ConnectedGreen
 import kotlinx.coroutines.launch
 
 private data class ImportedProfileDraft(
-    val fileName: String,
-    val domain: String,
-    val encryptionKey: String
+    val profile: ProfileEntity,
+    val domainInput: String
 )
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -270,13 +270,15 @@ private fun ProfileEditorDialog(
     onSave: (ProfileEntity) -> Unit,
     onDismiss: () -> Unit
 ) {
-    var name by remember(profile, importedDraft) { mutableStateOf(importedDraft?.fileName ?: profile?.name.orEmpty()) }
+    var name by remember(profile, importedDraft) { mutableStateOf(importedDraft?.profile?.name ?: profile?.name.orEmpty()) }
     var domains by remember(profile, importedDraft) {
-        mutableStateOf(importedDraft?.domain ?: profile?.domains?.removeSurrounding("[\"", "\"]").orEmpty())
+        mutableStateOf(importedDraft?.domainInput ?: profile?.domains?.removeSurrounding("[\"", "\"]").orEmpty())
     }
-    var encryptionKey by remember(profile, importedDraft) { mutableStateOf(importedDraft?.encryptionKey ?: profile?.encryptionKey.orEmpty()) }
-    var encryptionMethod by remember { mutableIntStateOf(profile?.encryptionMethod ?: 1) }
-    var resolvers by remember(profile, importedResolvers) { mutableStateOf(importedResolvers ?: profile?.resolvers ?: "8.8.8.8") }
+    var encryptionKey by remember(profile, importedDraft) { mutableStateOf(importedDraft?.profile?.encryptionKey ?: profile?.encryptionKey.orEmpty()) }
+    var encryptionMethod by remember(profile, importedDraft) { mutableIntStateOf(importedDraft?.profile?.encryptionMethod ?: profile?.encryptionMethod ?: 1) }
+    var resolvers by remember(profile, importedDraft, importedResolvers) {
+        mutableStateOf(importedResolvers ?: importedDraft?.profile?.resolvers ?: profile?.resolvers ?: "8.8.8.8")
+    }
     var showKey by remember { mutableStateOf(false) }
 
     AlertDialog(
@@ -384,11 +386,14 @@ private fun ProfileEditorDialog(
         confirmButton = {
             FilledTonalButton(
                 onClick = {
-                    val domainJson = "[\"${domains.trim()}\"]"
+                    val baseProfile = profile ?: importedDraft?.profile ?: ProfileEntity(name = "", domains = "")
+                    val domainJson = gson.toJson(
+                        domains.split(",").map { it.trim() }.filter { it.isNotEmpty() }
+                    )
                     onSave(
-                        (profile ?: ProfileEntity(name = "", domains = "")).copy(
+                        baseProfile.copy(
                             name = name.trim().ifEmpty { "Profile" },
-                            domains = domainJson,
+                            domains = if (domainJson == "[]") gson.toJson(listOf(domains.trim())) else domainJson,
                             encryptionKey = encryptionKey,
                             encryptionMethod = encryptionMethod,
                             resolvers = resolvers.trim()
@@ -408,6 +413,8 @@ private fun ProfileEditorDialog(
     )
 }
 
+private val gson = Gson()
+
 private fun readTextFromUri(context: Context, uri: Uri): String {
     return context.contentResolver.openInputStream(uri)?.bufferedReader()?.use { it.readText() }.orEmpty()
 }
@@ -421,33 +428,100 @@ private fun readDisplayName(context: Context, uri: Uri): String? {
 }
 
 private fun parseProfileTomlForImport(fileName: String, tomlContent: String): ImportedProfileDraft? {
-    var domain: String? = null
-    var encryptionKey: String? = null
+    val values = mutableMapOf<String, String>()
     tomlContent.lineSequence().forEach { raw ->
         val line = raw.substringBefore("#").trim()
         if (line.isEmpty() || "=" !in line) return@forEach
         val key = line.substringBefore("=").trim()
         val valueRaw = line.substringAfter("=").trim()
-        when (key) {
-            "DOMAINS" -> {
-                domain = valueRaw
-                    .removePrefix("[")
-                    .removeSuffix("]")
-                    .split(",")
-                    .map { it.trim().removeSurrounding("\"") }
-                    .firstOrNull { it.isNotBlank() }
-            }
-            "ENCRYPTION_KEY" -> {
-                encryptionKey = valueRaw.removeSurrounding("\"").trim()
-            }
+        val parsed = when {
+            key == "DOMAINS" -> valueRaw
+                .removePrefix("[")
+                .removeSuffix("]")
+                .split(",")
+                .map { it.trim().removeSurrounding("\"") }
+                .filter { it.isNotBlank() }
+                .joinToString(", ")
+            valueRaw.startsWith("\"") && valueRaw.endsWith("\"") ->
+                valueRaw.removeSurrounding("\"")
+            else -> valueRaw
         }
+        values[key] = parsed
     }
 
-    val parsedDomain = domain?.takeIf { it.isNotBlank() } ?: return null
-    val parsedKey = encryptionKey?.takeIf { it.isNotBlank() } ?: return null
+    val parsedDomain = values["DOMAINS"]?.takeIf { it.isNotBlank() } ?: return null
+    val parsedKey = values["ENCRYPTION_KEY"]?.takeIf { it.isNotBlank() } ?: return null
+
+    val advanced = mutableMapOf<String, String>()
+    IMPORT_ADVANCED_KEYS.forEach { key ->
+        values[key]?.let { advanced[key] = it.trim() }
+    }
+
+    val importedProfile = ProfileEntity(
+        name = fileName,
+        domains = gson.toJson(parsedDomain.split(",").map { it.trim() }.filter { it.isNotEmpty() }),
+        encryptionMethod = values["DATA_ENCRYPTION_METHOD"]?.toIntOrNull() ?: 1,
+        encryptionKey = parsedKey,
+        protocolType = normalizeProtocol(values["PROTOCOL_TYPE"]),
+        listenPort = values["LISTEN_PORT"]?.toIntOrNull()?.coerceIn(1, 65535) ?: 18000,
+        resolverBalancingStrategy = values["RESOLVER_BALANCING_STRATEGY"]?.toIntOrNull() ?: 2,
+        packetDuplicationCount = values["PACKET_DUPLICATION_COUNT"]?.toIntOrNull() ?: 2,
+        setupPacketDuplicationCount = values["SETUP_PACKET_DUPLICATION_COUNT"]?.toIntOrNull() ?: 2,
+        uploadCompression = values["UPLOAD_COMPRESSION_TYPE"]?.toIntOrNull() ?: 0,
+        downloadCompression = values["DOWNLOAD_COMPRESSION_TYPE"]?.toIntOrNull() ?: 0,
+        logLevel = values["LOG_LEVEL"]?.trim().takeUnless { it.isNullOrBlank() } ?: "INFO",
+        resolvers = "8.8.8.8",
+        advancedJson = gson.toJson(advanced)
+    )
+
     return ImportedProfileDraft(
-        fileName = fileName,
-        domain = parsedDomain,
-        encryptionKey = parsedKey
+        profile = importedProfile,
+        domainInput = parsedDomain
     )
 }
+
+private fun normalizeProtocol(value: String?): String {
+    return when (value?.trim()?.uppercase()) {
+        "TCP" -> "TCP"
+        else -> "SOCKS5"
+    }
+}
+
+private val IMPORT_ADVANCED_KEYS = setOf(
+    "LISTEN_IP",
+    "SOCKS5_AUTH",
+    "SOCKS5_USER",
+    "SOCKS5_PASS",
+    "LOCAL_DNS_ENABLED",
+    "STREAM_RESOLVER_FAILOVER_RESEND_THRESHOLD",
+    "STREAM_RESOLVER_FAILOVER_COOLDOWN",
+    "RECHECK_SERVER_INTERVAL_SECONDS",
+    "RECHECK_INACTIVE_SERVERS_ENABLED",
+    "AUTO_DISABLE_TIMEOUT_SERVERS",
+    "BASE_ENCODE_DATA",
+    "COMPRESSION_MIN_SIZE",
+    "MIN_UPLOAD_MTU",
+    "MIN_DOWNLOAD_MTU",
+    "MAX_UPLOAD_MTU",
+    "MAX_DOWNLOAD_MTU",
+    "MTU_TEST_RETRIES",
+    "MTU_TEST_TIMEOUT",
+    "MTU_TEST_PARALLELISM",
+    "SAVE_MTU_SERVERS_TO_FILE",
+    "TUNNEL_READER_WORKERS",
+    "TUNNEL_WRITER_WORKERS",
+    "TUNNEL_PROCESS_WORKERS",
+    "TUNNEL_PACKET_TIMEOUT_SECONDS",
+    "TX_CHANNEL_SIZE",
+    "RX_CHANNEL_SIZE",
+    "RESOLVER_UDP_CONNECTION_POOL_SIZE",
+    "ARQ_WINDOW_SIZE",
+    "ARQ_INITIAL_RTO_SECONDS",
+    "ARQ_MAX_RTO_SECONDS",
+    "ARQ_CONTROL_MAX_RTO_SECONDS",
+    "ARQ_MAX_CONTROL_RETRIES",
+    "ARQ_MAX_DATA_RETRIES",
+    "ARQ_DATA_NACK_INITIAL_DELAY_SECONDS",
+    "ARQ_DATA_NACK_REPEAT_SECONDS",
+    "ARQ_INACTIVITY_TIMEOUT_SECONDS"
+)
