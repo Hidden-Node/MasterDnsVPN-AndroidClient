@@ -42,6 +42,8 @@ class MasterDnsVpnService : VpnService() {
     private var logTailJob: Job? = null
     @Volatile
     private var isStopping = false
+    @Volatile
+    private var socksAuthWarningShown = false
 
     override fun onCreate() {
         super.onCreate()
@@ -69,6 +71,7 @@ class MasterDnsVpnService : VpnService() {
             try {
                 VpnManager.updateState(VpnManager.VpnState.CONNECTING)
                 VpnManager.clearError()
+                socksAuthWarningShown = false
 
                 // Show foreground notification
                 startForeground(NOTIFICATION_ID, buildNotification(getString(R.string.notification_connecting)))
@@ -229,7 +232,11 @@ class MasterDnsVpnService : VpnService() {
 
                 // Stop Go client and Tun bridge
                 try {
-                    mobile.Mobile.stopClient()
+                    if (mobile.Mobile.isRunning()) {
+                        mobile.Mobile.stopClient()
+                    } else {
+                        VpnManager.appendLog("Go core already stopped")
+                    }
                 } catch (e: Exception) {
                     Log.e(TAG, "Error stopping Go core", e)
                 }
@@ -282,7 +289,9 @@ class MasterDnsVpnService : VpnService() {
     override fun onDestroy() {
         if (!isStopping) {
             try {
-                mobile.Mobile.stopClient()
+                if (mobile.Mobile.isRunning()) {
+                    mobile.Mobile.stopClient()
+                }
             } catch (_: Exception) {
             }
             try {
@@ -345,6 +354,7 @@ class MasterDnsVpnService : VpnService() {
                         val line = raf.readLine() ?: break
                         if (line.isNotBlank()) {
                             VpnManager.appendLog(line)
+                            maybeReportSocksAuthIssue(line)
                         }
                     }
                     pointer = raf.filePointer
@@ -353,5 +363,20 @@ class MasterDnsVpnService : VpnService() {
                 delay(250L)
             }
         }
+    }
+
+    private fun maybeReportSocksAuthIssue(line: String) {
+        if (socksAuthWarningShown) return
+        val normalized = line.uppercase()
+        val authRelatedFailure = normalized.contains("SOCKS5_AUTH_FAILED") ||
+            (normalized.contains("SOCKS5") &&
+                normalized.contains("AUTH") &&
+                normalized.contains("FAIL"))
+        if (!authRelatedFailure) return
+
+        socksAuthWarningShown = true
+        val message = "SOCKS5 authentication failed. Check SOCKS5_AUTH, SOCKS5_USER, and SOCKS5_PASS in profile settings."
+        VpnManager.appendLog(message)
+        VpnManager.setError(message)
     }
 }

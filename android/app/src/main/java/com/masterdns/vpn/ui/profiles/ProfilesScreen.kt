@@ -1,5 +1,10 @@
 package com.masterdns.vpn.ui.profiles
 
+import android.content.Context
+import android.net.Uri
+import android.provider.OpenableColumns
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
@@ -19,6 +24,13 @@ import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import com.masterdns.vpn.data.local.ProfileEntity
 import com.masterdns.vpn.ui.theme.ConnectedGreen
+import kotlinx.coroutines.launch
+
+private data class ImportedProfileDraft(
+    val fileName: String,
+    val domain: String,
+    val encryptionKey: String
+)
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -30,8 +42,46 @@ fun ProfilesScreen(
     val profiles by viewModel.profiles.collectAsState()
     var showEditor by remember { mutableStateOf(false) }
     var editingProfile by remember { mutableStateOf<ProfileEntity?>(null) }
+    var importedDraft by remember { mutableStateOf<ImportedProfileDraft?>(null) }
+    var importedResolvers by remember { mutableStateOf<String?>(null) }
+    val context = androidx.compose.ui.platform.LocalContext.current
+    val snackbarHostState = remember { SnackbarHostState() }
+    val scope = rememberCoroutineScope()
+    val importLauncher = rememberLauncherForActivityResult(
+        ActivityResultContracts.OpenDocument()
+    ) { uri ->
+        if (uri == null) return@rememberLauncherForActivityResult
+        val text = readTextFromUri(context, uri)
+        val draft = parseProfileTomlForImport(
+            fileName = readDisplayName(context, uri) ?: "Imported Profile",
+            tomlContent = text
+        )
+        if (draft == null) {
+            scope.launch { snackbarHostState.showSnackbar("Invalid TOML: DOMAIN/ENCRYPTION_KEY not found") }
+            return@rememberLauncherForActivityResult
+        }
+        importedDraft = draft
+        editingProfile = null
+        showEditor = true
+        scope.launch { snackbarHostState.showSnackbar("TOML imported into profile form") }
+    }
+    val importResolversLauncher = rememberLauncherForActivityResult(
+        ActivityResultContracts.OpenDocument()
+    ) { uri ->
+        if (uri == null) return@rememberLauncherForActivityResult
+        val text = readTextFromUri(context, uri).trim()
+        if (text.isBlank()) {
+            scope.launch { snackbarHostState.showSnackbar("Resolvers file is empty") }
+            return@rememberLauncherForActivityResult
+        }
+        importedResolvers = text
+        editingProfile = null
+        showEditor = true
+        scope.launch { snackbarHostState.showSnackbar("Resolvers imported into profile form") }
+    }
 
     Scaffold(
+        snackbarHost = { SnackbarHost(hostState = snackbarHostState) },
         topBar = {
             TopAppBar(
                 title = { Text("Profiles", fontWeight = FontWeight.Bold) },
@@ -43,6 +93,8 @@ fun ProfilesScreen(
                 actions = {
                     IconButton(onClick = {
                         editingProfile = null
+                        importedDraft = null
+                        importedResolvers = null
                         showEditor = true
                     }) {
                         Icon(Icons.Filled.Add, contentDescription = "Add Profile")
@@ -54,6 +106,28 @@ fun ProfilesScreen(
         if (showEditor) {
             ProfileEditorDialog(
                 profile = editingProfile,
+                importedDraft = importedDraft,
+                importedResolvers = importedResolvers,
+                onImportToml = {
+                    importLauncher.launch(
+                        arrayOf(
+                            "application/toml",
+                            "text/x-toml",
+                            "text/plain",
+                            "application/octet-stream",
+                            "*/*"
+                        )
+                    )
+                },
+                onImportResolvers = {
+                    importResolversLauncher.launch(
+                        arrayOf(
+                            "text/plain",
+                            "application/octet-stream",
+                            "*/*"
+                        )
+                    )
+                },
                 onSave = { profile ->
                     if (editingProfile != null) {
                         viewModel.updateProfile(profile)
@@ -62,10 +136,14 @@ fun ProfilesScreen(
                     }
                     showEditor = false
                     editingProfile = null
+                    importedDraft = null
+                    importedResolvers = null
                 },
                 onDismiss = {
                     showEditor = false
                     editingProfile = null
+                    importedDraft = null
+                    importedResolvers = null
                 }
             )
         }
@@ -91,6 +169,8 @@ fun ProfilesScreen(
                     Spacer(modifier = Modifier.height(8.dp))
                     FilledTonalButton(onClick = {
                         editingProfile = null
+                        importedDraft = null
+                        importedResolvers = null
                         showEditor = true
                     }) {
                         Text("Create Profile")
@@ -183,16 +263,20 @@ fun ProfileCard(
 @Composable
 fun ProfileEditorDialog(
     profile: ProfileEntity?,
+    importedDraft: ImportedProfileDraft?,
+    importedResolvers: String?,
+    onImportToml: () -> Unit,
+    onImportResolvers: () -> Unit,
     onSave: (ProfileEntity) -> Unit,
     onDismiss: () -> Unit
 ) {
-    var name by remember { mutableStateOf(profile?.name ?: "") }
-    var domains by remember { mutableStateOf(
-        profile?.domains?.removeSurrounding("[\"", "\"]") ?: ""
-    ) }
-    var encryptionKey by remember { mutableStateOf(profile?.encryptionKey ?: "") }
+    var name by remember(profile, importedDraft) { mutableStateOf(importedDraft?.fileName ?: profile?.name.orEmpty()) }
+    var domains by remember(profile, importedDraft) {
+        mutableStateOf(importedDraft?.domain ?: profile?.domains?.removeSurrounding("[\"", "\"]").orEmpty())
+    }
+    var encryptionKey by remember(profile, importedDraft) { mutableStateOf(importedDraft?.encryptionKey ?: profile?.encryptionKey.orEmpty()) }
     var encryptionMethod by remember { mutableIntStateOf(profile?.encryptionMethod ?: 1) }
-    var resolvers by remember { mutableStateOf(profile?.resolvers ?: "8.8.8.8") }
+    var resolvers by remember(profile, importedResolvers) { mutableStateOf(importedResolvers ?: profile?.resolvers ?: "8.8.8.8") }
     var showKey by remember { mutableStateOf(false) }
 
     AlertDialog(
@@ -210,6 +294,29 @@ fun ProfileEditorDialog(
                     singleLine = true,
                     modifier = Modifier.fillMaxWidth()
                 )
+                if (profile == null) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        OutlinedButton(
+                            onClick = onImportToml,
+                            modifier = Modifier.weight(1f)
+                        ) {
+                            Icon(Icons.Filled.UploadFile, contentDescription = null)
+                            Spacer(modifier = Modifier.width(8.dp))
+                            Text("Import TOML")
+                        }
+                        OutlinedButton(
+                            onClick = onImportResolvers,
+                            modifier = Modifier.weight(1f)
+                        ) {
+                            Icon(Icons.Filled.Description, contentDescription = null)
+                            Spacer(modifier = Modifier.width(8.dp))
+                            Text("Import Resolvers")
+                        }
+                    }
+                }
 
                 OutlinedTextField(
                     value = domains,
@@ -298,5 +405,49 @@ fun ProfileEditorDialog(
                 Text("Cancel")
             }
         }
+    )
+}
+
+private fun readTextFromUri(context: Context, uri: Uri): String {
+    return context.contentResolver.openInputStream(uri)?.bufferedReader()?.use { it.readText() }.orEmpty()
+}
+
+private fun readDisplayName(context: Context, uri: Uri): String? {
+    return context.contentResolver.query(uri, null, null, null, null)?.use { cursor ->
+        val nameIndex = cursor.getColumnIndex(OpenableColumns.DISPLAY_NAME)
+        if (nameIndex < 0 || !cursor.moveToFirst()) return@use null
+        cursor.getString(nameIndex)
+    }?.substringBeforeLast(".")?.trim()?.takeIf { it.isNotEmpty() }
+}
+
+private fun parseProfileTomlForImport(fileName: String, tomlContent: String): ImportedProfileDraft? {
+    var domain: String? = null
+    var encryptionKey: String? = null
+    tomlContent.lineSequence().forEach { raw ->
+        val line = raw.substringBefore("#").trim()
+        if (line.isEmpty() || "=" !in line) return@forEach
+        val key = line.substringBefore("=").trim()
+        val valueRaw = line.substringAfter("=").trim()
+        when (key) {
+            "DOMAINS" -> {
+                domain = valueRaw
+                    .removePrefix("[")
+                    .removeSuffix("]")
+                    .split(",")
+                    .map { it.trim().removeSurrounding("\"") }
+                    .firstOrNull { it.isNotBlank() }
+            }
+            "ENCRYPTION_KEY" -> {
+                encryptionKey = valueRaw.removeSurrounding("\"").trim()
+            }
+        }
+    }
+
+    val parsedDomain = domain?.takeIf { it.isNotBlank() } ?: return null
+    val parsedKey = encryptionKey?.takeIf { it.isNotBlank() } ?: return null
+    return ImportedProfileDraft(
+        fileName = fileName,
+        domain = parsedDomain,
+        encryptionKey = parsedKey
     )
 }

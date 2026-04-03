@@ -34,6 +34,15 @@ fun AppNavigation() {
     val currentDestination = navBackStackEntry?.destination
 
     val bottomBarScreens = listOf(Screen.Home, Screen.Profiles, Screen.Logs, Screen.Settings)
+    fun navigateToRoot(screen: Screen) {
+        navController.navigate(screen.route) {
+            popUpTo(navController.graph.findStartDestination().id) {
+                saveState = true
+            }
+            launchSingleTop = true
+            restoreState = true
+        }
+    }
     val icons = mapOf(
         Screen.Home.route to Icons.Filled.Home,
         Screen.Profiles.route to Icons.Filled.Person,
@@ -57,13 +66,7 @@ fun AppNavigation() {
                         },
                         selected = currentDestination?.hierarchy?.any { it.route == screen.route } == true,
                         onClick = {
-                            navController.navigate(screen.route) {
-                                popUpTo(navController.graph.findStartDestination().id) {
-                                    saveState = true
-                                }
-                                launchSingleTop = true
-                                restoreState = true
-                            }
+                            navigateToRoot(screen)
                         }
                     )
                 }
@@ -84,7 +87,7 @@ fun AppNavigation() {
             }
             composable(Screen.Profiles.route) {
                 ProfilesScreen(
-                    onBack = { navController.popBackStack() },
+                    onBack = { navigateToRoot(Screen.Home) },
                     onOpenSettings = { profileId ->
                         navController.navigate("profile_settings/$profileId")
                     }
@@ -92,7 +95,7 @@ fun AppNavigation() {
             }
             composable(Screen.Logs.route) {
                 LogsScreen(
-                    onBack = { navController.popBackStack() }
+                    onBack = { navigateToRoot(Screen.Home) }
                 )
             }
             composable(Screen.Settings.route) {

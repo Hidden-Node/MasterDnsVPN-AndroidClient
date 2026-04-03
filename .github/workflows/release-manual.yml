@@ -66,6 +66,20 @@ jobs:
       - name: Build Go mobile AAR
         run: bash ./android/build_go_mobile.sh
 
+      - name: Derive Android app version from tag
+        run: |
+          TAG="${{ inputs.tag_name }}"
+          VERSION_NAME="${TAG#v}"
+          if [[ ! "$VERSION_NAME" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+            echo "tag_name must be SemVer like v1.2.3"
+            exit 1
+          fi
+          IFS='.' read -r MAJOR MINOR PATCH <<< "$VERSION_NAME"
+          VERSION_CODE=$((MAJOR * 10000 + MINOR * 100 + PATCH))
+          echo "ANDROID_VERSION_NAME=$VERSION_NAME" >> "$GITHUB_ENV"
+          echo "ANDROID_VERSION_CODE=$VERSION_CODE" >> "$GITHUB_ENV"
+          echo "Using ANDROID_VERSION_NAME=$VERSION_NAME ANDROID_VERSION_CODE=$VERSION_CODE"
+
       - name: Build Signed Release APKs (split + universal)
         working-directory: android
         env:
@@ -74,6 +88,8 @@ jobs:
           ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
           ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
           ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
+          ANDROID_VERSION_NAME: ${{ env.ANDROID_VERSION_NAME }}
+          ANDROID_VERSION_CODE: ${{ env.ANDROID_VERSION_CODE }}
         run: chmod +x gradlew && ./gradlew :app:assembleRelease --stacktrace
 
       - name: Prepare release files

@@ -715,17 +715,15 @@ func (c *Client) canBuildUploadPayload(domain string, payloadLen int) bool {
 	}
 
 	payload := buf[:payloadLen]
-	// No need to fill data just to check length
 	encoded, err := VpnProto.BuildEncoded(VpnProto.BuildOptions{
-		SessionID:       255,
-		PacketType:      maxUploadProbePacketType,
-		SessionCookie:   255,
-		StreamID:        0xFFFF,
-		SequenceNum:     0xFFFF,
-		FragmentID:      0xFF,
-		TotalFragments:  0xFF,
-		CompressionType: 0xFF,
-		Payload:         payload,
+		SessionID:      255,
+		PacketType:     Enums.PACKET_MTU_UP_REQ,
+		SessionCookie:  255,
+		StreamID:       0xFFFF,
+		SequenceNum:    0xFFFF,
+		FragmentID:     0xFF,
+		TotalFragments: 0xFF,
+		Payload:        payload,
 	}, c.codec)
 	if err != nil {
 		return false

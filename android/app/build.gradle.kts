@@ -9,13 +9,19 @@ plugins {
 android {
     namespace = "com.masterdns.vpn"
     compileSdk = 35
+    val appVersionName = System.getenv("ANDROID_VERSION_NAME")
+        ?.takeIf { it.isNotBlank() }
+        ?: "1.0.0"
+    val appVersionCode = System.getenv("ANDROID_VERSION_CODE")
+        ?.toIntOrNull()
+        ?: 1
 
     defaultConfig {
         applicationId = "com.masterdns.vpn"
         minSdk = 21
         targetSdk = 35
-        versionCode = 1
-        versionName = "1.0.0"
+        versionCode = appVersionCode
+        versionName = appVersionName
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
 

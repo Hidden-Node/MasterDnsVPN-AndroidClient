@@ -137,7 +137,12 @@ object VpnManager {
             putExtra(MasterDnsVpnService.EXTRA_PROFILE_ID, profile.id)
         }
 
-        context.startService(intent)
+        runCatching { context.startService(intent) }
+            .onFailure {
+                setError("Failed to start VPN service: ${it.message}")
+                appendLog("Failed to start VPN service: ${it.message}")
+                updateState(VpnState.ERROR)
+            }
     }
 
     /**
@@ -152,7 +157,12 @@ object VpnManager {
         val intent = Intent(context, MasterDnsVpnService::class.java).apply {
             action = MasterDnsVpnService.ACTION_DISCONNECT
         }
-        context.startService(intent)
+        runCatching { context.startService(intent) }
+            .onFailure {
+                setError("Failed to stop VPN service: ${it.message}")
+                appendLog("Failed to stop VPN service: ${it.message}")
+                updateState(VpnState.ERROR)
+            }
     }
 
     private fun parseScanLine(line: String) {
