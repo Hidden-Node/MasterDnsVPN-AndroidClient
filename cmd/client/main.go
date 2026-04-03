@@ -17,6 +17,7 @@ import (
 	"syscall"
 
 	"masterdnsvpn-go/internal/client"
+	"masterdnsvpn-go/internal/config"
 	"masterdnsvpn-go/internal/runtimepath"
 	"masterdnsvpn-go/internal/version"
 )
@@ -30,7 +31,13 @@ func waitForExitInput() {
 func main() {
 	configPath := flag.String("config", "client_config.toml", "Path to client configuration file")
 	logPath := flag.String("log", "", "Path to log file (optional)")
+	resolversPath := flag.String("resolvers", "", "Path to resolver file override (optional)")
 	versionFlag := flag.Bool("version", false, "Print version and exit")
+	configFlags, err := config.NewClientConfigFlagBinder(flag.CommandLine)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "Client flag setup failed: %v\n", err)
+		os.Exit(2)
+	}
 	flag.Parse()
 
 	if *versionFlag {
@@ -39,8 +46,13 @@ func main() {
 	}
 
 	resolvedConfigPath := runtimepath.Resolve(*configPath)
+	overrides := configFlags.Overrides()
+	if *resolversPath != "" {
+		resolvedResolversPath := runtimepath.Resolve(*resolversPath)
+		overrides.ResolversFilePath = &resolvedResolversPath
+	}
 
-	app, err := client.Bootstrap(resolvedConfigPath, *logPath)
+	app, err := client.Bootstrap(resolvedConfigPath, *logPath, overrides)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "Client startup failed: %v\n", err)
 		waitForExitInput()

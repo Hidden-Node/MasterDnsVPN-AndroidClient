@@ -108,13 +108,12 @@ LOCAL_DNS_CACHE_FLUSH_INTERVAL_SECONDS = 60.0
 
 # Resolver balancing strategy.
 # Allowed values:
-# 0 = Round Robin
 # 1 = Random
 # 2 = Round Robin
 # 3 = Least Loss
 # 4 = Lowest Latency
 # Modes 3 and 4 use runtime feedback from sends/successes.
-RESOLVER_BALANCING_STRATEGY = 0
+RESOLVER_BALANCING_STRATEGY = 2
 
 # Duplicate each normal outgoing tunnel packet this many times.
 # Clamped in code to [1, 8].
@@ -144,7 +143,7 @@ RECHECK_INACTIVE_INTERVAL_SECONDS = 60.0
 
 # Delay between background rechecks of individual resolver entries.
 # Clamped to [1s, 600s].
-RECHECK_SERVER_INTERVAL_SECONDS = 3.0
+RECHECK_SERVER_INTERVAL_SECONDS = 5.0
 
 # Number of inactive/runtime-disabled resolver entries rechecked per cycle.
 # Clamped to [1, 1024].
@@ -197,13 +196,13 @@ COMPRESSION_MIN_SIZE = 120
 
 # Minimum accepted upload/download MTUs after testing.
 # 0 can be used to effectively disable a bound, but keep realistic values.
-MIN_UPLOAD_MTU = 40
-MIN_DOWNLOAD_MTU = 100
+MIN_UPLOAD_MTU = 38
+MIN_DOWNLOAD_MTU = 500
 
 # Initial maximum MTU search bounds.
 # Must be >= the matching MIN value if both are set.
 MAX_UPLOAD_MTU = 150
-MAX_DOWNLOAD_MTU = 500
+MAX_DOWNLOAD_MTU = 900
 
 # MTU probe retries, timeout, and parallelism.
 # Retries and parallelism must be >= 1.
@@ -233,9 +232,9 @@ MTU_ADDED_SERVER_LOG_FORMAT = "Resolver {IP} added back at {TIME} (UP {UP_MTU}, 
 
 # Async tunnel runtime worker counts.
 # Each must be >= 1.
-TUNNEL_READER_WORKERS = 2
-TUNNEL_WRITER_WORKERS = 2
-TUNNEL_PROCESS_WORKERS = 2
+TUNNEL_READER_WORKERS = 5
+TUNNEL_WRITER_WORKERS = 5
+TUNNEL_PROCESS_WORKERS = 5
 
 # Per-packet tunnel timeout used in async runtime paths.
 # Clamped to [0.5s, 120s].
@@ -248,8 +247,8 @@ DISPATCHER_IDLE_POLL_INTERVAL_SECONDS = 0.020
 
 # Channel sizes for async TX/RX pipelines.
 # Clamped in code to [64, 65536].
-TX_CHANNEL_SIZE = 8192
-RX_CHANNEL_SIZE = 12288
+TX_CHANNEL_SIZE = 12288
+RX_CHANNEL_SIZE = 16384
 
 # UDP connection pool size per resolver key.
 # Clamped to [1, 1024].
@@ -309,16 +308,16 @@ MAX_PACKETS_PER_BATCH = 5
 
 # ARQ data/control behavior.
 # These values are clamped in code and should stay internally consistent.
-ARQ_WINDOW_SIZE = 600
-ARQ_INITIAL_RTO_SECONDS = 1
-ARQ_MAX_RTO_SECONDS = 5.0
+ARQ_WINDOW_SIZE = 1000
+ARQ_INITIAL_RTO_SECONDS = 0.6
+ARQ_MAX_RTO_SECONDS = 3.0
 ARQ_CONTROL_INITIAL_RTO_SECONDS = 0.5
-ARQ_CONTROL_MAX_RTO_SECONDS = 3.0
-ARQ_MAX_CONTROL_RETRIES = 300
+ARQ_CONTROL_MAX_RTO_SECONDS = 2.0
+ARQ_MAX_CONTROL_RETRIES = 120
 ARQ_INACTIVITY_TIMEOUT_SECONDS = 1800.0
 ARQ_DATA_PACKET_TTL_SECONDS = 2400.0
 ARQ_CONTROL_PACKET_TTL_SECONDS = 1200.0
-ARQ_MAX_DATA_RETRIES = 1200
+ARQ_MAX_DATA_RETRIES = 120
 
 # Maximum out-of-order gap ahead of rcvNxt that can trigger STREAM_DATA_NACK.
 # 0 disables NACK generation entirely.
@@ -328,7 +327,7 @@ ARQ_DATA_NACK_MAX_GAP = 64
 # Minimum seconds between repeated NACKs for the same missing sequence number.
 # Clamped to [0.1s, 30s].
 ARQ_DATA_NACK_INITIAL_DELAY_SECONDS = 0.4
-ARQ_DATA_NACK_REPEAT_SECONDS = 1.0
+ARQ_DATA_NACK_REPEAT_SECONDS = 0.8
 
 ARQ_TERMINAL_DRAIN_TIMEOUT_SECONDS = 120.0
 ARQ_TERMINAL_ACK_WAIT_TIMEOUT_SECONDS = 90.0

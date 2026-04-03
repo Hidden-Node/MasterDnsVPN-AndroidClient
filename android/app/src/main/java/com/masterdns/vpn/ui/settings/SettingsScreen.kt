@@ -110,13 +110,14 @@ private val configFields = listOf(
         "Resolver",
         "RESOLVER_BALANCING_STRATEGY",
         "RESOLVER_BALANCING_STRATEGY",
-        "0=Random, 1=RoundRobin, 2=LowestLatency, 3=LeastLoss, 4=Sticky",
+        "1=RoundRobin, 2=LowestLatency, 3=LeastLoss, 4=Sticky",
         keyboardType = KeyboardType.Number
     ),
     SettingField("Resolver", "PACKET_DUPLICATION_COUNT", "PACKET_DUPLICATION_COUNT", "Runtime packet duplication count", keyboardType = KeyboardType.Number),
     SettingField("Resolver", "SETUP_PACKET_DUPLICATION_COUNT", "SETUP_PACKET_DUPLICATION_COUNT", "Setup packet duplication count", keyboardType = KeyboardType.Number),
     SettingField("Resolver", "STREAM_RESOLVER_FAILOVER_RESEND_THRESHOLD", "STREAM_RESOLVER_FAILOVER_RESEND_THRESHOLD", "Resends before stream failover", keyboardType = KeyboardType.Number),
     SettingField("Resolver", "STREAM_RESOLVER_FAILOVER_COOLDOWN", "STREAM_RESOLVER_FAILOVER_COOLDOWN", "Failover cooldown seconds", keyboardType = KeyboardType.Decimal),
+    SettingField("Resolver", "RECHECK_SERVER_INTERVAL_SECONDS", "RECHECK_SERVER_INTERVAL_SECONDS", "Resolver health recheck interval seconds", keyboardType = KeyboardType.Decimal),
     SettingField("Resolver", "RECHECK_INACTIVE_SERVERS_ENABLED", "RECHECK_INACTIVE_SERVERS_ENABLED", "Re-check inactive resolvers", type = FieldType.BOOL),
     SettingField("Resolver", "AUTO_DISABLE_TIMEOUT_SERVERS", "AUTO_DISABLE_TIMEOUT_SERVERS", "Auto disable timeout resolvers", type = FieldType.BOOL),
     SettingField("Resolver", "BASE_ENCODE_DATA", "BASE_ENCODE_DATA", "Use base-encoded payloads", type = FieldType.BOOL),
@@ -141,6 +142,8 @@ private val configFields = listOf(
     SettingField("ARQ", "ARQ_WINDOW_SIZE", "ARQ_WINDOW_SIZE", "ARQ receive window size", keyboardType = KeyboardType.Number),
     SettingField("ARQ", "ARQ_INITIAL_RTO_SECONDS", "ARQ_INITIAL_RTO_SECONDS", "Initial RTO seconds", keyboardType = KeyboardType.Decimal),
     SettingField("ARQ", "ARQ_MAX_RTO_SECONDS", "ARQ_MAX_RTO_SECONDS", "Maximum RTO seconds", keyboardType = KeyboardType.Decimal),
+    SettingField("ARQ", "ARQ_CONTROL_MAX_RTO_SECONDS", "ARQ_CONTROL_MAX_RTO_SECONDS", "Control packet max RTO seconds", keyboardType = KeyboardType.Decimal),
+    SettingField("ARQ", "ARQ_MAX_CONTROL_RETRIES", "ARQ_MAX_CONTROL_RETRIES", "Maximum retries per control packet", keyboardType = KeyboardType.Number),
     SettingField("ARQ", "ARQ_MAX_DATA_RETRIES", "ARQ_MAX_DATA_RETRIES", "Maximum retries per data packet", keyboardType = KeyboardType.Number),
     SettingField("ARQ", "ARQ_DATA_NACK_INITIAL_DELAY_SECONDS", "ARQ_DATA_NACK_INITIAL_DELAY_SECONDS", "Initial delay before first NACK seconds", keyboardType = KeyboardType.Decimal),
     SettingField("ARQ", "ARQ_DATA_NACK_REPEAT_SECONDS", "ARQ_DATA_NACK_REPEAT_SECONDS", "NACK repeat interval seconds", keyboardType = KeyboardType.Decimal),
@@ -275,7 +278,19 @@ fun SettingsScreen(
                 )
                 Spacer(modifier = Modifier.height(6.dp))
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    Button(onClick = { importTomlLauncher.launch(arrayOf("text/*")) }) {
+                    Button(
+                        onClick = {
+                            importTomlLauncher.launch(
+                                arrayOf(
+                                    "application/toml",
+                                    "text/x-toml",
+                                    "text/plain",
+                                    "application/octet-stream",
+                                    "*/*"
+                                )
+                            )
+                        }
+                    ) {
                         Icon(Icons.Filled.UploadFile, contentDescription = null)
                         Spacer(modifier = Modifier.width(6.dp))
                         Text("Import TOML")
@@ -471,38 +486,41 @@ private fun defaultValuesFor(profile: ProfileEntity): Map<String, String> {
         put("SOCKS5_USER", adv("SOCKS5_USER", "master_dns_vpn"))
         put("SOCKS5_PASS", adv("SOCKS5_PASS", "master_dns_vpn"))
         put("LOCAL_DNS_ENABLED", adv("LOCAL_DNS_ENABLED", "false"))
-        put("RESOLVER_BALANCING_STRATEGY", profile.resolverBalancingStrategy.toString())
+        put("RESOLVER_BALANCING_STRATEGY", profile.resolverBalancingStrategy.takeIf { it != 0 }?.toString() ?: "2")
         put("PACKET_DUPLICATION_COUNT", profile.packetDuplicationCount.toString())
         put("SETUP_PACKET_DUPLICATION_COUNT", profile.setupPacketDuplicationCount.toString())
         put("STREAM_RESOLVER_FAILOVER_RESEND_THRESHOLD", adv("STREAM_RESOLVER_FAILOVER_RESEND_THRESHOLD", "3"))
         put("STREAM_RESOLVER_FAILOVER_COOLDOWN", adv("STREAM_RESOLVER_FAILOVER_COOLDOWN", "8.0"))
+        put("RECHECK_SERVER_INTERVAL_SECONDS", adv("RECHECK_SERVER_INTERVAL_SECONDS", "5.0"))
         put("RECHECK_INACTIVE_SERVERS_ENABLED", adv("RECHECK_INACTIVE_SERVERS_ENABLED", "true"))
         put("AUTO_DISABLE_TIMEOUT_SERVERS", adv("AUTO_DISABLE_TIMEOUT_SERVERS", "true"))
         put("BASE_ENCODE_DATA", adv("BASE_ENCODE_DATA", "false"))
         put("UPLOAD_COMPRESSION_TYPE", profile.uploadCompression.toString())
         put("DOWNLOAD_COMPRESSION_TYPE", profile.downloadCompression.toString())
         put("COMPRESSION_MIN_SIZE", adv("COMPRESSION_MIN_SIZE", "120"))
-        put("MIN_UPLOAD_MTU", adv("MIN_UPLOAD_MTU", "40"))
-        put("MIN_DOWNLOAD_MTU", adv("MIN_DOWNLOAD_MTU", "100"))
+        put("MIN_UPLOAD_MTU", adv("MIN_UPLOAD_MTU", "38"))
+        put("MIN_DOWNLOAD_MTU", adv("MIN_DOWNLOAD_MTU", "500"))
         put("MAX_UPLOAD_MTU", adv("MAX_UPLOAD_MTU", "150"))
-        put("MAX_DOWNLOAD_MTU", adv("MAX_DOWNLOAD_MTU", "500"))
+        put("MAX_DOWNLOAD_MTU", adv("MAX_DOWNLOAD_MTU", "900"))
         put("MTU_TEST_RETRIES", adv("MTU_TEST_RETRIES", "2"))
         put("MTU_TEST_TIMEOUT", adv("MTU_TEST_TIMEOUT", "2.0"))
         put("MTU_TEST_PARALLELISM", adv("MTU_TEST_PARALLELISM", "32"))
         put("SAVE_MTU_SERVERS_TO_FILE", adv("SAVE_MTU_SERVERS_TO_FILE", "false"))
-        put("TUNNEL_READER_WORKERS", adv("TUNNEL_READER_WORKERS", "2"))
-        put("TUNNEL_WRITER_WORKERS", adv("TUNNEL_WRITER_WORKERS", "2"))
-        put("TUNNEL_PROCESS_WORKERS", adv("TUNNEL_PROCESS_WORKERS", "2"))
+        put("TUNNEL_READER_WORKERS", adv("TUNNEL_READER_WORKERS", "5"))
+        put("TUNNEL_WRITER_WORKERS", adv("TUNNEL_WRITER_WORKERS", "5"))
+        put("TUNNEL_PROCESS_WORKERS", adv("TUNNEL_PROCESS_WORKERS", "5"))
         put("TUNNEL_PACKET_TIMEOUT_SECONDS", adv("TUNNEL_PACKET_TIMEOUT_SECONDS", "10.0"))
-        put("TX_CHANNEL_SIZE", adv("TX_CHANNEL_SIZE", "8192"))
-        put("RX_CHANNEL_SIZE", adv("RX_CHANNEL_SIZE", "12288"))
+        put("TX_CHANNEL_SIZE", adv("TX_CHANNEL_SIZE", "12288"))
+        put("RX_CHANNEL_SIZE", adv("RX_CHANNEL_SIZE", "16384"))
         put("RESOLVER_UDP_CONNECTION_POOL_SIZE", adv("RESOLVER_UDP_CONNECTION_POOL_SIZE", "128"))
-        put("ARQ_WINDOW_SIZE", adv("ARQ_WINDOW_SIZE", "600"))
-        put("ARQ_INITIAL_RTO_SECONDS", adv("ARQ_INITIAL_RTO_SECONDS", "1"))
-        put("ARQ_MAX_RTO_SECONDS", adv("ARQ_MAX_RTO_SECONDS", "5.0"))
-        put("ARQ_MAX_DATA_RETRIES", adv("ARQ_MAX_DATA_RETRIES", "1200"))
+        put("ARQ_WINDOW_SIZE", adv("ARQ_WINDOW_SIZE", "1000"))
+        put("ARQ_INITIAL_RTO_SECONDS", adv("ARQ_INITIAL_RTO_SECONDS", "0.6"))
+        put("ARQ_MAX_RTO_SECONDS", adv("ARQ_MAX_RTO_SECONDS", "3.0"))
+        put("ARQ_CONTROL_MAX_RTO_SECONDS", adv("ARQ_CONTROL_MAX_RTO_SECONDS", "2.0"))
+        put("ARQ_MAX_CONTROL_RETRIES", adv("ARQ_MAX_CONTROL_RETRIES", "120"))
+        put("ARQ_MAX_DATA_RETRIES", adv("ARQ_MAX_DATA_RETRIES", "120"))
         put("ARQ_DATA_NACK_INITIAL_DELAY_SECONDS", adv("ARQ_DATA_NACK_INITIAL_DELAY_SECONDS", "0.4"))
-        put("ARQ_DATA_NACK_REPEAT_SECONDS", adv("ARQ_DATA_NACK_REPEAT_SECONDS", "1.0"))
+        put("ARQ_DATA_NACK_REPEAT_SECONDS", adv("ARQ_DATA_NACK_REPEAT_SECONDS", "0.8"))
         put("ARQ_INACTIVITY_TIMEOUT_SECONDS", adv("ARQ_INACTIVITY_TIMEOUT_SECONDS", "1800.0"))
         put("LOG_LEVEL", profile.logLevel)
     }

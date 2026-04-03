@@ -89,7 +89,7 @@ func ParseFromLabels(labels string, codec *security.Codec) (Packet, error) {
 		return Packet{}, ErrInvalidEncodedData
 	}
 
-	raw, err := codec.DecodeLowerBase32StringAndDecrypt(labels)
+	raw, err := codec.DecodeStringAndDecrypt(labels)
 	if err != nil {
 		return Packet{}, err
 	}
@@ -291,8 +291,6 @@ func buildPacketFlags() [256]uint8 {
 	frag := [...]uint8{
 		Enums.PACKET_STREAM_DATA,
 		Enums.PACKET_STREAM_RESEND,
-		Enums.PACKET_MTU_UP_REQ,
-		Enums.PACKET_MTU_DOWN_RES,
 		Enums.PACKET_SOCKS5_SYN,
 		Enums.PACKET_DNS_QUERY_REQ,
 		Enums.PACKET_DNS_QUERY_RES,

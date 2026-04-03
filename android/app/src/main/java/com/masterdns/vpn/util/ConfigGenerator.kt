@@ -55,11 +55,12 @@ object ConfigGenerator {
             appendLine()
 
             // Section 4: Resolver Selection
-            appendLine("RESOLVER_BALANCING_STRATEGY = ${profile.resolverBalancingStrategy}")
+            appendLine("RESOLVER_BALANCING_STRATEGY = ${profile.resolverBalancingStrategy.takeIf { it != 0 } ?: 2}")
             appendLine("PACKET_DUPLICATION_COUNT = ${profile.packetDuplicationCount}")
             appendLine("SETUP_PACKET_DUPLICATION_COUNT = ${profile.setupPacketDuplicationCount}")
             appendLine("STREAM_RESOLVER_FAILOVER_RESEND_THRESHOLD = ${cfg("STREAM_RESOLVER_FAILOVER_RESEND_THRESHOLD", "3")}")
             appendLine("STREAM_RESOLVER_FAILOVER_COOLDOWN = ${cfg("STREAM_RESOLVER_FAILOVER_COOLDOWN", "8.0")}")
+            appendLine("RECHECK_SERVER_INTERVAL_SECONDS = ${cfg("RECHECK_SERVER_INTERVAL_SECONDS", "5.0")}")
             appendLine("RECHECK_INACTIVE_SERVERS_ENABLED = ${cfg("RECHECK_INACTIVE_SERVERS_ENABLED", "true")}")
             appendLine("AUTO_DISABLE_TIMEOUT_SERVERS = ${cfg("AUTO_DISABLE_TIMEOUT_SERVERS", "true")}")
             appendLine("BASE_ENCODE_DATA = ${cfg("BASE_ENCODE_DATA", "false")}")
@@ -72,10 +73,10 @@ object ConfigGenerator {
             appendLine()
 
             // Section 6: MTU Discovery
-            appendLine("MIN_UPLOAD_MTU = ${cfg("MIN_UPLOAD_MTU", "40")}")
-            appendLine("MIN_DOWNLOAD_MTU = ${cfg("MIN_DOWNLOAD_MTU", "100")}")
+            appendLine("MIN_UPLOAD_MTU = ${cfg("MIN_UPLOAD_MTU", "38")}")
+            appendLine("MIN_DOWNLOAD_MTU = ${cfg("MIN_DOWNLOAD_MTU", "500")}")
             appendLine("MAX_UPLOAD_MTU = ${cfg("MAX_UPLOAD_MTU", "150")}")
-            appendLine("MAX_DOWNLOAD_MTU = ${cfg("MAX_DOWNLOAD_MTU", "500")}")
+            appendLine("MAX_DOWNLOAD_MTU = ${cfg("MAX_DOWNLOAD_MTU", "900")}")
             appendLine("MTU_TEST_RETRIES = ${cfg("MTU_TEST_RETRIES", "2")}")
             appendLine("MTU_TEST_TIMEOUT = ${cfg("MTU_TEST_TIMEOUT", "2.0")}")
             appendLine("MTU_TEST_PARALLELISM = ${cfg("MTU_TEST_PARALLELISM", "32")}")
@@ -83,22 +84,24 @@ object ConfigGenerator {
             appendLine()
 
             // Section 7: Runtime Workers
-            appendLine("TUNNEL_READER_WORKERS = ${cfg("TUNNEL_READER_WORKERS", "2")}")
-            appendLine("TUNNEL_WRITER_WORKERS = ${cfg("TUNNEL_WRITER_WORKERS", "2")}")
-            appendLine("TUNNEL_PROCESS_WORKERS = ${cfg("TUNNEL_PROCESS_WORKERS", "2")}")
+            appendLine("TUNNEL_READER_WORKERS = ${cfg("TUNNEL_READER_WORKERS", "5")}")
+            appendLine("TUNNEL_WRITER_WORKERS = ${cfg("TUNNEL_WRITER_WORKERS", "5")}")
+            appendLine("TUNNEL_PROCESS_WORKERS = ${cfg("TUNNEL_PROCESS_WORKERS", "5")}")
             appendLine("TUNNEL_PACKET_TIMEOUT_SECONDS = ${cfg("TUNNEL_PACKET_TIMEOUT_SECONDS", "10.0")}")
-            appendLine("TX_CHANNEL_SIZE = ${cfg("TX_CHANNEL_SIZE", "8192")}")
-            appendLine("RX_CHANNEL_SIZE = ${cfg("RX_CHANNEL_SIZE", "12288")}")
+            appendLine("TX_CHANNEL_SIZE = ${cfg("TX_CHANNEL_SIZE", "12288")}")
+            appendLine("RX_CHANNEL_SIZE = ${cfg("RX_CHANNEL_SIZE", "16384")}")
             appendLine("RESOLVER_UDP_CONNECTION_POOL_SIZE = ${cfg("RESOLVER_UDP_CONNECTION_POOL_SIZE", "128")}")
             appendLine()
 
             // Section 8: ARQ
-            appendLine("ARQ_WINDOW_SIZE = ${cfg("ARQ_WINDOW_SIZE", "600")}")
-            appendLine("ARQ_INITIAL_RTO_SECONDS = ${cfg("ARQ_INITIAL_RTO_SECONDS", "1")}")
-            appendLine("ARQ_MAX_RTO_SECONDS = ${cfg("ARQ_MAX_RTO_SECONDS", "5.0")}")
-            appendLine("ARQ_MAX_DATA_RETRIES = ${cfg("ARQ_MAX_DATA_RETRIES", "1200")}")
+            appendLine("ARQ_WINDOW_SIZE = ${cfg("ARQ_WINDOW_SIZE", "1000")}")
+            appendLine("ARQ_INITIAL_RTO_SECONDS = ${cfg("ARQ_INITIAL_RTO_SECONDS", "0.6")}")
+            appendLine("ARQ_MAX_RTO_SECONDS = ${cfg("ARQ_MAX_RTO_SECONDS", "3.0")}")
+            appendLine("ARQ_CONTROL_MAX_RTO_SECONDS = ${cfg("ARQ_CONTROL_MAX_RTO_SECONDS", "2.0")}")
+            appendLine("ARQ_MAX_CONTROL_RETRIES = ${cfg("ARQ_MAX_CONTROL_RETRIES", "120")}")
+            appendLine("ARQ_MAX_DATA_RETRIES = ${cfg("ARQ_MAX_DATA_RETRIES", "120")}")
             appendLine("ARQ_DATA_NACK_INITIAL_DELAY_SECONDS = ${cfg("ARQ_DATA_NACK_INITIAL_DELAY_SECONDS", "0.4")}")
-            appendLine("ARQ_DATA_NACK_REPEAT_SECONDS = ${cfg("ARQ_DATA_NACK_REPEAT_SECONDS", "1.0")}")
+            appendLine("ARQ_DATA_NACK_REPEAT_SECONDS = ${cfg("ARQ_DATA_NACK_REPEAT_SECONDS", "0.8")}")
             appendLine("ARQ_INACTIVITY_TIMEOUT_SECONDS = ${cfg("ARQ_INACTIVITY_TIMEOUT_SECONDS", "1800.0")}")
             appendLine()
 

@@ -105,14 +105,6 @@ func (c *Client) buildSessionInitPayload() ([]byte, bool, [4]byte, error) {
 	}
 	copy(verifyCode[:], randomPart)
 
-	// Use pool for temporary buffer to avoid allocation
-	buf := c.udpBufferPool.Get().([]byte)
-	defer c.udpBufferPool.Put(buf)
-
-	if sessionInitPayloadSize > len(buf) {
-		return nil, false, verifyCode, errors.New("buffer pool slice too small")
-	}
-
 	payload := make([]byte, sessionInitPayloadSize)
 	if c.cfg.BaseEncodeData {
 		payload[0] = mtuProbeBase64Reply

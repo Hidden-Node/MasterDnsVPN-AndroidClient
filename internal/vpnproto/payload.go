@@ -77,5 +77,5 @@ func BuildEncodedAuto(opts BuildOptions, codec *security.Codec, minSize int) (st
 	if codec == nil {
 		return "", ErrCodecUnavailable
 	}
-	return codec.EncryptAndEncodeLowerBase32(raw)
+	return codec.EncryptAndEncode(raw)
 }

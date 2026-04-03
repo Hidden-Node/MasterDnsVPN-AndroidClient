@@ -56,6 +56,62 @@ func TestBalancerLowestLatencyUsesRuntimeStats(t *testing.T) {
 	}
 }
 
+func TestBalancerStatsHalfLifeAlsoAppliesOnSend(t *testing.T) {
+	b := NewBalancer(BalancingLeastLoss)
+	connections := []*Connection{
+		{Key: "a", IsValid: true},
+	}
+	b.SetConnections(connections)
+
+	for i := 0; i < connectionStatsHalfLifeThreshold+1; i++ {
+		b.ReportSend("a")
+	}
+
+	stats := b.statsForKey("a")
+	if stats == nil {
+		t.Fatal("expected stats for resolver a")
+	}
+
+	sent, acked, sum, count := stats.snapshot()
+	if sent != (connectionStatsHalfLifeThreshold+1)/2 {
+		t.Fatalf("expected send-triggered half-life to bound sent, got sent=%d acked=%d sum=%d count=%d", sent, acked, sum, count)
+	}
+	if acked != 0 || sum != 0 || count != 0 {
+		t.Fatalf("expected send-triggered half-life to preserve zero success stats, got acked=%d sum=%d count=%d", acked, sum, count)
+	}
+}
+
+func TestBalancerStatsHalfLifePreservesRelativeSuccessSignal(t *testing.T) {
+	b := NewBalancer(BalancingLeastLoss)
+	connections := []*Connection{
+		{Key: "a", IsValid: true},
+	}
+	b.SetConnections(connections)
+
+	for i := 0; i < 800; i++ {
+		b.ReportSend("a")
+	}
+	for i := 0; i < 400; i++ {
+		b.ReportSuccess("a", 5*time.Millisecond)
+	}
+	for i := 0; i < 401; i++ {
+		b.ReportSend("a")
+	}
+
+	stats := b.statsForKey("a")
+	if stats == nil {
+		t.Fatal("expected stats for resolver a")
+	}
+
+	sent, acked, sum, count := stats.snapshot()
+	if sent != 700 || acked != 200 || count != 200 {
+		t.Fatalf("expected balanced half-life after crossing threshold, got sent=%d acked=%d count=%d", sent, acked, count)
+	}
+	if sum != uint64(time.Millisecond/time.Microsecond)*5*200 {
+		t.Fatalf("expected RTT signal to decay proportionally, got sum=%d", sum)
+	}
+}
+
 func TestBalancerSnapshotIgnoresSourceMutationUntilRefresh(t *testing.T) {
 	b := NewBalancer(BalancingRoundRobinDefault)
 	connections := []*Connection{

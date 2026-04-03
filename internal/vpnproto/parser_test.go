@@ -120,9 +120,9 @@ func TestParseFromLabels(t *testing.T) {
 
 	payload := []byte("tunnel-payload")
 	raw := buildRawPacket(t, 3, Enums.PACKET_DNS_QUERY_REQ, 100, 200, 1, 2, 1, 4, payload)
-	encoded, err := codec.EncryptAndEncodeLowerBase32(raw)
+	encoded, err := codec.EncryptAndEncode(raw)
 	if err != nil {
-		t.Fatalf("EncryptAndEncodeLowerBase32 returned error: %v", err)
+		t.Fatalf("EncryptAndEncode returned error: %v", err)
 	}
 
 	parsed, err := ParseFromLabels(encoded, codec)

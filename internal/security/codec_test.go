@@ -73,14 +73,14 @@ func TestCodecEncodeDecodeLowerBase32RoundTrip(t *testing.T) {
 	}
 
 	plaintext := []byte("header-and-payload")
-	encoded, err := codec.EncryptAndEncodeLowerBase32(plaintext)
+	encoded, err := codec.EncryptAndEncode(plaintext)
 	if err != nil {
-		t.Fatalf("EncryptAndEncodeLowerBase32 returned error: %v", err)
+		t.Fatalf("EncryptAndEncode returned error: %v", err)
 	}
 
-	decoded, err := codec.DecodeLowerBase32AndDecrypt([]byte(encoded))
+	decoded, err := codec.DecodeAndDecrypt([]byte(encoded))
 	if err != nil {
-		t.Fatalf("DecodeLowerBase32AndDecrypt returned error: %v", err)
+		t.Fatalf("DecodeAndDecrypt returned error: %v", err)
 	}
 	if !bytes.Equal(decoded, plaintext) {
 		t.Fatal("encode/decode lower-base32 round-trip mismatch")

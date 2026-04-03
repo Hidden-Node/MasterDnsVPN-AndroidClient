@@ -35,6 +35,11 @@ func main() {
 	configPath := flag.String("config", "server_config.toml", "Path to server configuration file")
 	logPath := flag.String("log", "", "Path to log file (optional)")
 	versionFlag := flag.Bool("version", false, "Print version and exit")
+	configFlags, err := config.NewServerConfigFlagBinder(flag.CommandLine)
+	if err != nil {
+		_, _ = fmt.Fprintf(os.Stderr, "Server flag setup failed: %v\n", err)
+		os.Exit(2)
+	}
 	flag.Parse()
 
 	if *versionFlag {
@@ -44,7 +49,7 @@ func main() {
 
 	resolvedConfigPath := runtimepath.Resolve(*configPath)
 
-	cfg, err := config.LoadServerConfig(resolvedConfigPath)
+	cfg, err := config.LoadServerConfigWithOverrides(resolvedConfigPath, configFlags.Overrides())
 	if err != nil {
 		_, _ = fmt.Fprintf(os.Stderr, "Server startup failed: %v\n", err)
 		waitForExitInput()

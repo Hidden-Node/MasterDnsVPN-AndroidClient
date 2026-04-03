@@ -46,17 +46,17 @@ UDP_PORT = 53
 
 # Number of UDP reader goroutines.
 # If <= 0, code falls back to an auto default.
-UDP_READERS = 2
+UDP_READERS = 7
 
 # Number of DNS request workers that process incoming packets.
 # If <= 0, code falls back to an auto default.
-DNS_REQUEST_WORKERS = 4
+DNS_REQUEST_WORKERS = 7
 
 # Maximum queued requests waiting behind request workers.
 # If the queue is full, packets are dropped and rate-limited overload logs appear.
 # With the current client sample using larger RX buffering, keeping this at 8192
 # helps the server absorb short bursts without dropping front-door requests too early.
-MAX_CONCURRENT_REQUESTS = 12288
+MAX_CONCURRENT_REQUESTS = 16384
 
 # UDP socket read/write buffer size in bytes.
 SOCKET_BUFFER_SIZE = 8388608
@@ -76,7 +76,7 @@ DROP_LOG_INTERVAL_SECONDS = 2.0
 
 # Worker count for deferred per-session processing.
 # These workers serialize heavy or ordering-sensitive tasks behind session keys.
-DEFERRED_SESSION_WORKERS = 2
+DEFERRED_SESSION_WORKERS = 4
 
 # Queue limit for deferred per-session work.
 # Keep this a bit higher than the client-side setup pressure so bursty SYN/SOCKS/DNS
@@ -236,16 +236,16 @@ STREAM_RESULT_PACKET_TTL_SECONDS = 300.0
 STREAM_FAILURE_PACKET_TTL_SECONDS = 120.0
 
 # ARQ timing / retry profile.
-ARQ_WINDOW_SIZE = 600
-ARQ_INITIAL_RTO_SECONDS = 1
-ARQ_MAX_RTO_SECONDS = 5.0
+ARQ_WINDOW_SIZE = 1000
+ARQ_INITIAL_RTO_SECONDS = 0.6
+ARQ_MAX_RTO_SECONDS = 3.0
 ARQ_CONTROL_INITIAL_RTO_SECONDS = 0.5
-ARQ_CONTROL_MAX_RTO_SECONDS = 3.0
-ARQ_MAX_CONTROL_RETRIES = 300
+ARQ_CONTROL_MAX_RTO_SECONDS = 2.0
+ARQ_MAX_CONTROL_RETRIES = 120
 ARQ_INACTIVITY_TIMEOUT_SECONDS = 1800.0
 ARQ_DATA_PACKET_TTL_SECONDS = 2400.0
 ARQ_CONTROL_PACKET_TTL_SECONDS = 1200.0
-ARQ_MAX_DATA_RETRIES = 1200
+ARQ_MAX_DATA_RETRIES = 120
 
 # Maximum out-of-order gap ahead of rcvNxt that can trigger STREAM_DATA_NACK.
 # 0 disables NACK generation entirely.
@@ -255,7 +255,7 @@ ARQ_DATA_NACK_MAX_GAP = 64
 # Minimum seconds between repeated NACKs for the same missing sequence number.
 # Clamped to [0.1s, 30s].
 ARQ_DATA_NACK_INITIAL_DELAY_SECONDS = 0.4
-ARQ_DATA_NACK_REPEAT_SECONDS = 1.0
+ARQ_DATA_NACK_REPEAT_SECONDS = 0.8
 
 ARQ_TERMINAL_DRAIN_TIMEOUT_SECONDS = 120.0
 ARQ_TERMINAL_ACK_WAIT_TIMEOUT_SECONDS = 90.0

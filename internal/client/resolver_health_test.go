@@ -108,6 +108,22 @@ func TestResolverHealthRecheckReactivatesConnection(t *testing.T) {
 
 	waitForResolverHealthCondition(t, 500*time.Millisecond, func() bool {
 		conn, ok := c.GetConnectionByKey("a")
+		if !ok || conn.IsValid {
+			return false
+		}
+		c.resolverHealthMu.Lock()
+		defer c.resolverHealthMu.Unlock()
+		state, disabled := c.runtimeDisabled["a"]
+		meta := c.resolverRecheck["a"]
+		return disabled && state.SuccessCount == 1 && !meta.InFlight && meta.NextAt.After(now)
+	}, "expected first successful recheck to keep runtime-disabled resolver invalid")
+
+	now = now.Add(3 * time.Second)
+	c.nowFn = func() time.Time { return now }
+	c.runResolverRecheckBatch(context.Background(), now)
+
+	waitForResolverHealthCondition(t, 500*time.Millisecond, func() bool {
+		conn, ok := c.GetConnectionByKey("a")
 		return ok && conn.IsValid
 	}, "expected recheck to reactivate resolver")
 
@@ -181,6 +197,22 @@ func TestResolverHealthRecheckUsesSnapshotUpdateInsteadOfMutatingSharedConnectio
 		return conn.Key == "a"
 	}
 
+	c.runResolverRecheckBatch(context.Background(), now)
+
+	waitForResolverHealthCondition(t, 500*time.Millisecond, func() bool {
+		conn, ok := c.GetConnectionByKey("a")
+		if !ok || conn.IsValid {
+			return false
+		}
+		c.resolverHealthMu.Lock()
+		defer c.resolverHealthMu.Unlock()
+		state, disabled := c.runtimeDisabled["a"]
+		meta := c.resolverRecheck["a"]
+		return disabled && state.SuccessCount == 1 && !meta.InFlight && meta.NextAt.After(now)
+	}, "expected first successful recheck to keep runtime-disabled resolver invalid")
+
+	now = now.Add(3 * time.Second)
+	c.nowFn = func() time.Time { return now }
 	c.runResolverRecheckBatch(context.Background(), now)
 
 	waitForResolverHealthCondition(t, 500*time.Millisecond, func() bool {
@@ -473,6 +505,96 @@ func TestResolverHealthRecheckBatchDoesNotLaunchSameResolverTwiceWhileInFlight(t
 		meta := c.resolverRecheck["a"]
 		return !meta.InFlight && meta.FailCount >= 1 && meta.NextAt.After(now)
 	}, "expected failed in-flight recheck to clear in-flight state and schedule retry")
+}
+
+func TestResolverHealthRecheckBatchHonorsGlobalInFlightLimitAcrossBatches(t *testing.T) {
+	c := buildTestClientWithResolvers(config.ClientConfig{
+		RecheckInactiveServersEnabled:  true,
+		RecheckInactiveIntervalSeconds: 60.0,
+		RecheckServerIntervalSeconds:   3.0,
+		RecheckBatchSize:               1,
+	}, "a", "b")
+	c.successMTUChecks = true
+	c.syncedUploadMTU = 120
+	c.syncedDownloadMTU = 180
+
+	for _, key := range []string{"a", "b"} {
+		if !c.balancer.SetConnectionValidity(key, false) {
+			t.Fatalf("expected resolver %s to become invalid", key)
+		}
+	}
+
+	c.initResolverRecheckMeta()
+	now := time.Date(2026, 3, 30, 9, 26, 0, 0, time.UTC)
+	c.nowFn = func() time.Time { return now }
+
+	c.resolverHealthMu.Lock()
+	c.resolverRecheck["a"] = resolverRecheckState{NextAt: now.Add(-time.Second)}
+	c.resolverRecheck["b"] = resolverRecheckState{NextAt: now.Add(-time.Second)}
+	c.runtimeDisabled["a"] = resolverDisabledState{
+		DisabledAt:  now.Add(-time.Minute),
+		NextRetryAt: now.Add(-time.Second),
+		RetryCount:  1,
+		Cause:       "timeout window",
+	}
+	c.runtimeDisabled["b"] = resolverDisabledState{
+		DisabledAt:  now.Add(-time.Minute),
+		NextRetryAt: now.Add(-time.Second),
+		RetryCount:  1,
+		Cause:       "timeout window",
+	}
+	c.resolverHealthMu.Unlock()
+
+	startedA := make(chan struct{}, 1)
+	releaseA := make(chan struct{})
+	var callsA atomic.Int32
+	var callsB atomic.Int32
+	c.recheckConnectionFn = func(conn *Connection) bool {
+		if conn == nil {
+			return false
+		}
+		switch conn.Key {
+		case "a":
+			callsA.Add(1)
+			select {
+			case startedA <- struct{}{}:
+			default:
+			}
+			<-releaseA
+			return false
+		case "b":
+			callsB.Add(1)
+			return false
+		default:
+			return false
+		}
+	}
+
+	c.runResolverRecheckBatch(context.Background(), now)
+
+	select {
+	case <-startedA:
+	case <-time.After(200 * time.Millisecond):
+		t.Fatal("expected first resolver recheck to start")
+	}
+
+	c.runResolverRecheckBatch(context.Background(), now.Add(10*time.Millisecond))
+	time.Sleep(100 * time.Millisecond)
+
+	if callsA.Load() != 1 {
+		t.Fatalf("expected resolver a to start once, got %d", callsA.Load())
+	}
+	if callsB.Load() != 0 {
+		t.Fatalf("expected resolver b to wait for a free global recheck slot, got %d launches", callsB.Load())
+	}
+
+	close(releaseA)
+
+	waitForResolverHealthCondition(t, 500*time.Millisecond, func() bool {
+		c.resolverHealthMu.Lock()
+		defer c.resolverHealthMu.Unlock()
+		return !c.resolverRecheck["a"].InFlight
+	}, "expected first recheck to finish and clear in-flight state")
 }
 
 func TestResolverHealthSuccessfulRecheckClearsInFlightWhenResolverBecomesValidElsewhere(t *testing.T) {

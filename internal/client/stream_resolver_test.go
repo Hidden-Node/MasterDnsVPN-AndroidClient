@@ -70,6 +70,38 @@ func TestSelectTargetConnectionsForPacketPrefersStickyStreamResolver(t *testing.
 	}
 }
 
+func TestEnsureStreamPreferredConnectionSkipsRuntimeDisabledResolver(t *testing.T) {
+	c := buildTestClientWithResolvers(config.ClientConfig{
+		PacketDuplicationCount: 1,
+	}, "a", "b")
+
+	stream := testStream(8)
+	stream.PreferredServerKey = "a"
+	c.active_streams[stream.StreamID] = stream
+
+	c.resolverHealthMu.Lock()
+	c.runtimeDisabled["a"] = resolverDisabledState{
+		DisabledAt:  time.Now(),
+		NextRetryAt: time.Now().Add(time.Minute),
+		Cause:       "test",
+	}
+	c.resolverHealthMu.Unlock()
+
+	selected, err := c.selectTargetConnectionsForPacket(Enums.PACKET_STREAM_DATA, stream.StreamID)
+	if err != nil {
+		t.Fatalf("selectTargetConnectionsForPacket returned error: %v", err)
+	}
+	if len(selected) != 1 {
+		t.Fatalf("unexpected selected count: got=%d want=1", len(selected))
+	}
+	if selected[0].Key != "b" {
+		t.Fatalf("expected runtime-disabled preferred resolver to be skipped, got=%q", selected[0].Key)
+	}
+	if stream.PreferredServerKey != "b" {
+		t.Fatalf("expected preferred resolver to switch immediately, got=%q", stream.PreferredServerKey)
+	}
+}
+
 func TestSelectTargetConnectionsForPacketFailsOverOnResendStreak(t *testing.T) {
 	c := buildTestClientWithResolvers(config.ClientConfig{
 		PacketDuplicationCount:                1,
@@ -182,8 +214,8 @@ func TestSelectTargetConnectionsForPacketAppliesDuplicationCountToPing(t *testin
 	if err != nil {
 		t.Fatalf("packet %s: unexpected error: %v", Enums.PacketTypeName(Enums.PACKET_PING), err)
 	}
-	if len(selected) != 3 {
-		t.Fatalf("packet %s: expected duplication count to apply, got=%d", Enums.PacketTypeName(Enums.PACKET_PING), len(selected))
+	if len(selected) != 2 {
+		t.Fatalf("packet %s: expected duplication count to be capped at 2, got=%d", Enums.PacketTypeName(Enums.PACKET_PING), len(selected))
 	}
 }
 

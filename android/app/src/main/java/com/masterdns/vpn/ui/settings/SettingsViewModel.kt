@@ -96,6 +96,14 @@ class SettingsViewModel @Inject constructor(
         }
     }
 
+    private fun normalizeResolverBalancingStrategy(value: String?, fallback: Int): Int {
+        return when (value?.trim()?.toIntOrNull()) {
+            0 -> 2
+            1, 2, 3, 4 -> value.trim().toInt()
+            else -> if (fallback == 0) 2 else fallback
+        }
+    }
+
     private fun buildUpdatedProfile(profile: ProfileEntity, values: Map<String, String>): ProfileEntity {
         val mergedAdvanced = parseAdvanced(profile.advancedJson).toMutableMap()
         values.forEach { (key, value) ->
@@ -112,8 +120,10 @@ class SettingsViewModel @Inject constructor(
             protocolType = normalizeProtocol(values["PROTOCOL_TYPE"], profile.protocolType),
             listenPort = values["LISTEN_PORT"]?.toIntOrNull()
                 ?.coerceIn(1, 65535) ?: profile.listenPort,
-            resolverBalancingStrategy = values["RESOLVER_BALANCING_STRATEGY"]?.toIntOrNull()
-                ?: profile.resolverBalancingStrategy,
+            resolverBalancingStrategy = normalizeResolverBalancingStrategy(
+                values["RESOLVER_BALANCING_STRATEGY"],
+                profile.resolverBalancingStrategy
+            ),
             packetDuplicationCount = values["PACKET_DUPLICATION_COUNT"]?.toIntOrNull()
                 ?: profile.packetDuplicationCount,
             setupPacketDuplicationCount = values["SETUP_PACKET_DUPLICATION_COUNT"]?.toIntOrNull()
@@ -155,6 +165,7 @@ class SettingsViewModel @Inject constructor(
             "SETUP_PACKET_DUPLICATION_COUNT",
             "STREAM_RESOLVER_FAILOVER_RESEND_THRESHOLD",
             "STREAM_RESOLVER_FAILOVER_COOLDOWN",
+            "RECHECK_SERVER_INTERVAL_SECONDS",
             "RECHECK_INACTIVE_SERVERS_ENABLED",
             "AUTO_DISABLE_TIMEOUT_SERVERS",
             "BASE_ENCODE_DATA",
@@ -179,6 +190,8 @@ class SettingsViewModel @Inject constructor(
             "ARQ_WINDOW_SIZE",
             "ARQ_INITIAL_RTO_SECONDS",
             "ARQ_MAX_RTO_SECONDS",
+            "ARQ_CONTROL_MAX_RTO_SECONDS",
+            "ARQ_MAX_CONTROL_RETRIES",
             "ARQ_MAX_DATA_RETRIES",
             "ARQ_DATA_NACK_INITIAL_DELAY_SECONDS",
             "ARQ_DATA_NACK_REPEAT_SECONDS",
@@ -194,6 +207,7 @@ class SettingsViewModel @Inject constructor(
             "LOCAL_DNS_ENABLED",
             "STREAM_RESOLVER_FAILOVER_RESEND_THRESHOLD",
             "STREAM_RESOLVER_FAILOVER_COOLDOWN",
+            "RECHECK_SERVER_INTERVAL_SECONDS",
             "RECHECK_INACTIVE_SERVERS_ENABLED",
             "AUTO_DISABLE_TIMEOUT_SERVERS",
             "BASE_ENCODE_DATA",
@@ -216,6 +230,8 @@ class SettingsViewModel @Inject constructor(
             "ARQ_WINDOW_SIZE",
             "ARQ_INITIAL_RTO_SECONDS",
             "ARQ_MAX_RTO_SECONDS",
+            "ARQ_CONTROL_MAX_RTO_SECONDS",
+            "ARQ_MAX_CONTROL_RETRIES",
             "ARQ_MAX_DATA_RETRIES",
             "ARQ_DATA_NACK_INITIAL_DELAY_SECONDS",
             "ARQ_DATA_NACK_REPEAT_SECONDS",

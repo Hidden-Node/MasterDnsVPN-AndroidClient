@@ -82,7 +82,7 @@ func BuildEncoded(opts BuildOptions, codec *security.Codec) (string, error) {
 	if codec == nil {
 		return "", ErrCodecUnavailable
 	}
-	return codec.EncryptAndEncodeLowerBase32(raw)
+	return codec.EncryptAndEncode(raw)
 }
 
 func HeaderRawSize(packetType uint8) int {

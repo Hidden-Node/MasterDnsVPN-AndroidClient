@@ -122,12 +122,47 @@ func TestOnRXDropIncrementsCounter(t *testing.T) {
 	}
 }
 
+func TestTrackResolverSendBoundsResolverPendingGrowth(t *testing.T) {
+	c := createTestClient(t)
+	base := time.Now()
+
+	c.resolverStatsMu.Lock()
+	for i := 0; i < resolverPendingHardCap+32; i++ {
+		c.resolverPending[resolverSampleKey{
+			resolverAddr: "127.0.0.1:5300",
+			dnsID:        uint16(i),
+		}] = resolverSample{
+			serverKey: "resolver-a",
+			sentAt:    base.Add(-time.Minute),
+		}
+	}
+	c.resolverStatsMu.Unlock()
+
+	packet := []byte{0x12, 0x34}
+	c.trackResolverSend(packet, "127.0.0.1:5300", "resolver-a", base)
+
+	c.resolverStatsMu.RLock()
+	pendingCount := len(c.resolverPending)
+	_, inserted := c.resolverPending[resolverSampleKey{
+		resolverAddr: "127.0.0.1:5300",
+		dnsID:        binary.BigEndian.Uint16(packet),
+	}]
+	c.resolverStatsMu.RUnlock()
+
+	if pendingCount > resolverPendingHardCap {
+		t.Fatalf("expected resolverPending to stay bounded, got=%d hardCap=%d", pendingCount, resolverPendingHardCap)
+	}
+	if !inserted {
+		t.Fatal("expected latest resolver sample to remain tracked")
+	}
+}
+
 func TestDrainQueues(t *testing.T) {
 	c := createTestClient(t)
-	c.txChannel = make(chan asyncPacket, 5)
+	c.txChannel = make(chan rawOutboundTask, 5)
 	c.rxChannel = make(chan asyncReadPacket, 5)
 
-	c.txChannel <- asyncPacket{}
+	c.txChannel <- rawOutboundTask{}
 	c.rxChannel <- asyncReadPacket{data: make([]byte, 10)}
 
 	c.drainQueues()
