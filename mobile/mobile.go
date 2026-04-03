@@ -14,6 +14,7 @@ import (
 	"sync"
 
 	"masterdnsvpn-go/internal/client"
+	"masterdnsvpn-go/internal/config"
 	"masterdnsvpn-go/internal/version"
 
 	"github.com/xjasonlyu/tun2socks/v2/engine"
@@ -54,7 +55,7 @@ func StartClient(configPath string, logPath string) error {
 		return fmt.Errorf("failed to create config directory: %w", err)
 	}
 
-	app, err := client.Bootstrap(configPath, logPath)
+	app, err := client.Bootstrap(configPath, logPath, config.ClientConfigOverrides{})
 	if err != nil {
 		return fmt.Errorf("client bootstrap failed: %w", err)
 	}
