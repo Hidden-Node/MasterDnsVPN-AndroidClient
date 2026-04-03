@@ -261,7 +261,7 @@ fun ProfileCard(
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun ProfileEditorDialog(
+private fun ProfileEditorDialog(
     profile: ProfileEntity?,
     importedDraft: ImportedProfileDraft?,
     importedResolvers: String?,
