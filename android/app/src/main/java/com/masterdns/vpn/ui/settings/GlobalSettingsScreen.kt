@@ -48,11 +48,14 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.asImageBitmap
+import androidx.compose.ui.platform.LocalUriHandler
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Dialog
 import androidx.core.graphics.drawable.toBitmap
 import androidx.lifecycle.viewmodel.compose.viewModel
+import com.masterdns.vpn.R
 import com.masterdns.vpn.util.GlobalSettings
 import kotlinx.coroutines.launch
 
@@ -70,6 +73,7 @@ fun GlobalSettingsScreen(vm: GlobalSettingsViewModel = viewModel()) {
     var draftAppSelection by remember { mutableStateOf(parseCsv(current.splitPackagesCsv).toMutableSet()) }
     val snackbarHostState = remember { SnackbarHostState() }
     val scope = rememberCoroutineScope()
+    val uriHandler = LocalUriHandler.current
 
     Scaffold(
         topBar = { TopAppBar(title = { Text("Settings") }) },
@@ -152,6 +156,31 @@ fun GlobalSettingsScreen(vm: GlobalSettingsViewModel = viewModel()) {
                         ) {
                             Text("Save Global Settings")
                         }
+                    }
+                }
+            }
+            item {
+                Card(colors = CardDefaults.cardColors()) {
+                    Column(
+                        modifier = Modifier.padding(12.dp),
+                        verticalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        Text("Project Links", style = MaterialTheme.typography.titleMedium)
+                        LinkRow(
+                            title = "Main GitHub:",
+                            link = stringResource(R.string.project_main_github),
+                            onOpen = { uriHandler.openUri("https://${stringResource(R.string.project_main_github)}") }
+                        )
+                        LinkRow(
+                            title = "Main Telegram:",
+                            link = stringResource(R.string.project_main_telegram),
+                            onOpen = { uriHandler.openUri("https://${stringResource(R.string.project_main_telegram)}") }
+                        )
+                        LinkRow(
+                            title = "MDV-HN Android Client:",
+                            link = stringResource(R.string.project_android_client_github),
+                            onOpen = { uriHandler.openUri("https://${stringResource(R.string.project_android_client_github)}") }
+                        )
                     }
                 }
             }
@@ -316,6 +345,22 @@ fun GlobalSettingsScreen(vm: GlobalSettingsViewModel = viewModel()) {
                 }
             }
         }
+    }
+}
+
+@Composable
+private fun LinkRow(title: String, link: String, onOpen: () -> Unit) {
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.spacedBy(6.dp)
+    ) {
+        Text(title, style = MaterialTheme.typography.bodyMedium)
+        Text(
+            text = link,
+            style = MaterialTheme.typography.bodyMedium,
+            color = MaterialTheme.colorScheme.primary,
+            modifier = Modifier.clickable(onClick = onOpen)
+        )
     }
 }
 

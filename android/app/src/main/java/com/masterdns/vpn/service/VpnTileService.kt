@@ -4,6 +4,7 @@ import android.os.Build
 import android.service.quicksettings.Tile
 import android.service.quicksettings.TileService
 import androidx.annotation.RequiresApi
+import com.masterdns.vpn.R
 import com.masterdns.vpn.util.VpnManager
 
 @RequiresApi(Build.VERSION_CODES.N)
@@ -31,17 +32,17 @@ class VpnTileService : TileService() {
         when (VpnManager.state.value) {
             VpnManager.VpnState.CONNECTED -> {
                 tile.state = Tile.STATE_ACTIVE
-                tile.label = "MasterDnsVPN"
+                tile.label = getString(R.string.app_name)
                 tile.subtitle = "Connected"
             }
             VpnManager.VpnState.CONNECTING -> {
                 tile.state = Tile.STATE_ACTIVE
-                tile.label = "MasterDnsVPN"
+                tile.label = getString(R.string.app_name)
                 tile.subtitle = "Connecting..."
             }
             else -> {
                 tile.state = Tile.STATE_INACTIVE
-                tile.label = "MasterDnsVPN"
+                tile.label = getString(R.string.app_name)
                 tile.subtitle = "Disconnected"
             }
         }

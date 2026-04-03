@@ -20,7 +20,7 @@ class App : Application() {
                 getString(R.string.channel_vpn_service),
                 NotificationManager.IMPORTANCE_LOW
             ).apply {
-                description = "MasterDnsVPN connection status"
+                description = "${getString(R.string.app_name)} connection status"
                 setShowBadge(false)
             }
             val manager = getSystemService(NotificationManager::class.java)

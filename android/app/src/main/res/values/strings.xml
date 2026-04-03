@@ -1,7 +1,10 @@
 <resources>
-    <string name="app_name">MasterDnsVPN</string>
+    <string name="app_name">MDV-HN Edition</string>
     <string name="channel_vpn_service">VPN Service</string>
     <string name="notification_connected">VPN is connected</string>
     <string name="notification_connecting">Connecting…</string>
     <string name="notification_disconnected">VPN disconnected</string>
+    <string name="project_main_github">github.com/masterking32/MasterDnsVPN</string>
+    <string name="project_main_telegram">t.me/masterdnsvpn</string>
+    <string name="project_android_client_github">github.com/Hidden-Node/MasterDnsVPN-AndroidClient</string>
 </resources>

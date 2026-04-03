@@ -163,7 +163,7 @@ class MasterDnsVpnService : VpnService() {
 
                 // Establish VPN TUN interface
                 val builder = Builder()
-                    .setSession("MasterDnsVPN")
+                    .setSession(getString(R.string.app_name))
                     .setMtu(1500)
                     .addAddress("10.0.0.2", 32)
                     .addRoute("0.0.0.0", 0)
@@ -278,7 +278,7 @@ class MasterDnsVpnService : VpnService() {
         )
 
         return NotificationCompat.Builder(this, App.CHANNEL_ID)
-            .setContentTitle("MasterDnsVPN")
+            .setContentTitle(getString(R.string.app_name))
             .setContentText(text)
             .setSmallIcon(R.drawable.ic_vpn_key)
             .setContentIntent(pendingIntent)
