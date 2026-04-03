@@ -13,7 +13,6 @@ go install "golang.org/x/mobile/cmd/gobind@${MOBILE_TOOLS_VERSION}"
 # Ensure module dependency is available for gomobile bind
 GO111MODULE=on go get golang.org/x/mobile@${MOBILE_TOOLS_VERSION}
 GO111MODULE=on go get golang.org/x/mobile/bind@${MOBILE_TOOLS_VERSION}
-GO111MODULE=on go mod tidy
 
 export PATH="$(go env GOPATH)/bin:$PATH"
 GO111MODULE=on gomobile init
