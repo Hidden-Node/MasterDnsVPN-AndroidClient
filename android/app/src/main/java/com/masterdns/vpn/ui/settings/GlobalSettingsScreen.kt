@@ -166,20 +166,23 @@ fun GlobalSettingsScreen(vm: GlobalSettingsViewModel = viewModel()) {
                         verticalArrangement = Arrangement.spacedBy(8.dp)
                     ) {
                         Text("Project Links", style = MaterialTheme.typography.titleMedium)
+                        val mainGithubLink = stringResource(R.string.project_main_github)
+                        val mainTelegramLink = stringResource(R.string.project_main_telegram)
+                        val androidClientGithubLink = stringResource(R.string.project_android_client_github)
                         LinkRow(
                             title = "Main GitHub:",
-                            link = stringResource(R.string.project_main_github),
-                            onOpen = { uriHandler.openUri("https://${stringResource(R.string.project_main_github)}") }
+                            link = mainGithubLink,
+                            onOpen = { uriHandler.openUri("https://$mainGithubLink") }
                         )
                         LinkRow(
                             title = "Main Telegram:",
-                            link = stringResource(R.string.project_main_telegram),
-                            onOpen = { uriHandler.openUri("https://${stringResource(R.string.project_main_telegram)}") }
+                            link = mainTelegramLink,
+                            onOpen = { uriHandler.openUri("https://$mainTelegramLink") }
                         )
                         LinkRow(
                             title = "MDV-HN Android Client:",
-                            link = stringResource(R.string.project_android_client_github),
-                            onOpen = { uriHandler.openUri("https://${stringResource(R.string.project_android_client_github)}") }
+                            link = androidClientGithubLink,
+                            onOpen = { uriHandler.openUri("https://$androidClientGithubLink") }
                         )
                     }
                 }
