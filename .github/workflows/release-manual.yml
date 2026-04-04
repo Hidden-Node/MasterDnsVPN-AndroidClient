@@ -95,8 +95,21 @@ jobs:
       - name: Prepare release files
         run: |
           mkdir -p release-artifacts
-          cp android/app/libs/masterdnsvpn.aar release-artifacts/
-          cp android/app/build/outputs/apk/release/*.apk release-artifacts/
+          APP_NAME="masterdnsvpn"
+          VERSION_NAME="${ANDROID_VERSION_NAME}"
+
+          cp android/app/libs/masterdnsvpn.aar release-artifacts/${APP_NAME}-${VERSION_NAME}-release.aar
+
+          for apk in android/app/build/outputs/apk/release/*.apk; do
+            filename=$(basename "$apk")
+            if [[ "$filename" == "app-universal-release.apk" ]]; then
+              suffix="universal"
+            else
+              suffix=$(echo "$filename" | sed -E 's|^app-(.*)-release\.apk$|\1|')
+            fi
+            cp "$apk" "release-artifacts/${APP_NAME}-${VERSION_NAME}-${suffix}-release.apk"
+          done
+
           ls -la release-artifacts
 
       - name: Create GitHub Release
