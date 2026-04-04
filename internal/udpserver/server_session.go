@@ -769,6 +769,7 @@ func (s *Server) handleMTUUpRequest(questionPacket []byte, _ DnsParser.LitePacke
 		PacketType: Enums.PACKET_MTU_UP_RES,
 		Payload:    responsePayload[:],
 	}, baseEncode)
+
 	if err != nil {
 		return nil
 	}
