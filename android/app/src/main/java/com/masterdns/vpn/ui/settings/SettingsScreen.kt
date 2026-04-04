@@ -237,6 +237,19 @@ fun SettingsScreen(
                             )
                         }
                     }
+                },
+                actions = {
+                    val selected = profile
+                    if (selected != null) {
+                        IconButton(
+                            onClick = {
+                                viewModel.saveSettings(selected, fieldsState.toMap())
+                                scope.launch { snackbarHostState.showSnackbar("Profile settings saved and applied") }
+                            }
+                        ) {
+                            Icon(Icons.Filled.Save, contentDescription = "Save")
+                        }
+                    }
                 }
             )
         },

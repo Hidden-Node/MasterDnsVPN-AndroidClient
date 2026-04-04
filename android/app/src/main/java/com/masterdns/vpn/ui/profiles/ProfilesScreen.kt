@@ -270,16 +270,42 @@ private fun ProfileEditorDialog(
     onSave: (ProfileEntity) -> Unit,
     onDismiss: () -> Unit
 ) {
-    var name by remember(profile, importedDraft) { mutableStateOf(importedDraft?.profile?.name ?: profile?.name.orEmpty()) }
-    var domains by remember(profile, importedDraft) {
-        mutableStateOf(importedDraft?.domainInput ?: profile?.domains?.removeSurrounding("[\"", "\"]").orEmpty())
-    }
-    var encryptionKey by remember(profile, importedDraft) { mutableStateOf(importedDraft?.profile?.encryptionKey ?: profile?.encryptionKey.orEmpty()) }
-    var encryptionMethod by remember(profile, importedDraft) { mutableIntStateOf(importedDraft?.profile?.encryptionMethod ?: profile?.encryptionMethod ?: 1) }
-    var resolvers by remember(profile, importedDraft, importedResolvers) {
-        mutableStateOf(importedResolvers ?: importedDraft?.profile?.resolvers ?: profile?.resolvers ?: "8.8.8.8")
-    }
+    var name by remember { mutableStateOf(profile?.name.orEmpty()) }
+    var domains by remember { mutableStateOf(profile?.domains?.removeSurrounding("[\"", "\"]").orEmpty()) }
+    var encryptionKey by remember { mutableStateOf(profile?.encryptionKey.orEmpty()) }
+    var encryptionMethod by remember { mutableIntStateOf(profile?.encryptionMethod ?: 1) }
+    var resolvers by remember { mutableStateOf(profile?.resolvers ?: "8.8.8.8") }
     var showKey by remember { mutableStateOf(false) }
+    var showResolversEditor by remember { mutableStateOf(false) }
+    val largeResolversText = resolvers.length > 6000
+
+    LaunchedEffect(profile?.id) {
+        if (profile != null) {
+            name = profile.name
+            domains = profile.domains.removeSurrounding("[\"", "\"]")
+            encryptionKey = profile.encryptionKey
+            encryptionMethod = profile.encryptionMethod
+            resolvers = profile.resolvers
+            showResolversEditor = false
+        }
+    }
+
+    LaunchedEffect(importedDraft, importedResolvers) {
+        val importedProfile = importedDraft?.profile
+        if (importedProfile != null) {
+            if (name.isBlank()) {
+                // Keep user-entered profile name if they typed it before import.
+                name = importedProfile.name
+            }
+            domains = importedDraft.domainInput
+            encryptionKey = importedProfile.encryptionKey
+            encryptionMethod = importedProfile.encryptionMethod
+            resolvers = importedProfile.resolvers
+        }
+        if (!importedResolvers.isNullOrBlank()) {
+            resolvers = importedResolvers
+        }
+    }
 
     AlertDialog(
         onDismissRequest = onDismiss,
@@ -373,14 +399,33 @@ private fun ProfileEditorDialog(
                     }
                 }
 
-                OutlinedTextField(
-                    value = resolvers,
-                    onValueChange = { resolvers = it },
-                    label = { Text("Resolvers (one per line)") },
-                    modifier = Modifier.fillMaxWidth().height(120.dp),
-                    maxLines = 6,
-                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Uri)
-                )
+                if (!showResolversEditor && largeResolversText) {
+                    Card(
+                        modifier = Modifier.fillMaxWidth(),
+                        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)
+                    ) {
+                        Column(modifier = Modifier.padding(10.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                            Text("Resolvers list is large (${resolvers.lines().size} lines)")
+                            Text(
+                                "To avoid UI lag, tap Edit to open the text box.",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f)
+                            )
+                            OutlinedButton(onClick = { showResolversEditor = true }) {
+                                Text("Edit Resolvers")
+                            }
+                        }
+                    }
+                } else {
+                    OutlinedTextField(
+                        value = resolvers,
+                        onValueChange = { resolvers = it },
+                        label = { Text("Resolvers (one per line)") },
+                        modifier = Modifier.fillMaxWidth().height(120.dp),
+                        maxLines = 6,
+                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Uri)
+                    )
+                }
             }
         },
         confirmButton = {

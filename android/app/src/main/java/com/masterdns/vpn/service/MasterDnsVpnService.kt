@@ -6,6 +6,7 @@ import android.content.Intent
 import android.net.VpnService
 import android.os.Build
 import android.os.ParcelFileDescriptor
+import android.os.PowerManager
 import android.util.Log
 import androidx.core.app.NotificationCompat
 import com.masterdns.vpn.App
@@ -18,7 +19,9 @@ import com.masterdns.vpn.util.VpnManager
 import kotlinx.coroutines.*
 import java.io.File
 import java.io.RandomAccessFile
+import java.net.InetAddress
 import java.net.InetSocketAddress
+import java.net.ServerSocket
 import java.net.Socket
 import kotlin.coroutines.coroutineContext
 
@@ -40,6 +43,7 @@ class MasterDnsVpnService : VpnService() {
     private var vpnInterface: ParcelFileDescriptor? = null
     private var goClientJob: Job? = null
     private var logTailJob: Job? = null
+    private var wakeLock: PowerManager.WakeLock? = null
     @Volatile
     private var isStopping = false
     @Volatile
@@ -75,6 +79,7 @@ class MasterDnsVpnService : VpnService() {
 
                 // Show foreground notification
                 startForeground(NOTIFICATION_ID, buildNotification(getString(R.string.notification_connecting)))
+                acquireWakeLock()
 
                 // Load profile from DB
                 val db = AppDatabase.getInstance(this@MasterDnsVpnService)
@@ -87,6 +92,7 @@ class MasterDnsVpnService : VpnService() {
                 val listenIpOverride: String? = null
 
                 VpnManager.appendLog("Loading profile: ${profile.name}")
+                ensureSocksPortAvailable(socksPort)
 
                 // Generate config files
                 val configDir = File(filesDir, "config")
@@ -252,6 +258,7 @@ class MasterDnsVpnService : VpnService() {
                 VpnManager.updateState(VpnManager.VpnState.DISCONNECTED)
                 VpnManager.stopTrafficMonitor()
                 VpnManager.appendLog("VPN disconnected")
+                releaseWakeLock()
 
                 runCatching {
                     if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) {
@@ -300,6 +307,7 @@ class MasterDnsVpnService : VpnService() {
             }
             vpnInterface = null
         }
+        releaseWakeLock()
         serviceScope.cancel()
         super.onDestroy()
     }
@@ -336,6 +344,35 @@ class MasterDnsVpnService : VpnService() {
         } catch (_: Exception) {
             false
         }
+    }
+
+    private suspend fun ensureSocksPortAvailable(port: Int) {
+        if (!isLocalPortInUse(port)) return
+        VpnManager.appendLog("SOCKS5 port $port is busy, attempting to free it...")
+
+        runCatching {
+            if (mobile.Mobile.isRunning()) {
+                mobile.Mobile.stopClient()
+            }
+        }
+        delay(400L)
+
+        if (!isLocalPortInUse(port)) {
+            VpnManager.appendLog("SOCKS5 port $port released successfully")
+            return
+        }
+
+        throw IllegalStateException("SOCKS5 port $port is already in use. Change LISTEN_PORT or close the app using it.")
+    }
+
+    private fun isLocalPortInUse(port: Int): Boolean {
+        return runCatching {
+            ServerSocket().use { server ->
+                server.reuseAddress = true
+                server.bind(InetSocketAddress(InetAddress.getByName("127.0.0.1"), port))
+            }
+            false
+        }.getOrElse { true }
     }
 
     private suspend fun tailLogFile(logFile: File) {
@@ -378,5 +415,22 @@ class MasterDnsVpnService : VpnService() {
         val message = "SOCKS5 authentication failed. Check SOCKS5_AUTH, SOCKS5_USER, and SOCKS5_PASS in profile settings."
         VpnManager.appendLog(message)
         VpnManager.setError(message)
+    }
+
+    private fun acquireWakeLock() {
+        if (wakeLock?.isHeld == true) return
+        val pm = getSystemService(POWER_SERVICE) as? PowerManager ?: return
+        wakeLock = pm.newWakeLock(PowerManager.PARTIAL_WAKE_LOCK, "$TAG:runtime").apply {
+            setReferenceCounted(false)
+            acquire()
+        }
+    }
+
+    private fun releaseWakeLock() {
+        val lock = wakeLock ?: return
+        if (lock.isHeld) {
+            runCatching { lock.release() }
+        }
+        wakeLock = null
     }
 }
