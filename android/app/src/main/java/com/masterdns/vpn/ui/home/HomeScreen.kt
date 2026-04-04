@@ -29,6 +29,8 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
+import com.google.gson.Gson
+import com.google.gson.reflect.TypeToken
 import com.masterdns.vpn.ui.theme.*
 import com.masterdns.vpn.util.VpnManager
 
@@ -43,6 +45,14 @@ fun HomeScreen(
     val scanStatus by VpnManager.scanStatus.collectAsState()
     val selectedProfile by viewModel.selectedProfile.collectAsState()
     val context = LocalContext.current
+    val advanced = remember(selectedProfile?.advancedJson) {
+        parseAdvanced(selectedProfile?.advancedJson.orEmpty())
+    }
+    val proxyHost = advanced["LISTEN_IP"]?.trim().takeUnless { it.isNullOrEmpty() } ?: "127.0.0.1"
+    val proxyPort = selectedProfile?.listenPort ?: 18000
+    val socksAuthEnabled = advanced["SOCKS5_AUTH"].equals("true", ignoreCase = true)
+    val socksUser = advanced["SOCKS5_USER"]?.trim().orEmpty()
+    val socksPass = advanced["SOCKS5_PASS"]?.trim().orEmpty()
 
     val vpnPermissionLauncher = rememberLauncherForActivityResult(
         ActivityResultContracts.StartActivityForResult()
@@ -275,6 +285,18 @@ fun HomeScreen(
                     text = "Download: ${formatSpeed(downBps)}   Upload: ${formatSpeed(upBps)}",
                     style = MaterialTheme.typography.bodySmall
                 )
+                Spacer(modifier = Modifier.height(8.dp))
+                Text(
+                    text = "SOCKS5: $proxyHost:$proxyPort",
+                    style = MaterialTheme.typography.bodySmall.copy(fontWeight = FontWeight.SemiBold)
+                )
+                if (socksAuthEnabled && socksUser.isNotBlank() && socksPass.isNotBlank()) {
+                    Spacer(modifier = Modifier.height(2.dp))
+                    Text(
+                        text = "Auth: $socksUser / $socksPass",
+                        style = MaterialTheme.typography.bodySmall
+                    )
+                }
             }
         }
 
@@ -348,5 +370,14 @@ private fun formatSpeed(bps: Long): String {
         bps >= mb -> String.format("%.2f MB/s", bps / mb)
         bps >= kb -> String.format("%.1f KB/s", bps / kb)
         else -> "${bps} B/s"
+    }
+}
+
+private fun parseAdvanced(json: String): Map<String, String> {
+    return try {
+        val type = object : TypeToken<Map<String, String>>() {}.type
+        Gson().fromJson<Map<String, String>>(json, type) ?: emptyMap()
+    } catch (_: Exception) {
+        emptyMap()
     }
 }
