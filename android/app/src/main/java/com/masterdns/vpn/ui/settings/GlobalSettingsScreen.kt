@@ -353,16 +353,26 @@ fun GlobalSettingsScreen(vm: GlobalSettingsViewModel = viewModel()) {
 
 @Composable
 private fun LinkRow(title: String, link: String, onOpen: () -> Unit) {
-    Row(
-        modifier = Modifier.fillMaxWidth(),
-        horizontalArrangement = Arrangement.spacedBy(6.dp)
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clickable(onClick = onOpen)
+            .padding(vertical = 6.dp)
     ) {
-        Text(title, style = MaterialTheme.typography.bodyMedium)
+        Text(
+            text = title,
+            style = MaterialTheme.typography.bodyMedium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant
+        )
         Text(
             text = link,
-            style = MaterialTheme.typography.bodyMedium,
+            style = MaterialTheme.typography.bodyMedium.copy(
+                textDecoration = TextDecoration.Underline,
+                fontWeight = FontWeight.Medium
+            ),
             color = MaterialTheme.colorScheme.primary,
-            modifier = Modifier.clickable(onClick = onOpen)
+            maxLines = 3,
+            overflow = TextOverflow.Ellipsis
         )
     }
 }

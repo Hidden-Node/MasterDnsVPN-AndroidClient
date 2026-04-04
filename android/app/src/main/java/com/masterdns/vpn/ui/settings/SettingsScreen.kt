@@ -170,17 +170,10 @@ fun SettingsScreen(
     val snackbarHostState = remember { SnackbarHostState() }
     val listState = rememberLazyListState()
     val scope = rememberCoroutineScope()
-
-    val listItems = remember {
-        buildList<Any> {
-            var section = ""
-            configFields.forEach { field ->
-                if (field.section != section) {
-                    section = field.section
-                    add(section)
-                }
-                add(field)
-            }
+    val sections = remember { configFields.groupBy { it.section } }
+    val sectionExpanded = remember {
+        mutableStateMapOf<String, Boolean>().apply {
+            sections.keys.forEach { put(it, it == "Identity" || it == "Proxy") }
         }
     }
 
@@ -328,32 +321,41 @@ fun SettingsScreen(
             }
 
             val socksAuthEnabled = fieldsState["SOCKS5_AUTH"].equals("true", ignoreCase = true)
-            items(listItems, key = { item ->
-                when (item) {
-                    is String -> "header_$item"
-                    is SettingField -> item.key
-                    else -> item.hashCode().toString()
-                }
-            }) { item ->
-                when (item) {
-                    is String -> {
+            items(sections.keys.toList(), key = { "section_$it" }) { section ->
+                val expanded = sectionExpanded[section] ?: false
+                Card(
+                    onClick = { sectionExpanded[section] = !expanded },
+                    modifier = Modifier.fillMaxWidth(),
+                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.45f))
+                ) {
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(horizontal = 12.dp, vertical = 10.dp),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
                         Text(
-                            text = item,
+                            text = section,
                             style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.Bold),
                             color = MaterialTheme.colorScheme.primary
                         )
+                        Text(if (expanded) "Hide" else "Show", color = MaterialTheme.colorScheme.primary)
                     }
-                    is SettingField -> {
-                        if ((item.key == "SOCKS5_USER" || item.key == "SOCKS5_PASS") && !socksAuthEnabled) {
-                            return@items
-                        }
-                        ConfigFieldCard(
-                            field = item,
-                            value = fieldsState[item.key].orEmpty(),
-                            onChange = { fieldsState[item.key] = it }
-                        )
+                }
+                if (!expanded) return@items
+
+                Spacer(modifier = Modifier.height(6.dp))
+                sections[section].orEmpty().forEach { field ->
+                    if ((field.key == "SOCKS5_USER" || field.key == "SOCKS5_PASS") && !socksAuthEnabled) {
+                        return@forEach
                     }
-                    else -> Unit
+                    ConfigFieldCard(
+                        field = field,
+                        value = fieldsState[field.key].orEmpty(),
+                        onChange = { fieldsState[field.key] = it }
+                    )
+                    Spacer(modifier = Modifier.height(8.dp))
                 }
             }
 
