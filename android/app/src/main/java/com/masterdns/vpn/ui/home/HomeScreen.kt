@@ -5,6 +5,7 @@ import android.net.VpnService
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.animateColorAsState
+import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.*
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
@@ -56,6 +57,18 @@ fun HomeScreen(
     val isConnected = vpnState == VpnManager.VpnState.CONNECTED
     val isConnecting = vpnState == VpnManager.VpnState.CONNECTING
     val isDisconnecting = vpnState == VpnManager.VpnState.DISCONNECTING
+    val totalResolvers = selectedProfile?.resolvers
+        ?.lineSequence()
+        ?.map { it.trim() }
+        ?.count { it.isNotEmpty() }
+        ?.coerceAtLeast(1)
+        ?: 1
+    val scannedCount = (scanStatus.validCount + scanStatus.rejectedCount).coerceAtMost(totalResolvers)
+    val scanProgress by animateFloatAsState(
+        targetValue = (scannedCount.toFloat() / totalResolvers.toFloat()).coerceIn(0f, 1f),
+        animationSpec = tween(350),
+        label = "scanProgress"
+    )
 
     val statusColor by animateColorAsState(
         targetValue = when (vpnState) {
@@ -232,6 +245,22 @@ fun HomeScreen(
                             pop()
                         },
                         style = MaterialTheme.typography.bodySmall
+                    )
+                }
+                if (scanStatus.scanning || isConnecting) {
+                    Spacer(modifier = Modifier.height(8.dp))
+                    Text(
+                        text = "DNS Scan Progress: $scannedCount / $totalResolvers",
+                        style = MaterialTheme.typography.bodySmall
+                    )
+                    Spacer(modifier = Modifier.height(6.dp))
+                    LinearProgressIndicator(
+                        progress = { scanProgress },
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(10.dp),
+                        color = MaterialTheme.colorScheme.primary,
+                        trackColor = MaterialTheme.colorScheme.surfaceTint.copy(alpha = 0.22f)
                     )
                 }
                 if (scanStatus.syncedUploadMtu > 0 || scanStatus.syncedDownloadMtu > 0) {
