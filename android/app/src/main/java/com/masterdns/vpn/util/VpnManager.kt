@@ -241,6 +241,12 @@ object VpnManager {
                 "yyyy-MM-dd'T'HH:mm:ss'Z'",
                 "yyyy-MM-dd HH:mm:ss"
             ),
+            // Example: 2026/04/05 10:20:30
+            Triple(
+                Regex("^(\\d{4}/\\d{2}/\\d{2} \\d{2}:\\d{2}:\\d{2})(.*)$"),
+                "yyyy/MM/dd HH:mm:ss",
+                "yyyy/MM/dd HH:mm:ss"
+            ),
             // Example: 2026-04-05 10:20:30 UTC
             Triple(
                 Regex("^(\\d{4}-\\d{2}-\\d{2} \\d{2}:\\d{2}:\\d{2})\\s+UTC(.*)$"),
