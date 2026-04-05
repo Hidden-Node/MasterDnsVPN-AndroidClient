@@ -127,7 +127,8 @@ class MasterDnsVpnService : VpnService() {
                         profile = runtimeProfile,
                         listenPort = socksPort,
                         listenIpOverride = listenIpOverride,
-                        protocolOverride = protocolOverride
+                        protocolOverride = protocolOverride,
+                        localDnsEnabledOverride = if (proxyMode) false else null
                     )
                 )
                 if (profile.resolvers.isNotBlank()) {

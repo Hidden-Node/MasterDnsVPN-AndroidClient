@@ -19,7 +19,10 @@ object ConfigGenerator {
         profile: ProfileEntity,
         listenPort: Int = 18000,
         listenIpOverride: String? = null,
-        protocolOverride: String? = null
+        protocolOverride: String? = null,
+        localDnsEnabledOverride: Boolean? = null,
+        localDnsIpOverride: String? = null,
+        localDnsPortOverride: Int? = null
     ): String {
         val domains = parseDomains(profile.domains)
         val domainsStr = domains.joinToString(", ") { "\"$it\"" }
@@ -28,6 +31,10 @@ object ConfigGenerator {
         fun cfg(key: String, fallback: String): String {
             val value = advanced[key]?.trim()
             return if (value.isNullOrEmpty()) fallback else value
+        }
+
+        fun cfgInt(key: String, fallback: String): Int {
+            return cfg(key, fallback).toIntOrNull() ?: fallback.toIntOrNull() ?: 0
         }
 
         return buildString {
@@ -51,7 +58,11 @@ object ConfigGenerator {
             appendLine()
 
             // Section 3: Local DNS Service
-            appendLine("LOCAL_DNS_ENABLED = ${cfg("LOCAL_DNS_ENABLED", "false")}")
+            appendLine(
+                "LOCAL_DNS_ENABLED = ${localDnsEnabledOverride?.let { it.toString() } ?: cfg("LOCAL_DNS_ENABLED", "false")}"
+            )
+            appendLine("LOCAL_DNS_IP = \"${escapeToml(localDnsIpOverride ?: cfg("LOCAL_DNS_IP", "127.0.0.1"))}\"")
+            appendLine("LOCAL_DNS_PORT = ${localDnsPortOverride ?: cfgInt("LOCAL_DNS_PORT", "53")}")
             appendLine()
 
             // Section 4: Resolver Selection
