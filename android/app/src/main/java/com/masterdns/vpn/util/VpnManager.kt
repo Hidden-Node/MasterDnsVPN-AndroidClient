@@ -49,6 +49,7 @@ object VpnManager {
         val lastDecision: String = "",
         val validCount: Int = 0,
         val rejectedCount: Int = 0,
+        val activeResolvers: Int = 0,
         val syncedUploadMtu: Int = 0,
         val syncedDownloadMtu: Int = 0
     )
@@ -190,6 +191,14 @@ object VpnManager {
                 lastDecision = decision,
                 validCount = valid,
                 rejectedCount = rejected
+            )
+            return
+        }
+
+        val activeResolversMatch = Regex("Active Resolvers\\s*[:]\\s*(\\d+)", RegexOption.IGNORE_CASE).find(line)
+        if (activeResolversMatch != null) {
+            _scanStatus.value = _scanStatus.value.copy(
+                activeResolvers = activeResolversMatch.groupValues[1].toIntOrNull() ?: _scanStatus.value.activeResolvers
             )
             return
         }

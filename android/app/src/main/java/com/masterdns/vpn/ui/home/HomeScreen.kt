@@ -280,6 +280,13 @@ fun HomeScreen(
                         style = MaterialTheme.typography.bodySmall
                     )
                 }
+                if (scanStatus.activeResolvers > 0) {
+                    Spacer(modifier = Modifier.height(2.dp))
+                    Text(
+                        text = "Active Resolvers: ${scanStatus.activeResolvers}",
+                        style = MaterialTheme.typography.bodySmall.copy(fontWeight = FontWeight.SemiBold)
+                    )
+                }
                 Spacer(modifier = Modifier.height(6.dp))
                 Text(
                     text = "Download: ${formatSpeed(downBps)}   Upload: ${formatSpeed(upBps)}",
@@ -290,12 +297,24 @@ fun HomeScreen(
                     text = "SOCKS5: $proxyHost:$proxyPort",
                     style = MaterialTheme.typography.bodySmall.copy(fontWeight = FontWeight.SemiBold)
                 )
-                if (socksAuthEnabled && socksUser.isNotBlank() && socksPass.isNotBlank()) {
-                    Spacer(modifier = Modifier.height(2.dp))
+                if (socksAuthEnabled) {
+                    Spacer(modifier = Modifier.height(6.dp))
                     Text(
-                        text = "Auth: $socksUser / $socksPass",
-                        style = MaterialTheme.typography.bodySmall
+                        text = "SOCKS5 authentication",
+                        style = MaterialTheme.typography.bodySmall.copy(fontWeight = FontWeight.SemiBold)
                     )
+                    if (socksUser.isNotBlank()) {
+                        Text(
+                            text = "Username: $socksUser",
+                            style = MaterialTheme.typography.bodySmall
+                        )
+                    }
+                    if (socksPass.isNotBlank()) {
+                        Text(
+                            text = "Password: $socksPass",
+                            style = MaterialTheme.typography.bodySmall
+                        )
+                    }
                 }
             }
         }
