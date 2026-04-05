@@ -127,11 +127,11 @@ SETUP_PACKET_DUPLICATION_COUNT = 2
 # Stream-aware resolver failover.
 # If a stream keeps resending on the same preferred resolver, it can move.
 # Threshold is clamped to [1, 128].
-STREAM_RESOLVER_FAILOVER_RESEND_THRESHOLD = 3
+STREAM_RESOLVER_FAILOVER_RESEND_THRESHOLD = 2
 
 # Minimum seconds between preferred-resolver switches for the same stream.
 # Clamped to [0.1s, 120s].
-STREAM_RESOLVER_FAILOVER_COOLDOWN = 8.0
+STREAM_RESOLVER_FAILOVER_COOLDOWN = 2.5
 
 # If true, resolvers rejected during initial MTU testing are rechecked in the
 # background using the current synced upload/download MTUs.
@@ -147,7 +147,7 @@ RECHECK_SERVER_INTERVAL_SECONDS = 5.0
 
 # Number of inactive/runtime-disabled resolver entries rechecked per cycle.
 # Clamped to [1, 1024].
-RECHECK_BATCH_SIZE = 5
+RECHECK_BATCH_SIZE = 10
 
 # If true, a resolver is runtime-disabled when it stays timeout-only across the
 # configured window and enough observations have been collected.
@@ -155,15 +155,15 @@ AUTO_DISABLE_TIMEOUT_SERVERS = true
 
 # Timeout-only observation window in seconds.
 # Clamped to [1s, 86400s].
-AUTO_DISABLE_TIMEOUT_WINDOW_SECONDS = 90.0
+AUTO_DISABLE_TIMEOUT_WINDOW_SECONDS = 30.0
 
 # Minimum observations required before auto-disable can trigger.
 # Clamped to [1, 10000].
-AUTO_DISABLE_MIN_OBSERVATIONS = 8
+AUTO_DISABLE_MIN_OBSERVATIONS = 5
 
 # Frequency of auto-disable evaluation.
 # Clamped to [0.25s, 600s].
-AUTO_DISABLE_CHECK_INTERVAL_SECONDS = 4.0
+AUTO_DISABLE_CHECK_INTERVAL_SECONDS = 2.0
 
 # If true, payload labels are base-encoded before tunneling.
 # Usually keep false unless a specific resolver path behaves better with it.
@@ -232,8 +232,7 @@ MTU_ADDED_SERVER_LOG_FORMAT = "Resolver {IP} added back at {TIME} (UP {UP_MTU}, 
 
 # Async tunnel runtime worker counts.
 # Each must be >= 1.
-TUNNEL_READER_WORKERS = 5
-TUNNEL_WRITER_WORKERS = 5
+RX_TX_WORKERS = 4
 TUNNEL_PROCESS_WORKERS = 5
 
 # Per-packet tunnel timeout used in async runtime paths.

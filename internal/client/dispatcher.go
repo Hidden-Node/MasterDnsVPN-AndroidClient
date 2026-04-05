@@ -44,7 +44,6 @@ func (c *Client) asyncStreamDispatcher(ctx context.Context) {
 		case <-ctx.Done():
 			return false
 		case <-c.txSignal:
-		case <-c.txSpaceSignal:
 		case <-idleTimer.C:
 		}
 		if !idleTimer.Stop() {
@@ -220,7 +219,7 @@ dispatchLoop:
 			// dispatcher — doing so would stall ALL streams until a resolver
 			// comes back. Instead, pop and discard non-retriable control packets
 			// so the queue doesn't jam, and leave data/resend packets for ARQ
-			// retransmission. Signal txSignal to keep the dispatcher alive.
+			// retransmission.
 			if peekedItem.PacketType != Enums.PACKET_STREAM_DATA && peekedItem.PacketType != Enums.PACKET_STREAM_RESEND {
 				if selected != nil {
 					if dropped, _, ok := selected.PopNextTXPacket(); ok && dropped != nil {
@@ -272,10 +271,6 @@ dispatchLoop:
 			(item.PacketType == Enums.PACKET_STREAM_DATA || item.PacketType == Enums.PACKET_STREAM_RESEND) &&
 			!c.shouldTransmitQueuedStreamPacket(selected, item) {
 			selected.ReleaseTXPacket(item)
-			select {
-			case c.txSignal <- struct{}{}:
-			default:
-			}
 			continue dispatchLoop
 		}
 
@@ -426,11 +421,6 @@ dispatchLoop:
 				selected.ReleaseTXPacket(item)
 			}
 			return
-		}
-
-		select {
-		case c.txSignal <- struct{}{}:
-		default:
 		}
 	}
 }

@@ -250,6 +250,73 @@ AUTO_DISABLE_CHECK_INTERVAL_SECONDS = 3.0
 	}
 }
 
+func TestLoadClientConfigUsesMergedRX_TX_Workers(t *testing.T) {
+	dir := t.TempDir()
+
+	configPath := filepath.Join(dir, "client_config.toml")
+	resolversPath := filepath.Join(dir, "client_resolvers.txt")
+
+	if err := os.WriteFile(configPath, []byte(`
+PROTOCOL_TYPE = "SOCKS5"
+DOMAINS = ["v.domain.com"]
+DATA_ENCRYPTION_METHOD = 1
+ENCRYPTION_KEY = "secret"
+RX_TX_WORKERS = 9
+TUNNEL_PROCESS_WORKERS = 2
+`), 0o644); err != nil {
+		t.Fatalf("WriteFile config failed: %v", err)
+	}
+	if err := os.WriteFile(resolversPath, []byte("8.8.8.8\n"), 0o644); err != nil {
+		t.Fatalf("WriteFile resolvers failed: %v", err)
+	}
+
+	cfg, err := LoadClientConfig(configPath)
+	if err != nil {
+		t.Fatalf("LoadClientConfig returned error: %v", err)
+	}
+
+	if cfg.RX_TX_Workers != 9 {
+		t.Fatalf("unexpected merged RX/TX workers: got=%d want=%d", cfg.RX_TX_Workers, 9)
+	}
+	if cfg.TunnelProcessWorkers != 9 {
+		t.Fatalf("expected process workers to be raised to RX/TX count: got=%d want=%d", cfg.TunnelProcessWorkers, 9)
+	}
+}
+
+func TestLoadClientConfigFallsBackToLegacyReaderWriterWorkers(t *testing.T) {
+	dir := t.TempDir()
+
+	configPath := filepath.Join(dir, "client_config.toml")
+	resolversPath := filepath.Join(dir, "client_resolvers.txt")
+
+	if err := os.WriteFile(configPath, []byte(`
+PROTOCOL_TYPE = "SOCKS5"
+DOMAINS = ["v.domain.com"]
+DATA_ENCRYPTION_METHOD = 1
+ENCRYPTION_KEY = "secret"
+TUNNEL_READER_WORKERS = 3
+TUNNEL_WRITER_WORKERS = 9
+TUNNEL_PROCESS_WORKERS = 2
+`), 0o644); err != nil {
+		t.Fatalf("WriteFile config failed: %v", err)
+	}
+	if err := os.WriteFile(resolversPath, []byte("8.8.8.8\n"), 0o644); err != nil {
+		t.Fatalf("WriteFile resolvers failed: %v", err)
+	}
+
+	cfg, err := LoadClientConfig(configPath)
+	if err != nil {
+		t.Fatalf("LoadClientConfig returned error: %v", err)
+	}
+
+	if cfg.RX_TX_Workers != 9 {
+		t.Fatalf("expected legacy reader/writer workers to map into merged RX/TX workers: got=%d want=%d", cfg.RX_TX_Workers, 9)
+	}
+	if cfg.TunnelProcessWorkers != 9 {
+		t.Fatalf("expected process workers to be raised to merged RX/TX count: got=%d want=%d", cfg.TunnelProcessWorkers, 9)
+	}
+}
+
 func TestLoadClientConfigWithOverridesReplacesResolversDomainsAndMTURange(t *testing.T) {
 	dir := t.TempDir()
 

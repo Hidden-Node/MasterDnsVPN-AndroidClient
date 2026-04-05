@@ -241,17 +241,23 @@ object VpnManager {
                 "yyyy-MM-dd'T'HH:mm:ss'Z'",
                 "yyyy-MM-dd HH:mm:ss"
             ),
-            // Example: 2026/04/05 10:20:30
-            Triple(
-                Regex("^(\\d{4}/\\d{2}/\\d{2} \\d{2}:\\d{2}:\\d{2})(.*)$"),
-                "yyyy/MM/dd HH:mm:ss",
-                "yyyy/MM/dd HH:mm:ss"
-            ),
-            // Example: 2026-04-05 10:20:30 UTC
+            // Example: 2026-04-05 10:20:30 UTC (check UTC variant first)
             Triple(
                 Regex("^(\\d{4}-\\d{2}-\\d{2} \\d{2}:\\d{2}:\\d{2})\\s+UTC(.*)$"),
                 "yyyy-MM-dd HH:mm:ss",
                 "yyyy-MM-dd HH:mm:ss"
+            ),
+            // Example: 2026-04-05 10:20:30 (from mtu_logging.go, no UTC)
+            Triple(
+                Regex("^(\\d{4}-\\d{2}-\\d{2} \\d{2}:\\d{2}:\\d{2})\\s(.*)$"),
+                "yyyy-MM-dd HH:mm:ss",
+                "yyyy-MM-dd HH:mm:ss"
+            ),
+            // Example: 2026/04/05 10:20:30 (from logger.go)
+            Triple(
+                Regex("^(\\d{4}/\\d{2}/\\d{2} \\d{2}:\\d{2}:\\d{2})(.*)$"),
+                "yyyy/MM/dd HH:mm:ss",
+                "yyyy/MM/dd HH:mm:ss"
             )
         )
 

@@ -143,17 +143,22 @@ log_header "Preparing Environment"
 log_info "Installing dependencies..."
 if [[ "$PM" == "apt" ]]; then
   apt-get update -y >/dev/null 2>&1
-  apt-get install -y lsof net-tools wget unzip curl ca-certificates iproute2 procps >/dev/null 2>&1
+  apt-get install -y lsof net-tools wget unzip curl ca-certificates iproute2 procps irqbalance >/dev/null 2>&1
 elif [[ "$PM" == "dnf" ]]; then
-  dnf -y install lsof net-tools wget unzip curl ca-certificates iproute procps-ng >/dev/null 2>&1
+  dnf -y install lsof net-tools wget unzip curl ca-certificates iproute procps-ng irqbalance >/dev/null 2>&1
 else
-  yum -y install lsof net-tools wget unzip curl ca-certificates iproute procps-ng >/dev/null 2>&1
+  yum -y install lsof net-tools wget unzip curl ca-certificates iproute procps-ng irqbalance >/dev/null 2>&1
 fi
 require_cmd ss
 require_cmd unzip
 require_cmd systemctl
 require_cmd sysctl
 log_success "System tools are ready."
+
+if systemctl list-unit-files --type=service --all 2>/dev/null | awk '{print $1}' | grep -qx 'irqbalance.service'; then
+  log_info "Enabling irqbalance for better multi-core packet distribution..."
+  systemctl enable --now irqbalance >/dev/null 2>&1 || log_warn "Could not enable/start irqbalance."
+fi
 
 check_port53() {
   ss -H -lun "sport = :53" 2>/dev/null | grep -q ':53' && return 0
@@ -450,6 +455,9 @@ net.core.wmem_max = 33554432
 net.ipv4.udp_rmem_min = 16384
 net.ipv4.udp_wmem_min = 16384
 net.ipv4.udp_mem = 65536 131072 262144
+net.netfilter.nf_conntrack_max = 262144
+net.netfilter.nf_conntrack_udp_timeout = 15
+net.netfilter.nf_conntrack_udp_timeout_stream = 60
 net.ipv4.ip_local_port_range = 10240 65535
 EOF
 sysctl --system >/dev/null 2>&1 || log_warn "Could not fully apply sysctl settings."

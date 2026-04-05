@@ -69,11 +69,15 @@ object ConfigGenerator {
             appendLine("RESOLVER_BALANCING_STRATEGY = ${profile.resolverBalancingStrategy.takeIf { it != 0 } ?: 2}")
             appendLine("PACKET_DUPLICATION_COUNT = ${profile.packetDuplicationCount}")
             appendLine("SETUP_PACKET_DUPLICATION_COUNT = ${profile.setupPacketDuplicationCount}")
-            appendLine("STREAM_RESOLVER_FAILOVER_RESEND_THRESHOLD = ${cfg("STREAM_RESOLVER_FAILOVER_RESEND_THRESHOLD", "3")}")
-            appendLine("STREAM_RESOLVER_FAILOVER_COOLDOWN = ${cfg("STREAM_RESOLVER_FAILOVER_COOLDOWN", "8.0")}")
+            appendLine("STREAM_RESOLVER_FAILOVER_RESEND_THRESHOLD = ${cfg("STREAM_RESOLVER_FAILOVER_RESEND_THRESHOLD", "2")}")
+            appendLine("STREAM_RESOLVER_FAILOVER_COOLDOWN = ${cfg("STREAM_RESOLVER_FAILOVER_COOLDOWN", "2.5")}")
             appendLine("RECHECK_SERVER_INTERVAL_SECONDS = ${cfg("RECHECK_SERVER_INTERVAL_SECONDS", "5.0")}")
+            appendLine("RECHECK_BATCH_SIZE = ${cfg("RECHECK_BATCH_SIZE", "10")}")
             appendLine("RECHECK_INACTIVE_SERVERS_ENABLED = ${cfg("RECHECK_INACTIVE_SERVERS_ENABLED", "true")}")
             appendLine("AUTO_DISABLE_TIMEOUT_SERVERS = ${cfg("AUTO_DISABLE_TIMEOUT_SERVERS", "true")}")
+            appendLine("AUTO_DISABLE_TIMEOUT_WINDOW_SECONDS = ${cfg("AUTO_DISABLE_TIMEOUT_WINDOW_SECONDS", "30.0")}")
+            appendLine("AUTO_DISABLE_MIN_OBSERVATIONS = ${cfg("AUTO_DISABLE_MIN_OBSERVATIONS", "5")}")
+            appendLine("AUTO_DISABLE_CHECK_INTERVAL_SECONDS = ${cfg("AUTO_DISABLE_CHECK_INTERVAL_SECONDS", "2.0")}")
             appendLine("BASE_ENCODE_DATA = ${cfg("BASE_ENCODE_DATA", "false")}")
             appendLine()
 
@@ -100,8 +104,7 @@ object ConfigGenerator {
             appendLine()
 
             // Section 7: Runtime Workers
-            appendLine("TUNNEL_READER_WORKERS = ${cfg("TUNNEL_READER_WORKERS", "5")}")
-            appendLine("TUNNEL_WRITER_WORKERS = ${cfg("TUNNEL_WRITER_WORKERS", "5")}")
+            appendLine("RX_TX_WORKERS = ${cfg("RX_TX_WORKERS", "4")}")
             appendLine("TUNNEL_PROCESS_WORKERS = ${cfg("TUNNEL_PROCESS_WORKERS", "5")}")
             appendLine("TUNNEL_PACKET_TIMEOUT_SECONDS = ${cfg("TUNNEL_PACKET_TIMEOUT_SECONDS", "10.0")}")
             appendLine("TX_CHANNEL_SIZE = ${cfg("TX_CHANNEL_SIZE", "12288")}")

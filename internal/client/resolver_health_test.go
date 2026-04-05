@@ -874,7 +874,7 @@ func TestLateResolverSuccessRetractsPriorTimeoutEvent(t *testing.T) {
 	}
 
 	c.collectExpiredResolverTimeouts(timeoutAt)
-	c.trackResolverSuccess([]byte{0x00, 0x4d}, &net.UDPAddr{IP: net.ParseIP("127.0.0.1"), Port: 5350}, receivedAt)
+	c.trackResolverSuccess([]byte{0x00, 0x4d}, &net.UDPAddr{IP: net.ParseIP("127.0.0.1"), Port: 5350}, "", receivedAt)
 
 	c.resolverHealthMu.Lock()
 	state := c.resolverHealth["a"]
