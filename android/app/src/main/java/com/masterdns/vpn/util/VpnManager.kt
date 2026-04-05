@@ -14,6 +14,10 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import java.text.SimpleDateFormat
+import java.util.Date
+import java.util.Locale
+import java.util.TimeZone
 
 /**
  * Singleton bridge between Kotlin UI and Go core.
@@ -78,13 +82,14 @@ object VpnManager {
     }
 
     fun appendLog(line: String) {
+        val normalizedLine = normalizeLogTimestampToLocal(line)
         val current = _logs.value.toMutableList()
-        current.add(line)
+        current.add(normalizedLine)
         if (current.size > MAX_LOG_LINES) {
             current.removeAt(0)
         }
         _logs.value = current
-        parseScanLine(line)
+        parseScanLine(normalizedLine)
     }
 
     fun clearLogs() {
@@ -210,6 +215,58 @@ object VpnManager {
             line.contains("Session Initialized Successfully", ignoreCase = true)
         ) {
             _scanStatus.value = _scanStatus.value.copy(scanning = false)
+        }
+    }
+
+    private fun normalizeLogTimestampToLocal(line: String): String {
+        val candidates = listOf(
+            // Example: 2026-04-05T10:20:30.123Z
+            Triple(
+                Regex("^(\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}\\.\\d{3}Z)(.*)$"),
+                "yyyy-MM-dd'T'HH:mm:ss.SSS'Z'",
+                "yyyy-MM-dd HH:mm:ss.SSS"
+            ),
+            // Example: 2026-04-05T10:20:30Z
+            Triple(
+                Regex("^(\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}Z)(.*)$"),
+                "yyyy-MM-dd'T'HH:mm:ss'Z'",
+                "yyyy-MM-dd HH:mm:ss"
+            ),
+            // Example: 2026-04-05 10:20:30 UTC
+            Triple(
+                Regex("^(\\d{4}-\\d{2}-\\d{2} \\d{2}:\\d{2}:\\d{2})\\s+UTC(.*)$"),
+                "yyyy-MM-dd HH:mm:ss",
+                "yyyy-MM-dd HH:mm:ss"
+            )
+        )
+
+        for ((regex, inputFormat, outputFormat) in candidates) {
+            val match = regex.find(line) ?: continue
+            val utcStamp = match.groupValues[1]
+            val suffix = match.groupValues[2]
+            val localStamp = convertUtcToLocal(utcStamp, inputFormat, outputFormat) ?: continue
+            return "$localStamp$suffix"
+        }
+        return line
+    }
+
+    private fun convertUtcToLocal(
+        utcValue: String,
+        inputPattern: String,
+        outputPattern: String
+    ): String? {
+        return try {
+            val input = SimpleDateFormat(inputPattern, Locale.US).apply {
+                timeZone = TimeZone.getTimeZone("UTC")
+                isLenient = false
+            }
+            val parsed: Date = input.parse(utcValue) ?: return null
+            val output = SimpleDateFormat(outputPattern, Locale.US).apply {
+                timeZone = TimeZone.getDefault()
+            }
+            output.format(parsed)
+        } catch (_: Exception) {
+            null
         }
     }
 }
