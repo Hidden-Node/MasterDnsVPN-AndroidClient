@@ -81,6 +81,11 @@ object ConfigGenerator {
             appendLine("MTU_TEST_TIMEOUT = ${cfg("MTU_TEST_TIMEOUT", "2.0")}")
             appendLine("MTU_TEST_PARALLELISM = ${cfg("MTU_TEST_PARALLELISM", "32")}")
             appendLine("SAVE_MTU_SERVERS_TO_FILE = ${cfg("SAVE_MTU_SERVERS_TO_FILE", "false")}")
+            appendLine("MTU_SERVERS_FILE_NAME = \"${escapeToml(cfg("MTU_SERVERS_FILE_NAME", "masterdnsvpn_mtu/masterdnsvpn_success_test_{time}.log"))}\"")
+            appendLine("MTU_SERVERS_FILE_FORMAT = \"${escapeToml(cfg("MTU_SERVERS_FILE_FORMAT", "{IP} - UP: {UP_MTU} DOWN: {DOWN-MTU}"))}\"")
+            appendLine("MTU_USING_SECTION_SEPARATOR_TEXT = \"${escapeToml(cfg("MTU_USING_SECTION_SEPARATOR_TEXT", ""))}\"")
+            appendLine("MTU_REMOVED_SERVER_LOG_FORMAT = \"${escapeToml(cfg("MTU_REMOVED_SERVER_LOG_FORMAT", "Resolver {IP} removed at {TIME} due to {CAUSE}"))}\"")
+            appendLine("MTU_ADDED_SERVER_LOG_FORMAT = \"${escapeToml(cfg("MTU_ADDED_SERVER_LOG_FORMAT", "Resolver {IP} added back at {TIME} (UP {UP_MTU}, DOWN {DOWN_MTU})"))}\"")
             appendLine()
 
             // Section 7: Runtime Workers

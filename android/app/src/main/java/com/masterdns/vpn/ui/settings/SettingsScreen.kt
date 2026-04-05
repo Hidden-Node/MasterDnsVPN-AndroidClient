@@ -110,7 +110,7 @@ private val configFields = listOf(
         "Resolver",
         "RESOLVER_BALANCING_STRATEGY",
         "RESOLVER_BALANCING_STRATEGY",
-        "1=RoundRobin, 2=LowestLatency, 3=LeastLoss, 4=Sticky",
+        "1=Random, 2=Round Robin, 3=Least Loss, 4=Lowest Latency",
         keyboardType = KeyboardType.Number
     ),
     SettingField("Resolver", "PACKET_DUPLICATION_COUNT", "PACKET_DUPLICATION_COUNT", "Runtime packet duplication count", keyboardType = KeyboardType.Number),
@@ -132,6 +132,11 @@ private val configFields = listOf(
     SettingField("MTU", "MTU_TEST_TIMEOUT", "MTU_TEST_TIMEOUT", "Probe timeout seconds", keyboardType = KeyboardType.Decimal),
     SettingField("MTU", "MTU_TEST_PARALLELISM", "MTU_TEST_PARALLELISM", "Parallel probe workers", keyboardType = KeyboardType.Number),
     SettingField("MTU", "SAVE_MTU_SERVERS_TO_FILE", "SAVE_MTU_SERVERS_TO_FILE", "Persist successful MTU resolvers to file", type = FieldType.BOOL),
+    SettingField("MTU", "MTU_SERVERS_FILE_NAME", "MTU_SERVERS_FILE_NAME", "Output file name/path for MTU results"),
+    SettingField("MTU", "MTU_SERVERS_FILE_FORMAT", "MTU_SERVERS_FILE_FORMAT", "Format: {IP} {UP_MTU} {DOWN-MTU}"),
+    SettingField("MTU", "MTU_USING_SECTION_SEPARATOR_TEXT", "MTU_USING_SECTION_SEPARATOR_TEXT", "Optional separator text between sections"),
+    SettingField("MTU", "MTU_REMOVED_SERVER_LOG_FORMAT", "MTU_REMOVED_SERVER_LOG_FORMAT", "Log format when resolver is removed"),
+    SettingField("MTU", "MTU_ADDED_SERVER_LOG_FORMAT", "MTU_ADDED_SERVER_LOG_FORMAT", "Log format when resolver is re-added"),
     SettingField("Runtime", "TUNNEL_READER_WORKERS", "TUNNEL_READER_WORKERS", "Reader worker count", keyboardType = KeyboardType.Number),
     SettingField("Runtime", "TUNNEL_WRITER_WORKERS", "TUNNEL_WRITER_WORKERS", "Writer worker count", keyboardType = KeyboardType.Number),
     SettingField("Runtime", "TUNNEL_PROCESS_WORKERS", "TUNNEL_PROCESS_WORKERS", "Processor worker count", keyboardType = KeyboardType.Number),
@@ -521,6 +526,11 @@ private fun defaultValuesFor(profile: ProfileEntity): Map<String, String> {
         put("MTU_TEST_TIMEOUT", adv("MTU_TEST_TIMEOUT", "2.0"))
         put("MTU_TEST_PARALLELISM", adv("MTU_TEST_PARALLELISM", "32"))
         put("SAVE_MTU_SERVERS_TO_FILE", adv("SAVE_MTU_SERVERS_TO_FILE", "false"))
+        put("MTU_SERVERS_FILE_NAME", adv("MTU_SERVERS_FILE_NAME", "masterdnsvpn_mtu/masterdnsvpn_success_test_{time}.log"))
+        put("MTU_SERVERS_FILE_FORMAT", adv("MTU_SERVERS_FILE_FORMAT", "{IP} - UP: {UP_MTU} DOWN: {DOWN-MTU}"))
+        put("MTU_USING_SECTION_SEPARATOR_TEXT", adv("MTU_USING_SECTION_SEPARATOR_TEXT", ""))
+        put("MTU_REMOVED_SERVER_LOG_FORMAT", adv("MTU_REMOVED_SERVER_LOG_FORMAT", "Resolver {IP} removed at {TIME} due to {CAUSE}"))
+        put("MTU_ADDED_SERVER_LOG_FORMAT", adv("MTU_ADDED_SERVER_LOG_FORMAT", "Resolver {IP} added back at {TIME} (UP {UP_MTU}, DOWN {DOWN_MTU})"))
         put("TUNNEL_READER_WORKERS", adv("TUNNEL_READER_WORKERS", "5"))
         put("TUNNEL_WRITER_WORKERS", adv("TUNNEL_WRITER_WORKERS", "5"))
         put("TUNNEL_PROCESS_WORKERS", adv("TUNNEL_PROCESS_WORKERS", "5"))

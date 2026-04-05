@@ -9,6 +9,8 @@ import android.os.ParcelFileDescriptor
 import android.os.PowerManager
 import android.util.Log
 import androidx.core.app.NotificationCompat
+import com.google.gson.Gson
+import com.google.gson.reflect.TypeToken
 import com.masterdns.vpn.App
 import com.masterdns.vpn.MainActivity
 import com.masterdns.vpn.R
@@ -100,10 +102,29 @@ class MasterDnsVpnService : VpnService() {
 
                 val configFile = File(configDir, "client_config.toml")
                 val resolversFile = File(configDir, "client_resolvers.txt")
+                val advanced = parseAdvanced(profile.advancedJson).toMutableMap()
+                val saveMtuToFile = advanced["SAVE_MTU_SERVERS_TO_FILE"].equals("true", ignoreCase = true)
+                var runtimeProfile = profile
+                if (saveMtuToFile) {
+                    val mtuDir = File(getExternalFilesDir(null), "masterdnsvpn_mtu")
+                    if (!mtuDir.exists()) {
+                        mtuDir.mkdirs()
+                    }
+                    val fileName = advanced["MTU_SERVERS_FILE_NAME"]
+                        ?.trim()
+                        ?.ifBlank { "masterdnsvpn_success_test_{time}.log" }
+                        ?: "masterdnsvpn_success_test_{time}.log"
+                    val cleanName = File(fileName).name
+                    val outputPath = File(mtuDir, cleanName).absolutePath
+                    advanced["MTU_SERVERS_FILE_NAME"] = outputPath
+                    runtimeProfile = profile.copy(advancedJson = Gson().toJson(advanced))
+                    VpnManager.appendLog("MTU results folder: ${mtuDir.absolutePath}")
+                    VpnManager.appendLog("MTU results file pattern: $outputPath")
+                }
 
                 configFile.writeText(
                     ConfigGenerator.generateConfig(
-                        profile = profile,
+                        profile = runtimeProfile,
                         listenPort = socksPort,
                         listenIpOverride = listenIpOverride,
                         protocolOverride = protocolOverride
@@ -343,6 +364,15 @@ class MasterDnsVpnService : VpnService() {
             }
         } catch (_: Exception) {
             false
+        }
+    }
+
+    private fun parseAdvanced(json: String): Map<String, String> {
+        return try {
+            val type = object : TypeToken<Map<String, String>>() {}.type
+            Gson().fromJson<Map<String, String>>(json, type) ?: emptyMap()
+        } catch (_: Exception) {
+            emptyMap()
         }
     }
 
