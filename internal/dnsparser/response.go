@@ -64,27 +64,6 @@ func BuildNotImplementedResponseFromLite(request []byte, parsed LitePacket) ([]b
 	return buildResponseWithRCodeLite(request, parsed, Enums.DNSR_CODE_NOT_IMPLEMENTED)
 }
 
-const (
-	syntheticNoDataTTL     = 60
-	syntheticNoDataRefresh = 60
-	syntheticNoDataRetry   = 60
-	syntheticNoDataExpire  = 300
-	syntheticNoDataMinimum = 60
-)
-
-var (
-	syntheticSOAMName = []byte{
-		0x02, 'n', 's',
-		0x07, 'i', 'n', 'v', 'a', 'l', 'i', 'd',
-		0x00,
-	}
-	syntheticSOARName = []byte{
-		0x0a, 'h', 'o', 's', 't', 'm', 'a', 's', 't', 'e', 'r',
-		0x07, 'i', 'n', 'v', 'a', 'l', 'i', 'd',
-		0x00,
-	}
-)
-
 func buildResponseWithRCode(request []byte, rcode uint8) ([]byte, error) {
 	if len(request) < dnsHeaderSize {
 		return nil, ErrPacketTooShort
@@ -154,73 +133,7 @@ func buildResponseWithRCodeLite(request []byte, parsed LitePacket, rcode uint8) 
 }
 
 func buildNoDataResponseLite(request []byte, parsed LitePacket) ([]byte, error) {
-	if len(request) < dnsHeaderSize {
-		return nil, ErrPacketTooShort
-	}
-	if !isLikelyDNSRequestHeader(parsed.Header) {
-		return nil, ErrNotDNSRequest
-	}
-
-	optStart, optLen := findOPTRecordRange(request, parsed.Header, parsed.QuestionEndOffset)
-
-	questionLen := 0
-	if parsed.QuestionEndOffset >= dnsHeaderSize && parsed.QuestionEndOffset <= len(request) {
-		questionLen = parsed.QuestionEndOffset - dnsHeaderSize
-	}
-
-	authority := buildSyntheticSOAAuthority(parsed)
-	response := make([]byte, dnsHeaderSize+questionLen+len(authority)+optLen)
-	binary.BigEndian.PutUint16(response[0:2], parsed.Header.ID)
-	binary.BigEndian.PutUint16(response[2:4], buildResponseFlags(parsed.Header.Flags, Enums.DNSR_CODE_NO_ERROR))
-	binary.BigEndian.PutUint16(response[4:6], parsed.Header.QDCount)
-	if len(authority) > 0 {
-		binary.BigEndian.PutUint16(response[8:10], 1)
-	}
-	binary.BigEndian.PutUint16(response[10:12], uint16(getARCount(optLen)))
-
-	offset := dnsHeaderSize
-	if questionLen > 0 {
-		copy(response[offset:], request[dnsHeaderSize:parsed.QuestionEndOffset])
-		offset += questionLen
-	}
-	if len(authority) > 0 {
-		copy(response[offset:], authority)
-		offset += len(authority)
-	}
-	if optLen > 0 {
-		copy(response[offset:], request[optStart:optStart+optLen])
-	}
-
-	return response, nil
-}
-
-func buildSyntheticSOAAuthority(parsed LitePacket) []byte {
-	owner := []byte{0}
-	if parsed.HasQuestion {
-		// Reuse the first question name via compression pointer to keep the
-		// synthetic authority compact and avoid re-encoding the qname.
-		owner = []byte{0xC0, 0x0C}
-	}
-
-	rdataLen := len(syntheticSOAMName) + len(syntheticSOARName) + 20
-	record := make([]byte, len(owner)+10+rdataLen)
-
-	offset := copy(record, owner)
-	binary.BigEndian.PutUint16(record[offset:offset+2], Enums.DNS_RECORD_TYPE_SOA)
-	binary.BigEndian.PutUint16(record[offset+2:offset+4], Enums.DNSQ_CLASS_IN)
-	binary.BigEndian.PutUint32(record[offset+4:offset+8], syntheticNoDataTTL)
-	binary.BigEndian.PutUint16(record[offset+8:offset+10], uint16(rdataLen))
-	offset += 10
-
-	offset += copy(record[offset:], syntheticSOAMName)
-	offset += copy(record[offset:], syntheticSOARName)
-	binary.BigEndian.PutUint32(record[offset:offset+4], 1)
-	binary.BigEndian.PutUint32(record[offset+4:offset+8], syntheticNoDataRefresh)
-	binary.BigEndian.PutUint32(record[offset+8:offset+12], syntheticNoDataRetry)
-	binary.BigEndian.PutUint32(record[offset+12:offset+16], syntheticNoDataExpire)
-	binary.BigEndian.PutUint32(record[offset+16:offset+20], syntheticNoDataMinimum)
-
-	return record
+	return buildResponseWithRCodeLite(request, parsed, Enums.DNSR_CODE_NO_ERROR)
 }
 
 func getARCount(optLen int) int {

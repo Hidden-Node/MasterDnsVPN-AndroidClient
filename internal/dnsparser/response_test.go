@@ -274,7 +274,7 @@ func TestBuildEmptyNoErrorResponseHandlesManyLabels(t *testing.T) {
 	}
 }
 
-func TestBuildNoDataResponseFromLiteAddsSOAAuthority(t *testing.T) {
+func TestBuildNoDataResponseFromLiteBuildsEmptyNoErrorResponse(t *testing.T) {
 	request := buildDNSQuery(0x5151, "example.com", Enums.DNS_RECORD_TYPE_AAAA, true)
 
 	parsed, err := ParsePacketLite(request)
@@ -294,22 +294,16 @@ func TestBuildNoDataResponseFromLiteAddsSOAAuthority(t *testing.T) {
 	if got := binary.BigEndian.Uint16(response[6:8]); got != 0 {
 		t.Fatalf("unexpected ancount: got=%d want=0", got)
 	}
-	if got := binary.BigEndian.Uint16(response[8:10]); got != 1 {
-		t.Fatalf("unexpected nscount: got=%d want=1", got)
+	if got := binary.BigEndian.Uint16(response[8:10]); got != 0 {
+		t.Fatalf("unexpected nscount: got=%d want=0", got)
 	}
 
 	full, err := ParsePacket(response)
 	if err != nil {
 		t.Fatalf("ParsePacket(response) returned error: %v", err)
 	}
-	if len(full.Authorities) != 1 {
-		t.Fatalf("unexpected authority count: got=%d want=1", len(full.Authorities))
-	}
-	if full.Authorities[0].Type != Enums.DNS_RECORD_TYPE_SOA {
-		t.Fatalf("unexpected authority type: got=%d want=%d", full.Authorities[0].Type, Enums.DNS_RECORD_TYPE_SOA)
-	}
-	if full.Authorities[0].Name != "example.com" {
-		t.Fatalf("unexpected authority owner: got=%q want=%q", full.Authorities[0].Name, "example.com")
+	if len(full.Authorities) != 0 {
+		t.Fatalf("unexpected authority count: got=%d want=0", len(full.Authorities))
 	}
 	if len(full.Additional) != 1 || full.Additional[0].Type != Enums.DNS_RECORD_TYPE_OPT {
 		t.Fatalf("response must preserve the OPT record")
