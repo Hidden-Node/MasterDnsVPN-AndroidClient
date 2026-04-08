@@ -2211,6 +2211,36 @@ func TestARQ_RxLoopShutdownDrainsPendingInboundQueueAccounting(t *testing.T) {
 	}
 }
 
+func TestARQ_ReceiveWindowAllowsTwiceSendWindowOutOfOrder(t *testing.T) {
+	enqueuer := NewMockPacketEnqueuer()
+	a := NewARQ(1, 1, enqueuer, nil, 1000, &testLogger{t}, Config{
+		WindowSize: 100,
+		RTO:        0.1,
+		MaxRTO:     0.5,
+	})
+
+	a.windowSize = 100
+	a.receiveWindowSize = 200
+
+	a.processReceivedDataBatch([]rxPayload{{sn: 150, data: []byte("in-window")}})
+
+	a.mu.RLock()
+	_, accepted := a.rcvBuf[150]
+	a.mu.RUnlock()
+	if !accepted {
+		t.Fatal("expected out-of-order packet inside receive window to be buffered")
+	}
+
+	a.processReceivedDataBatch([]rxPayload{{sn: 250, data: []byte("too-far")}})
+
+	a.mu.RLock()
+	_, dropped := a.rcvBuf[250]
+	a.mu.RUnlock()
+	if dropped {
+		t.Fatal("expected packet beyond receive window to be dropped")
+	}
+}
+
 func TestARQ_WriteDeadlineTimeoutRetriesAndFlushes(t *testing.T) {
 	enqueuer := NewMockPacketEnqueuer()
 	cfg := Config{

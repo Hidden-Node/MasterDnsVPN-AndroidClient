@@ -44,18 +44,10 @@ SUPPORTED_DOWNLOAD_COMPRESSION_TYPES = [0, 1, 2, 3]
 UDP_HOST = "0.0.0.0"
 UDP_PORT = 53
 
-# Number of UDP reader goroutines.
-# If <= 0, code falls back to an auto default.
-UDP_READERS = 7
-
-# Number of DNS request workers that process incoming packets.
-# If <= 0, code falls back to an auto default.
-DNS_REQUEST_WORKERS = 7
-
-# Maximum queued requests waiting behind request workers.
-# If the queue is full, packets are dropped and rate-limited overload logs appear.
-# With the current client sample using larger RX buffering, keeping this at 8192
-# helps the server absorb short bursts without dropping front-door requests too early.
+# UDP readers, DNS workers, and front-door request queue are smart-sized
+# internally. Only override them if you are profiling a specific host.
+UDP_READERS = 4
+DNS_REQUEST_WORKERS = 8
 MAX_CONCURRENT_REQUESTS = 16384
 
 # UDP socket read/write buffer size in bytes.
@@ -74,20 +66,13 @@ DROP_LOG_INTERVAL_SECONDS = 2.0
 # - Controls initial queue capacities used inside session runtime structures.
 # ------------------------------------------------------------------------------
 
-# Worker count for deferred per-session processing.
-# These workers serialize heavy or ordering-sensitive tasks behind session keys.
+# Deferred-session workers and queue depth are also smart-sized internally.
+# Override them only if you are tuning a specific production host.
 DEFERRED_SESSION_WORKERS = 4
-
-# Queue limit for deferred per-session work.
-# Keep this a bit higher than the client-side setup pressure so bursty SYN/SOCKS/DNS
-# setup traffic is less likely to be dropped during short spikes.
 DEFERRED_SESSION_QUEUE_LIMIT = 4096
 
-# Initial queue / store capacities.
-SESSION_ORPHAN_QUEUE_INITIAL_CAPACITY = 128
-STREAM_QUEUE_INITIAL_CAPACITY = 256
-DNS_FRAGMENT_STORE_CAPACITY = 512
-SOCKS5_FRAGMENT_STORE_CAPACITY = 1024
+# Initial queue / store capacities are now derived automatically by the server
+# from workers, ARQ window, and batching pressure.
 
 # ------------------------------------------------------------------------------
 # 4) Session Lifecycle & Invalid-Cookie Handling
@@ -149,7 +134,7 @@ DNS_INFLIGHT_WAIT_TIMEOUT_SECONDS = 15.0
 # Fragment assembly timeout for inbound DNS query fragments.
 DNS_FRAGMENT_ASSEMBLY_TIMEOUT = 300.0
 
-# In-memory tunnel DNS cache sizing.
+# In-memory tunnel DNS cache size is auto-raised internally when needed.
 DNS_CACHE_MAX_RECORDS = 50000
 DNS_CACHE_TTL_SECONDS = 300.0
 
@@ -220,9 +205,8 @@ ENCRYPTION_KEY_FILE = "encrypt_key.txt"
 # ------------------------------------------------------------------------------
 
 # Maximum packable control blocks emitted in one response.
-# Keep this aligned with the client sample unless you intentionally want larger
-# packed bursts from the server.
-MAX_PACKETS_PER_BATCH = 10
+# The default is already conservative; override only for deliberate batching tests.
+MAX_PACKETS_PER_BATCH = 8
 
 # Duplicate the last packed control-block response this many dispatcher turns.
 # 1 = disabled.
@@ -250,7 +234,7 @@ ARQ_MAX_DATA_RETRIES = 120
 # Maximum out-of-order gap ahead of rcvNxt that can trigger STREAM_DATA_NACK.
 # 0 disables NACK generation entirely.
 # Keep this small so only near-miss gaps cause early resend requests.
-ARQ_DATA_NACK_MAX_GAP = 64
+ARQ_DATA_NACK_MAX_GAP = 16
 
 # Minimum seconds between repeated NACKs for the same missing sequence number.
 # Clamped to [0.1s, 30s].
@@ -271,4 +255,4 @@ LOG_LEVEL = "INFO"
 
 # ------------------------------------------------------------------------------
 
-CONFIG_VERSION = "10"
+CONFIG_VERSION = "11"

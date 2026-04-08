@@ -116,12 +116,12 @@ LOCAL_DNS_CACHE_FLUSH_INTERVAL_SECONDS = 60.0
 RESOLVER_BALANCING_STRATEGY = 2
 
 # Duplicate each normal outgoing tunnel packet this many times.
-# Clamped in code to [1, 8].
+# Clamped in code to [1, 4].
 # Higher values improve resilience but increase bandwidth and CPU usage.
 PACKET_DUPLICATION_COUNT = 2
 
 # Duplicate stream setup packets (STREAM_SYN / SOCKS5_SYN) this many times.
-# Clamped in code to [PACKET_DUPLICATION_COUNT, 8].
+# Clamped in code to [PACKET_DUPLICATION_COUNT, 5].
 SETUP_PACKET_DUPLICATION_COUNT = 2
 
 # Stream-aware resolver failover.
@@ -137,18 +137,6 @@ STREAM_RESOLVER_FAILOVER_COOLDOWN = 2.5
 # background using the current synced upload/download MTUs.
 RECHECK_INACTIVE_SERVERS_ENABLED = true
 
-# Full background recheck cycle interval.
-# Clamped to [60s, 86400s].
-RECHECK_INACTIVE_INTERVAL_SECONDS = 60.0
-
-# Delay between background rechecks of individual resolver entries.
-# Clamped to [1s, 600s].
-RECHECK_SERVER_INTERVAL_SECONDS = 5.0
-
-# Number of inactive/runtime-disabled resolver entries rechecked per cycle.
-# Clamped to [1, 1024].
-RECHECK_BATCH_SIZE = 10
-
 # If true, a resolver is runtime-disabled when it stays timeout-only across the
 # configured window and enough observations have been collected.
 AUTO_DISABLE_TIMEOUT_SERVERS = true
@@ -156,14 +144,6 @@ AUTO_DISABLE_TIMEOUT_SERVERS = true
 # Timeout-only observation window in seconds.
 # Clamped to [1s, 86400s].
 AUTO_DISABLE_TIMEOUT_WINDOW_SECONDS = 30.0
-
-# Minimum observations required before auto-disable can trigger.
-# Clamped to [1, 10000].
-AUTO_DISABLE_MIN_OBSERVATIONS = 5
-
-# Frequency of auto-disable evaluation.
-# Clamped to [0.25s, 600s].
-AUTO_DISABLE_CHECK_INTERVAL_SECONDS = 2.0
 
 # If true, payload labels are base-encoded before tunneling.
 # Usually keep false unless a specific resolver path behaves better with it.
@@ -184,7 +164,7 @@ UPLOAD_COMPRESSION_TYPE = 0
 DOWNLOAD_COMPRESSION_TYPE = 0
 
 # Minimum payload size before compression is attempted.
-# Must be >= 1.
+# Must be >= 120.
 COMPRESSION_MIN_SIZE = 120
 
 # ------------------------------------------------------------------------------
@@ -204,11 +184,12 @@ MIN_DOWNLOAD_MTU = 500
 MAX_UPLOAD_MTU = 150
 MAX_DOWNLOAD_MTU = 900
 
-# MTU probe retries, timeout, and parallelism.
-# Retries and parallelism must be >= 1.
+# MTU probe retries and timeout.
+# Parallelism is auto-raised internally when resolver count is large, but you
+# can still override it in advanced setups if needed.
 MTU_TEST_RETRIES = 2
 MTU_TEST_TIMEOUT = 2.0
-MTU_TEST_PARALLELISM = 32
+MTU_TEST_PARALLELISM = 16
 
 # Export successful MTU-tested resolvers to a file.
 SAVE_MTU_SERVERS_TO_FILE = false
@@ -231,9 +212,10 @@ MTU_ADDED_SERVER_LOG_FORMAT = "Resolver {IP} added back at {TIME} (UP {UP_MTU}, 
 # ------------------------------------------------------------------------------
 
 # Async tunnel runtime worker counts.
-# Each must be >= 1.
+# These can be overridden, but leaving them unset usually lets the client's
+# smart sizing choose a better baseline for the current machine.
 RX_TX_WORKERS = 4
-TUNNEL_PROCESS_WORKERS = 5
+TUNNEL_PROCESS_WORKERS = 6
 
 # Per-packet tunnel timeout used in async runtime paths.
 # Clamped to [0.5s, 120s].
@@ -244,21 +226,10 @@ TUNNEL_PACKET_TIMEOUT_SECONDS = 10.0
 # Clamped to [0.001s, 1s].
 DISPATCHER_IDLE_POLL_INTERVAL_SECONDS = 0.020
 
-# Channel sizes for async TX/RX pipelines.
-# Clamped in code to [64, 65536].
-TX_CHANNEL_SIZE = 12288
-RX_CHANNEL_SIZE = 16384
+# Channel sizes for async RX pipelines are auto-raised internally when needed.
+RX_CHANNEL_SIZE = 4096
 
 # UDP connection pool size per resolver key.
-# Clamped to [1, 1024].
-RESOLVER_UDP_CONNECTION_POOL_SIZE = 128
-
-# Initial queue/store capacities.
-# These reduce reallocations under many active streams.
-STREAM_QUEUE_INITIAL_CAPACITY = 256
-ORPHAN_QUEUE_INITIAL_CAPACITY = 64
-DNS_RESPONSE_FRAGMENT_STORE_CAPACITY = 512
-
 # Local UDP ASSOCIATE read timeout.
 # Clamped to [1s, 3600s].
 SOCKS_UDP_ASSOCIATE_READ_TIMEOUT_SECONDS = 30.0
@@ -283,6 +254,11 @@ SESSION_INIT_RETRY_MAX_SECONDS = 60.0
 # Clamped to [1s, 3600s].
 SESSION_INIT_BUSY_RETRY_INTERVAL_SECONDS = 60.0
 
+# Concurrent racing session initialization attempts.
+# Higher values improve reliability on unstable networks but increase DNS traffic.
+# Clamped to [1, 5].
+SESSION_INIT_RACING_COUNT = 3
+
 # Ping/keepalive pacing.
 # These control how aggressively the client sends ping traffic depending on
 # recent activity.
@@ -302,8 +278,9 @@ PING_COLD_THRESHOLD_SECONDS = 30.0
 # ------------------------------------------------------------------------------
 
 # Maximum control blocks packed together in one outgoing batch.
-# Clamped to [1, 64].
-MAX_PACKETS_PER_BATCH = 5
+# The default is already tuned conservatively; only override this if you are
+# intentionally testing a different batching profile.
+MAX_PACKETS_PER_BATCH = 8
 
 # ARQ data/control behavior.
 # These values are clamped in code and should stay internally consistent.
@@ -321,7 +298,7 @@ ARQ_MAX_DATA_RETRIES = 120
 # Maximum out-of-order gap ahead of rcvNxt that can trigger STREAM_DATA_NACK.
 # 0 disables NACK generation entirely.
 # Keep this small so only near-miss gaps cause early resend requests.
-ARQ_DATA_NACK_MAX_GAP = 64
+ARQ_DATA_NACK_MAX_GAP = 16
 
 # Minimum seconds between repeated NACKs for the same missing sequence number.
 # Clamped to [0.1s, 30s].

@@ -9,7 +9,7 @@ import (
 
 func TestStreamZeroAllowsMultipleQueuedPingsWithDifferentSequence(t *testing.T) {
 	c := &Client{
-		txSignal: make(chan struct{}, 8),
+		dispatchSignal: make(chan struct{}, 8),
 	}
 	s := &Stream_client{
 		client:   c,
@@ -33,7 +33,7 @@ func TestStreamZeroAllowsMultipleQueuedPingsWithDifferentSequence(t *testing.T) 
 
 func TestPingQueueDropsWhenCongested(t *testing.T) {
 	c := &Client{
-		txSignal: make(chan struct{}, 8),
+		dispatchSignal: make(chan struct{}, 8),
 	}
 	s := &Stream_client{
 		client:   c,

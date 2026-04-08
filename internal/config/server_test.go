@@ -98,3 +98,47 @@ func TestServerConfigFlagBinderBuildsOverridesForSetFlagsOnly(t *testing.T) {
 		t.Fatalf("did not expect unset flag to appear in overrides: %#v", overrides.Values["UDPHost"])
 	}
 }
+
+func TestServerConfigEffectiveSizingUsesSmartFloorsAndDerivedCapacities(t *testing.T) {
+	cfg := defaultServerConfig()
+	cfg.ProtocolType = "SOCKS5"
+	cfg.UDPReaders = 1
+	cfg.DNSRequestWorkers = 1
+	cfg.DeferredSessionWorkers = 1
+	cfg.DeferredSessionQueueLimit = 64
+	cfg.MaxConcurrentRequests = 512
+	cfg.MaxPacketsPerBatch = 1
+	cfg.DNSCacheMaxRecords = 100
+	cfg.ARQWindowSize = 2000
+
+	if got := cfg.EffectiveUDPReaders(); got < 1 {
+		t.Fatalf("expected effective udp readers floor, got=%d", got)
+	}
+	if got := cfg.EffectiveDNSRequestWorkers(); got < cfg.EffectiveUDPReaders()+1 {
+		t.Fatalf("expected dns workers to track reader pressure, got=%d readers=%d", got, cfg.EffectiveUDPReaders())
+	}
+	if got := cfg.EffectiveDeferredSessionQueueLimit(); got < 256 {
+		t.Fatalf("expected deferred queue smart floor, got=%d", got)
+	}
+	if got := cfg.EffectiveMaxConcurrentRequests(); got < 4096 {
+		t.Fatalf("expected max concurrent requests smart floor, got=%d", got)
+	}
+	if got := cfg.EffectiveMaxPacketsPerBatch(); got < 10 {
+		t.Fatalf("expected max packets per batch smart floor, got=%d", got)
+	}
+	if got := cfg.EffectiveDNSCacheMaxRecords(); got < cfg.EffectiveMaxConcurrentRequests()*2 {
+		t.Fatalf("expected dns cache smart floor, got=%d concurrent=%d", got, cfg.EffectiveMaxConcurrentRequests())
+	}
+	if got := cfg.EffectiveSessionOrphanQueueInitialCap(); got < 32 {
+		t.Fatalf("expected derived orphan queue cap, got=%d", got)
+	}
+	if got := cfg.EffectiveStreamQueueInitialCapacity(); got < 32 {
+		t.Fatalf("expected derived stream queue cap, got=%d", got)
+	}
+	if got := cfg.EffectiveDNSFragmentStoreCapacity(); got < 64 {
+		t.Fatalf("expected derived dns fragment store cap, got=%d", got)
+	}
+	if got := cfg.EffectiveSOCKS5FragmentStoreCapacity(); got < 64 {
+		t.Fatalf("expected derived socks5 fragment store cap, got=%d", got)
+	}
+}

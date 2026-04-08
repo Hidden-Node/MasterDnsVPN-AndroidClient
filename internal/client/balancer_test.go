@@ -6,13 +6,16 @@ import (
 )
 
 func TestBalancerLeastLossFallsBackToRoundRobinWithoutStats(t *testing.T) {
-	b := NewBalancer(BalancingLeastLoss)
+	b := NewBalancer(BalancingLeastLoss, nil)
 	connections := []*Connection{
 		{Key: "a", IsValid: true},
 		{Key: "b", IsValid: true},
 		{Key: "c", IsValid: true},
 	}
 	b.SetConnections(connections)
+	_ = b.SetConnectionValidity("a", true)
+	_ = b.SetConnectionValidity("b", true)
+	_ = b.SetConnectionValidity("c", true)
 
 	first, ok := b.GetBestConnection()
 	if !ok {
@@ -33,12 +36,14 @@ func TestBalancerLeastLossFallsBackToRoundRobinWithoutStats(t *testing.T) {
 }
 
 func TestBalancerLowestLatencyUsesRuntimeStats(t *testing.T) {
-	b := NewBalancer(BalancingLowestLatency)
+	b := NewBalancer(BalancingLowestLatency, nil)
 	connections := []*Connection{
 		{Key: "a", IsValid: true},
 		{Key: "b", IsValid: true},
 	}
 	b.SetConnections(connections)
+	_ = b.SetConnectionValidity("a", true)
+	_ = b.SetConnectionValidity("b", true)
 
 	for i := 0; i < 6; i++ {
 		b.ReportSend("a")
@@ -57,7 +62,7 @@ func TestBalancerLowestLatencyUsesRuntimeStats(t *testing.T) {
 }
 
 func TestBalancerStatsHalfLifeAlsoAppliesOnSend(t *testing.T) {
-	b := NewBalancer(BalancingLeastLoss)
+	b := NewBalancer(BalancingLeastLoss, nil)
 	connections := []*Connection{
 		{Key: "a", IsValid: true},
 	}
@@ -72,7 +77,7 @@ func TestBalancerStatsHalfLifeAlsoAppliesOnSend(t *testing.T) {
 		t.Fatal("expected stats for resolver a")
 	}
 
-	sent, acked, sum, count := stats.snapshot()
+	sent, acked, _, sum, count := stats.snapshot()
 	if sent != (connectionStatsHalfLifeThreshold+1)/2 {
 		t.Fatalf("expected send-triggered half-life to bound sent, got sent=%d acked=%d sum=%d count=%d", sent, acked, sum, count)
 	}
@@ -82,7 +87,7 @@ func TestBalancerStatsHalfLifeAlsoAppliesOnSend(t *testing.T) {
 }
 
 func TestBalancerStatsHalfLifePreservesRelativeSuccessSignal(t *testing.T) {
-	b := NewBalancer(BalancingLeastLoss)
+	b := NewBalancer(BalancingLeastLoss, nil)
 	connections := []*Connection{
 		{Key: "a", IsValid: true},
 	}
@@ -103,7 +108,7 @@ func TestBalancerStatsHalfLifePreservesRelativeSuccessSignal(t *testing.T) {
 		t.Fatal("expected stats for resolver a")
 	}
 
-	sent, acked, sum, count := stats.snapshot()
+	sent, acked, _, sum, count := stats.snapshot()
 	if sent != 700 || acked != 200 || count != 200 {
 		t.Fatalf("expected balanced half-life after crossing threshold, got sent=%d acked=%d count=%d", sent, acked, count)
 	}
@@ -112,36 +117,26 @@ func TestBalancerStatsHalfLifePreservesRelativeSuccessSignal(t *testing.T) {
 	}
 }
 
-func TestBalancerSnapshotIgnoresSourceMutationUntilRefresh(t *testing.T) {
-	b := NewBalancer(BalancingRoundRobinDefault)
+func TestBalancerSetConnectionsCopiesSourceDomain(t *testing.T) {
+	b := NewBalancer(BalancingRoundRobinDefault, nil)
 	connections := []*Connection{
-		{Key: "a", IsValid: true, UploadMTUBytes: 120},
+		{Key: "a", IsValid: true, Domain: "a.example.com"},
 	}
 	b.SetConnections(connections)
 
-	connections[0].UploadMTUBytes = 64
+	connections[0].Domain = "mutated.example.com"
 
 	got, ok := b.GetConnectionByKey("a")
 	if !ok {
 		t.Fatal("expected resolver a in balancer snapshot")
 	}
-	if got.UploadMTUBytes != 120 {
-		t.Fatalf("expected immutable snapshot value before refresh, got %d", got.UploadMTUBytes)
-	}
-
-	b.RefreshValidConnections()
-
-	got, ok = b.GetConnectionByKey("a")
-	if !ok {
-		t.Fatal("expected resolver a after refresh")
-	}
-	if got.UploadMTUBytes != 64 {
-		t.Fatalf("expected refreshed snapshot to pick new MTU, got %d", got.UploadMTUBytes)
+	if got.Domain != "a.example.com" {
+		t.Fatalf("expected balancer to keep copied domain after source mutation, got %q", got.Domain)
 	}
 }
 
-func TestBalancerSetConnectionValidityRefreshesSnapshotFromSource(t *testing.T) {
-	b := NewBalancer(BalancingRoundRobinDefault)
+func TestBalancerSetConnectionValidityDoesNotPullSourceMutation(t *testing.T) {
+	b := NewBalancer(BalancingRoundRobinDefault, nil)
 	connections := []*Connection{
 		{Key: "a", IsValid: false, UploadMTUBytes: 140, DownloadMTUBytes: 220},
 	}
@@ -161,13 +156,13 @@ func TestBalancerSetConnectionValidityRefreshesSnapshotFromSource(t *testing.T) 
 	if !got.IsValid {
 		t.Fatal("expected resolver a to become valid")
 	}
-	if got.UploadMTUBytes != 90 || got.DownloadMTUBytes != 180 {
-		t.Fatalf("expected snapshot to pick latest source MTUs, got up=%d down=%d", got.UploadMTUBytes, got.DownloadMTUBytes)
+	if got.UploadMTUBytes != 0 || got.DownloadMTUBytes != 0 {
+		t.Fatalf("expected balancer state to stay independent from source mutation, got up=%d down=%d", got.UploadMTUBytes, got.DownloadMTUBytes)
 	}
 }
 
-func TestBalancerSetConnectionMTURefreshesSourceAndSnapshot(t *testing.T) {
-	b := NewBalancer(BalancingRoundRobinDefault)
+func TestBalancerSetConnectionMTUUpdatesBalancerOnly(t *testing.T) {
+	b := NewBalancer(BalancingRoundRobinDefault, nil)
 	connections := []*Connection{
 		{Key: "a", IsValid: true, UploadMTUBytes: 120, UploadMTUChars: 180, DownloadMTUBytes: 220},
 	}
@@ -177,8 +172,8 @@ func TestBalancerSetConnectionMTURefreshesSourceAndSnapshot(t *testing.T) {
 		t.Fatal("expected SetConnectionMTU to succeed")
 	}
 
-	if connections[0].UploadMTUBytes != 90 || connections[0].UploadMTUChars != 135 || connections[0].DownloadMTUBytes != 180 {
-		t.Fatalf("expected source MTUs to update, got up=%d chars=%d down=%d", connections[0].UploadMTUBytes, connections[0].UploadMTUChars, connections[0].DownloadMTUBytes)
+	if connections[0].UploadMTUBytes != 120 || connections[0].UploadMTUChars != 180 || connections[0].DownloadMTUBytes != 220 {
+		t.Fatalf("expected source MTUs to remain unchanged, got up=%d chars=%d down=%d", connections[0].UploadMTUBytes, connections[0].UploadMTUChars, connections[0].DownloadMTUBytes)
 	}
 
 	got, ok := b.GetConnectionByKey("a")

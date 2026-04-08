@@ -140,7 +140,7 @@ func (c *Client) getUDPConn(resolverLabel string) (*net.UDPConn, error) {
 	c.resolverConnsMu.Lock()
 	pool, ok := c.resolverConns[resolverLabel]
 	if !ok {
-		pool = make(chan pooledUDPConn, c.cfg.ResolverUDPConnectionPoolSize)
+		pool = make(chan pooledUDPConn, c.cfg.EffectiveResolverUDPConnectionPoolSize())
 		c.resolverConns[resolverLabel] = pool
 	}
 	c.resolverConnsMu.Unlock()
