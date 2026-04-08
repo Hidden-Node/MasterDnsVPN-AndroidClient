@@ -399,6 +399,31 @@ fun SettingsScreen(
                 if (!expanded) return@items
 
                 Spacer(modifier = Modifier.height(6.dp))
+                if (section == "DNS") {
+                    val dnsEnabled = fieldsState["LOCAL_DNS_ENABLED"].equals("true", ignoreCase = true)
+                    val dnsPort = fieldsState["LOCAL_DNS_PORT"]?.toIntOrNull() ?: 53
+                    if (dnsEnabled && dnsPort <= 1024) {
+                        Card(
+                            colors = CardDefaults.cardColors(
+                                containerColor = MaterialTheme.colorScheme.errorContainer
+                            ),
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            Row(
+                                modifier = Modifier.padding(12.dp),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Text(
+                                    text = "⚠ Port $dnsPort requires root access on Android. " +
+                                        "The app will automatically use port 5353 instead.",
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = MaterialTheme.colorScheme.onErrorContainer
+                                )
+                            }
+                        }
+                        Spacer(modifier = Modifier.height(8.dp))
+                    }
+                }
                 sections[section].orEmpty().forEach { field ->
                     if ((field.key == "SOCKS5_USER" || field.key == "SOCKS5_PASS") && !socksAuthEnabled) {
                         return@forEach

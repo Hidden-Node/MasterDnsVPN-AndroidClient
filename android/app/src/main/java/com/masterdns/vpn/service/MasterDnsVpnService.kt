@@ -133,13 +133,27 @@ class MasterDnsVpnService : VpnService() {
                     }
                 }
 
+                // Detect LOCAL_DNS_ENABLED with a privileged port (<=1024) — requires root on Android.
+                // Automatically fall back to port 5353 to avoid a bind permission error on non-rooted devices.
+                val advancedForDns = parseAdvanced(runtimeProfile.advancedJson)
+                val localDnsEnabled = advancedForDns["LOCAL_DNS_ENABLED"].equals("true", ignoreCase = true)
+                val localDnsPort = advancedForDns["LOCAL_DNS_PORT"]?.toIntOrNull() ?: 53
+                val safeDnsPort: Int? = if (!proxyMode && localDnsEnabled && localDnsPort <= 1024) {
+                    VpnManager.appendLog(
+                        "WARNING: LOCAL_DNS_PORT=$localDnsPort requires root on Android. " +
+                            "Automatically using port 5353 instead."
+                    )
+                    5353
+                } else null
+
                 configFile.writeText(
                     ConfigGenerator.generateConfig(
                         profile = runtimeProfile,
                         listenPort = socksPort,
                         listenIpOverride = listenIpOverride,
                         protocolOverride = protocolOverride,
-                        localDnsEnabledOverride = if (proxyMode) false else null
+                        localDnsEnabledOverride = if (proxyMode) false else null,
+                        localDnsPortOverride = if (proxyMode) null else safeDnsPort
                     )
                 )
                 if (runtimeProfile.resolvers.isNotBlank()) {
