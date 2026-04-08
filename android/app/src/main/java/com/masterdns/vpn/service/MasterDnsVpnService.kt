@@ -227,13 +227,20 @@ class MasterDnsVpnService : VpnService() {
                 }
 
                 // Establish VPN TUN interface
+                // Determine the DNS server to advertise to Android:
+                // - When LOCAL_DNS is enabled, Go core runs its own DNS listener on 127.0.0.1.
+                //   We advertise the VPN interface address (10.0.0.2) so DNS queries come
+                //   through the TUN and get forwarded by tun2socks → Go core local DNS.
+                // - Otherwise fall back to 8.8.8.8 / 8.8.4.4 which travel through the
+                //   tunnel via tun2socks → SOCKS5 → Go core → resolver servers.
+                val vpnDnsServer = if (localDnsEnabled && !proxyMode) "10.0.0.2" else "8.8.8.8"
+
                 val builder = Builder()
                     .setSession(getString(R.string.app_name))
                     .setMtu(1500)
                     .addAddress("10.0.0.2", 32)
                     .addRoute("0.0.0.0", 0)
-                    .addDnsServer("8.8.8.8")
-                    .addDnsServer("8.8.4.4")
+                    .addDnsServer(vpnDnsServer)
 
                 if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) {
                     val splitEnabled = globalSettings.splitTunnelingEnabled &&
@@ -243,7 +250,6 @@ class MasterDnsVpnService : VpnService() {
                         // 1. User-selected packages
                         // 2. Browser companion packages (WebView, GMS, etc.) so browsers
                         //    actually route through the tunnel
-                        // 3. This app itself — Go core must reach its own SOCKS5 proxy
                         val userSelected = globalSettings.splitPackagesCsv
                             .split(",")
                             .map { it.trim() }
@@ -256,7 +262,12 @@ class MasterDnsVpnService : VpnService() {
                             runCatching { pm.getApplicationInfo(pkg, 0) }.isSuccess
                         }.toSet()
 
-                        val finalAllowed = userSelected + installedCompanions + setOf(packageName)
+                        // Do NOT include our own packageName here.
+                        // tun2socks reads from the TUN fd directly (not via the route table),
+                        // and Go core's outbound UDP sockets must bypass the TUN to reach
+                        // resolver servers directly — exactly like the non-split path which
+                        // uses addDisallowedApplication(packageName).
+                        val finalAllowed = userSelected + installedCompanions
 
                         VpnManager.appendLog(
                             "Split tunnel: ${userSelected.size} user apps, " +
