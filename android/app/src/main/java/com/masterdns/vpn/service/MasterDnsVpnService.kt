@@ -40,6 +40,18 @@ class MasterDnsVpnService : VpnService() {
         private const val DEFAULT_SOCKS_PORT = 18000
         private const val SOCKS_STARTUP_TIMEOUT_MS = 8 * 60 * 1000L
         private const val SOCKS_POLL_INTERVAL_MS = 500L
+
+        // Companion packages that browsers and apps rely on for network access.
+        // These must be included alongside any user-selected app to ensure traffic
+        // actually flows through the tunnel (e.g. Chrome uses WebView & GMS).
+        private val BROWSER_COMPANION_PACKAGES = setOf(
+            "com.google.android.webview",
+            "com.android.webview",
+            "com.google.android.gms",
+            "com.google.android.gsf",
+            "com.android.chrome",          // system Chrome on some OEMs
+            "com.google.android.captiveportallogin"
+        )
     }
 
     private val serviceScope = CoroutineScope(Dispatchers.IO + SupervisorJob())
@@ -227,17 +239,37 @@ class MasterDnsVpnService : VpnService() {
                     val splitEnabled = globalSettings.splitTunnelingEnabled &&
                         globalSettings.splitPackagesCsv.isNotBlank()
                     if (splitEnabled) {
-                        globalSettings.splitPackagesCsv
+                        // Build the final allowed-app set:
+                        // 1. User-selected packages
+                        // 2. Browser companion packages (WebView, GMS, etc.) so browsers
+                        //    actually route through the tunnel
+                        // 3. This app itself — Go core must reach its own SOCKS5 proxy
+                        val userSelected = globalSettings.splitPackagesCsv
                             .split(",")
                             .map { it.trim() }
-                            .filter { it.isNotEmpty() && it != packageName }
-                            .forEach { pkg ->
-                                try {
-                                    builder.addAllowedApplication(pkg)
-                                } catch (e: Exception) {
-                                    VpnManager.appendLog("Split tunnel ignore package '$pkg': ${e.message}")
-                                }
+                            .filter { it.isNotEmpty() }
+                            .toSet()
+
+                        // Determine which companion packages are actually installed
+                        val pm = packageManager
+                        val installedCompanions = BROWSER_COMPANION_PACKAGES.filter { pkg ->
+                            runCatching { pm.getApplicationInfo(pkg, 0) }.isSuccess
+                        }.toSet()
+
+                        val finalAllowed = userSelected + installedCompanions + setOf(packageName)
+
+                        VpnManager.appendLog(
+                            "Split tunnel: ${userSelected.size} user apps, " +
+                            "${installedCompanions.size} companion packages added"
+                        )
+
+                        finalAllowed.forEach { pkg ->
+                            try {
+                                builder.addAllowedApplication(pkg)
+                            } catch (e: Exception) {
+                                VpnManager.appendLog("Split tunnel skip '$pkg': ${e.message}")
                             }
+                        }
                     } else {
                         // Exclude app itself by default to avoid self-loop traffic.
                         builder.addDisallowedApplication(packageName)
