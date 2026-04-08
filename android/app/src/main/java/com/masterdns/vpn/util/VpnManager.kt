@@ -195,10 +195,35 @@ object VpnManager {
             return
         }
 
-        val activeResolversMatch = Regex("Active Resolvers\\s*[:]\\s*(\\d+)", RegexOption.IGNORE_CASE).find(line)
+        val activeResolversMatch = Regex(
+            "Active Resolvers\\s*[:=]\\s*[^\\d-]*(\\d+)",
+            RegexOption.IGNORE_CASE
+        ).find(line)
         if (activeResolversMatch != null) {
             _scanStatus.value = _scanStatus.value.copy(
                 activeResolvers = activeResolversMatch.groupValues[1].toIntOrNull() ?: _scanStatus.value.activeResolvers
+            )
+            return
+        }
+
+        val totalActiveMatch = Regex(
+            "total\\s+active\\s*[:=]\\s*[^\\d-]*(\\d+)",
+            RegexOption.IGNORE_CASE
+        ).find(line)
+        if (totalActiveMatch != null) {
+            _scanStatus.value = _scanStatus.value.copy(
+                activeResolvers = totalActiveMatch.groupValues[1].toIntOrNull() ?: _scanStatus.value.activeResolvers
+            )
+            return
+        }
+
+        val remainingMatch = Regex(
+            "remaining\\s*[:=]\\s*[^\\d-]*(\\d+)",
+            RegexOption.IGNORE_CASE
+        ).find(line)
+        if (remainingMatch != null) {
+            _scanStatus.value = _scanStatus.value.copy(
+                activeResolvers = remainingMatch.groupValues[1].toIntOrNull() ?: _scanStatus.value.activeResolvers
             )
             return
         }
