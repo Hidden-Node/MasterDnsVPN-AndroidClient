@@ -7,4 +7,5 @@
     <string name="project_main_github">github.com/masterking32/MasterDnsVPN</string>
     <string name="project_main_telegram">t.me/masterdnsvpn</string>
     <string name="project_android_client_github">github.com/Hidden-Node/MasterDnsVPN-AndroidClient</string>
+    <string name="engine_version">v2026.04.07</string>
 </resources>
