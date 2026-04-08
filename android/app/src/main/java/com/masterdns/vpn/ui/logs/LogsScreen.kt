@@ -7,6 +7,7 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ArrowBack
+import androidx.compose.material.icons.filled.AutoMode
 import androidx.compose.material.icons.filled.DeleteSweep
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -23,10 +24,11 @@ import com.masterdns.vpn.util.VpnManager
 fun LogsScreen(onBack: () -> Unit) {
     val logs by VpnManager.logs.collectAsState()
     val listState = rememberLazyListState()
+    var autoScrollEnabled by remember { mutableStateOf(true) }
 
     // Auto-scroll to bottom when new logs arrive
     LaunchedEffect(logs.size) {
-        if (logs.isNotEmpty()) {
+        if (autoScrollEnabled && logs.isNotEmpty()) {
             listState.animateScrollToItem(logs.size - 1)
         }
     }
@@ -41,6 +43,14 @@ fun LogsScreen(onBack: () -> Unit) {
                     }
                 },
                 actions = {
+                    FilledTonalIconButton(onClick = { autoScrollEnabled = !autoScrollEnabled }) {
+                        Icon(Icons.Filled.AutoMode, contentDescription = "Auto")
+                    }
+                    Text(
+                        text = if (autoScrollEnabled) "Auto ON" else "Auto OFF",
+                        style = MaterialTheme.typography.labelMedium,
+                        modifier = Modifier.padding(end = 6.dp)
+                    )
                     IconButton(onClick = { VpnManager.clearLogs() }) {
                         Icon(Icons.Filled.DeleteSweep, contentDescription = "Clear Logs")
                     }
