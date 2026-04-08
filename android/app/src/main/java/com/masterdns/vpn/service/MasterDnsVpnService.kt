@@ -4,6 +4,7 @@ import android.app.Notification
 import android.app.PendingIntent
 import android.content.Intent
 import android.net.VpnService
+import android.net.Uri
 import android.os.Build
 import android.os.ParcelFileDescriptor
 import android.os.PowerManager
@@ -20,6 +21,7 @@ import com.masterdns.vpn.util.GlobalSettingsStore
 import com.masterdns.vpn.util.VpnManager
 import kotlinx.coroutines.*
 import java.io.File
+import java.io.FileInputStream
 import java.io.RandomAccessFile
 import java.net.InetAddress
 import java.net.InetSocketAddress
@@ -46,6 +48,8 @@ class MasterDnsVpnService : VpnService() {
     private var goClientJob: Job? = null
     private var logTailJob: Job? = null
     private var wakeLock: PowerManager.WakeLock? = null
+    private var mtuExportTargetUri: String? = null
+    private var mtuTempOutputDir: File? = null
     @Volatile
     private var isStopping = false
     @Volatile
@@ -102,24 +106,31 @@ class MasterDnsVpnService : VpnService() {
 
                 val configFile = File(configDir, "client_config.toml")
                 val resolversFile = File(configDir, "client_resolvers.txt")
-                val advanced = parseAdvanced(profile.advancedJson).toMutableMap()
+                mtuExportTargetUri = null
+                mtuTempOutputDir = null
+                val advanced = parseAdvanced(profile.advancedJson)
                 val saveMtuToFile = advanced["SAVE_MTU_SERVERS_TO_FILE"].equals("true", ignoreCase = true)
                 var runtimeProfile = profile
                 if (saveMtuToFile) {
-                    val mtuDir = File(getExternalFilesDir(null), "masterdnsvpn_mtu")
-                    if (!mtuDir.exists()) {
-                        mtuDir.mkdirs()
-                    }
-                    val fileName = advanced["MTU_SERVERS_FILE_NAME"]
+                    val configuredPath = advanced["MTU_SERVERS_FILE_NAME"]
                         ?.trim()
                         ?.ifBlank { "masterdnsvpn_success_test_{time}.log" }
                         ?: "masterdnsvpn_success_test_{time}.log"
-                    val cleanName = File(fileName).name
-                    val outputPath = File(mtuDir, cleanName).absolutePath
-                    advanced["MTU_SERVERS_FILE_NAME"] = outputPath
-                    runtimeProfile = profile.copy(advancedJson = Gson().toJson(advanced))
-                    VpnManager.appendLog("MTU results folder: ${mtuDir.absolutePath}")
-                    VpnManager.appendLog("MTU results file pattern: $outputPath")
+                    val exportUri = advanced["MTU_EXPORT_URI"]?.trim().orEmpty()
+                    if (exportUri.isNotBlank()) {
+                        val advancedMutable = advanced.toMutableMap()
+                        val safeName = File(configuredPath).name.ifBlank { "masterdnsvpn_success_test_{time}.log" }
+                        val tmpDir = File(filesDir, "mtu_exports").apply { mkdirs() }
+                        val tmpPath = File(tmpDir, safeName).absolutePath
+                        advancedMutable["MTU_SERVERS_FILE_NAME"] = tmpPath
+                        runtimeProfile = profile.copy(advancedJson = Gson().toJson(advancedMutable))
+                        mtuExportTargetUri = exportUri
+                        mtuTempOutputDir = tmpDir
+                        VpnManager.appendLog("MTU results temp path: $tmpPath")
+                        VpnManager.appendLog("MTU export destination selected via file manager")
+                    } else {
+                        VpnManager.appendLog("MTU results target: $configuredPath")
+                    }
                 }
 
                 configFile.writeText(
@@ -131,10 +142,10 @@ class MasterDnsVpnService : VpnService() {
                         localDnsEnabledOverride = if (proxyMode) false else null
                     )
                 )
-                if (profile.resolvers.isNotBlank()) {
-                    resolversFile.writeText(ConfigGenerator.generateResolvers(profile))
+                if (runtimeProfile.resolvers.isNotBlank()) {
+                    resolversFile.writeText(ConfigGenerator.generateResolvers(runtimeProfile))
                 } else if (!resolversFile.exists() || resolversFile.readText().isBlank()) {
-                    resolversFile.writeText(ConfigGenerator.generateResolvers(profile))
+                    resolversFile.writeText(ConfigGenerator.generateResolvers(runtimeProfile))
                 } else {
                     VpnManager.appendLog("Using existing client_resolvers.txt from app storage")
                 }
@@ -280,6 +291,7 @@ class MasterDnsVpnService : VpnService() {
                 VpnManager.updateState(VpnManager.VpnState.DISCONNECTED)
                 VpnManager.stopTrafficMonitor()
                 VpnManager.appendLog("VPN disconnected")
+                exportMtuResultsIfNeeded()
                 releaseWakeLock()
 
                 runCatching {
@@ -374,6 +386,25 @@ class MasterDnsVpnService : VpnService() {
             Gson().fromJson<Map<String, String>>(json, type) ?: emptyMap()
         } catch (_: Exception) {
             emptyMap()
+        }
+    }
+
+    private fun exportMtuResultsIfNeeded() {
+        val target = mtuExportTargetUri?.takeIf { it.isNotBlank() } ?: return
+        val dir = mtuTempOutputDir ?: return
+        val latest = dir.listFiles()
+            ?.filter { it.isFile }
+            ?.maxByOrNull { it.lastModified() }
+            ?: return
+        runCatching {
+            val uri = Uri.parse(target)
+            contentResolver.openOutputStream(uri, "wt")?.use { out ->
+                FileInputStream(latest).use { input -> input.copyTo(out) }
+            } ?: error("Cannot open selected destination")
+        }.onSuccess {
+            VpnManager.appendLog("MTU results exported to selected destination")
+        }.onFailure {
+            VpnManager.appendLog("MTU export failed: ${it.message}")
         }
     }
 

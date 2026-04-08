@@ -140,7 +140,7 @@ private val configFields = listOf(
     SettingField("MTU", "MTU_TEST_TIMEOUT", "MTU_TEST_TIMEOUT", "Probe timeout seconds", keyboardType = KeyboardType.Decimal),
     SettingField("MTU", "MTU_TEST_PARALLELISM", "MTU_TEST_PARALLELISM", "Parallel probe workers", keyboardType = KeyboardType.Number),
     SettingField("MTU", "SAVE_MTU_SERVERS_TO_FILE", "SAVE_MTU_SERVERS_TO_FILE", "Persist successful MTU resolvers to file", type = FieldType.BOOL),
-    SettingField("MTU", "MTU_SERVERS_FILE_NAME", "MTU_SERVERS_FILE_NAME", "Output file name/path for MTU results"),
+    SettingField("MTU", "MTU_SERVERS_FILE_NAME", "MTU_SERVERS_FILE_NAME", "Output file name/path (absolute path supported)"),
     SettingField("MTU", "MTU_SERVERS_FILE_FORMAT", "MTU_SERVERS_FILE_FORMAT", "Format: {IP} {UP_MTU} {DOWN-MTU}"),
     SettingField("MTU", "MTU_USING_SECTION_SEPARATOR_TEXT", "MTU_USING_SECTION_SEPARATOR_TEXT", "Optional separator text between sections"),
     SettingField("MTU", "MTU_REMOVED_SERVER_LOG_FORMAT", "MTU_REMOVED_SERVER_LOG_FORMAT", "Log format when resolver is removed"),
@@ -243,6 +243,14 @@ fun SettingsScreen(
             val text = readTextFromUri(context, uri)
             viewModel.importResolvers(selected, text)
             scope.launch { snackbarHostState.showSnackbar("Resolvers imported into profile") }
+        }
+    }
+    val pickMtuExportLauncher = rememberLauncherForActivityResult(
+        ActivityResultContracts.CreateDocument("text/plain")
+    ) { uri ->
+        if (uri != null) {
+            fieldsState["MTU_EXPORT_URI"] = uri.toString()
+            scope.launch { snackbarHostState.showSnackbar("MTU export destination selected") }
         }
     }
 
@@ -351,6 +359,17 @@ fun SettingsScreen(
                     Icon(Icons.Filled.UploadFile, contentDescription = null)
                     Spacer(modifier = Modifier.width(6.dp))
                     Text("Import client_resolvers.txt")
+                }
+                Spacer(modifier = Modifier.height(6.dp))
+                Button(
+                    onClick = {
+                        val selectedName = selected.name.trim().ifBlank { "profile" }
+                        pickMtuExportLauncher.launch("${selectedName}_mtu_results.log")
+                    }
+                ) {
+                    Icon(Icons.Filled.Download, contentDescription = null)
+                    Spacer(modifier = Modifier.width(6.dp))
+                    Text("Pick MTU export destination")
                 }
             }
 
@@ -568,6 +587,7 @@ private fun defaultValuesFor(profile: ProfileEntity): Map<String, String> {
         put("MTU_USING_SECTION_SEPARATOR_TEXT", adv("MTU_USING_SECTION_SEPARATOR_TEXT", ""))
         put("MTU_REMOVED_SERVER_LOG_FORMAT", adv("MTU_REMOVED_SERVER_LOG_FORMAT", "Resolver {IP} removed at {TIME} due to {CAUSE}"))
         put("MTU_ADDED_SERVER_LOG_FORMAT", adv("MTU_ADDED_SERVER_LOG_FORMAT", "Resolver {IP} added back at {TIME} (UP {UP_MTU}, DOWN {DOWN_MTU})"))
+        put("MTU_EXPORT_URI", adv("MTU_EXPORT_URI", ""))
         put("RX_TX_WORKERS", adv("RX_TX_WORKERS", "4"))
         put("TUNNEL_PROCESS_WORKERS", adv("TUNNEL_PROCESS_WORKERS", "6"))
         put("TUNNEL_PACKET_TIMEOUT_SECONDS", adv("TUNNEL_PACKET_TIMEOUT_SECONDS", "10.0"))
