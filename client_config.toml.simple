@@ -177,12 +177,12 @@ COMPRESSION_MIN_SIZE = 120
 # Minimum accepted upload/download MTUs after testing.
 # 0 can be used to effectively disable a bound, but keep realistic values.
 MIN_UPLOAD_MTU = 38
-MIN_DOWNLOAD_MTU = 500
+MIN_DOWNLOAD_MTU = 100
 
 # Initial maximum MTU search bounds.
 # Must be >= the matching MIN value if both are set.
 MAX_UPLOAD_MTU = 150
-MAX_DOWNLOAD_MTU = 900
+MAX_DOWNLOAD_MTU = 500
 
 # MTU probe retries and timeout.
 # Parallelism is auto-raised internally when resolver count is large, but you
@@ -262,12 +262,12 @@ SESSION_INIT_RACING_COUNT = 3
 # Ping/keepalive pacing.
 # These control how aggressively the client sends ping traffic depending on
 # recent activity.
-PING_AGGRESSIVE_INTERVAL_SECONDS = 0.200
+PING_AGGRESSIVE_INTERVAL_SECONDS = 0.100
 PING_LAZY_INTERVAL_SECONDS = 0.750
 PING_COOLDOWN_INTERVAL_SECONDS = 2.0
 PING_COLD_INTERVAL_SECONDS = 15.0
-PING_WARM_THRESHOLD_SECONDS = 5.0
-PING_COOL_THRESHOLD_SECONDS = 15.0
+PING_WARM_THRESHOLD_SECONDS = 8.0
+PING_COOL_THRESHOLD_SECONDS = 20.0
 PING_COLD_THRESHOLD_SECONDS = 30.0
 
 # ------------------------------------------------------------------------------
@@ -284,16 +284,16 @@ MAX_PACKETS_PER_BATCH = 8
 
 # ARQ data/control behavior.
 # These values are clamped in code and should stay internally consistent.
-ARQ_WINDOW_SIZE = 1000
-ARQ_INITIAL_RTO_SECONDS = 0.6
-ARQ_MAX_RTO_SECONDS = 3.0
+ARQ_WINDOW_SIZE = 600
+ARQ_INITIAL_RTO_SECONDS = 1.0
+ARQ_MAX_RTO_SECONDS = 5.0
 ARQ_CONTROL_INITIAL_RTO_SECONDS = 0.5
-ARQ_CONTROL_MAX_RTO_SECONDS = 2.0
-ARQ_MAX_CONTROL_RETRIES = 120
+ARQ_CONTROL_MAX_RTO_SECONDS = 3.0
+ARQ_MAX_CONTROL_RETRIES = 400
 ARQ_INACTIVITY_TIMEOUT_SECONDS = 1800.0
 ARQ_DATA_PACKET_TTL_SECONDS = 2400.0
 ARQ_CONTROL_PACKET_TTL_SECONDS = 1200.0
-ARQ_MAX_DATA_RETRIES = 120
+ARQ_MAX_DATA_RETRIES = 1200
 
 # Maximum out-of-order gap ahead of rcvNxt that can trigger STREAM_DATA_NACK.
 # 0 disables NACK generation entirely.
@@ -302,8 +302,8 @@ ARQ_DATA_NACK_MAX_GAP = 16
 
 # Minimum seconds between repeated NACKs for the same missing sequence number.
 # Clamped to [0.1s, 30s].
-ARQ_DATA_NACK_INITIAL_DELAY_SECONDS = 0.4
-ARQ_DATA_NACK_REPEAT_SECONDS = 0.8
+ARQ_DATA_NACK_INITIAL_DELAY_SECONDS = 0.1
+ARQ_DATA_NACK_REPEAT_SECONDS = 1.0
 
 ARQ_TERMINAL_DRAIN_TIMEOUT_SECONDS = 120.0
 ARQ_TERMINAL_ACK_WAIT_TIMEOUT_SECONDS = 90.0

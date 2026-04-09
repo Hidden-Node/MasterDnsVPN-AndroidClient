@@ -206,7 +206,7 @@ ENCRYPTION_KEY_FILE = "encrypt_key.txt"
 
 # Maximum packable control blocks emitted in one response.
 # The default is already conservative; override only for deliberate batching tests.
-MAX_PACKETS_PER_BATCH = 8
+MAX_PACKETS_PER_BATCH = 5
 
 # Duplicate the last packed control-block response this many dispatcher turns.
 # 1 = disabled.
@@ -220,16 +220,16 @@ STREAM_RESULT_PACKET_TTL_SECONDS = 300.0
 STREAM_FAILURE_PACKET_TTL_SECONDS = 120.0
 
 # ARQ timing / retry profile.
-ARQ_WINDOW_SIZE = 1000
-ARQ_INITIAL_RTO_SECONDS = 0.6
-ARQ_MAX_RTO_SECONDS = 3.0
+ARQ_WINDOW_SIZE = 800
+ARQ_INITIAL_RTO_SECONDS = 1.0
+ARQ_MAX_RTO_SECONDS = 5.0
 ARQ_CONTROL_INITIAL_RTO_SECONDS = 0.5
-ARQ_CONTROL_MAX_RTO_SECONDS = 2.0
-ARQ_MAX_CONTROL_RETRIES = 120
+ARQ_CONTROL_MAX_RTO_SECONDS = 3.0
+ARQ_MAX_CONTROL_RETRIES = 400
 ARQ_INACTIVITY_TIMEOUT_SECONDS = 1800.0
 ARQ_DATA_PACKET_TTL_SECONDS = 2400.0
 ARQ_CONTROL_PACKET_TTL_SECONDS = 1200.0
-ARQ_MAX_DATA_RETRIES = 120
+ARQ_MAX_DATA_RETRIES = 1200
 
 # Maximum out-of-order gap ahead of rcvNxt that can trigger STREAM_DATA_NACK.
 # 0 disables NACK generation entirely.
@@ -238,8 +238,8 @@ ARQ_DATA_NACK_MAX_GAP = 16
 
 # Minimum seconds between repeated NACKs for the same missing sequence number.
 # Clamped to [0.1s, 30s].
-ARQ_DATA_NACK_INITIAL_DELAY_SECONDS = 0.4
-ARQ_DATA_NACK_REPEAT_SECONDS = 0.8
+ARQ_DATA_NACK_INITIAL_DELAY_SECONDS = 0.3
+ARQ_DATA_NACK_REPEAT_SECONDS = 1.0
 
 ARQ_TERMINAL_DRAIN_TIMEOUT_SECONDS = 120.0
 ARQ_TERMINAL_ACK_WAIT_TIMEOUT_SECONDS = 90.0
@@ -255,4 +255,4 @@ LOG_LEVEL = "INFO"
 
 # ------------------------------------------------------------------------------
 
-CONFIG_VERSION = "11"
+CONFIG_VERSION = "12"
