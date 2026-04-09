@@ -55,14 +55,14 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.text.style.TextAlign
-import com.masterdns.vpn.BuildConfig
 import androidx.compose.ui.window.Dialog
 import androidx.core.graphics.drawable.toBitmap
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.masterdns.vpn.R
 import com.masterdns.vpn.util.GlobalSettings
 import kotlinx.coroutines.launch
+import com.masterdns.vpn.BuildConfig
+
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun GlobalSettingsScreen(vm: GlobalSettingsViewModel = viewModel()) {
@@ -78,6 +78,7 @@ fun GlobalSettingsScreen(vm: GlobalSettingsViewModel = viewModel()) {
     val snackbarHostState = remember { SnackbarHostState() }
     val scope = rememberCoroutineScope()
     val uriHandler = LocalUriHandler.current
+
     Scaffold(
         topBar = { TopAppBar(title = { Text("Settings") }) },
         snackbarHost = { SnackbarHost(hostState = snackbarHostState) }
@@ -118,14 +119,17 @@ fun GlobalSettingsScreen(vm: GlobalSettingsViewModel = viewModel()) {
                                             draft = draft.copy(connectionMode = mode)
                                             modeExpanded = false
                                         }
+                                    )
                                 }
                             }
                         }
+
                         RowSwitch(
                             title = "Split Tunneling",
                             checked = draft.splitTunnelingEnabled,
                             onChecked = { draft = draft.copy(splitTunnelingEnabled = it) }
                         )
+
                         if (draft.splitTunnelingEnabled) {
                             Card(
                                 onClick = {
@@ -134,6 +138,7 @@ fun GlobalSettingsScreen(vm: GlobalSettingsViewModel = viewModel()) {
                                     selectedQuery = ""
                                     activeTab = "AVAILABLE"
                                     showAppPicker = true
+                                },
                                 modifier = Modifier.fillMaxWidth()
                             ) {
                                 Column(modifier = Modifier.padding(12.dp)) {
@@ -141,16 +146,25 @@ fun GlobalSettingsScreen(vm: GlobalSettingsViewModel = viewModel()) {
                                     Text(
                                         "${parseCsv(draft.splitPackagesCsv).size} selected apps - tap to choose",
                                         style = MaterialTheme.typography.bodySmall
+                                    )
+                                }
+                            }
+                        }
+
                         Button(
                             onClick = {
                                 vm.save(normalize(draft))
                                 scope.launch { snackbarHostState.showSnackbar("Global settings saved and applied") }
                             },
                             modifier = Modifier.fillMaxWidth()
+                        ) {
                             Text("Save Global Settings")
+                        }
                     }
                 }
             }
+            item {
+                Card(colors = CardDefaults.cardColors()) {
                     Column(
                         modifier = Modifier.padding(12.dp),
                         verticalArrangement = Arrangement.spacedBy(8.dp)
@@ -163,38 +177,84 @@ fun GlobalSettingsScreen(vm: GlobalSettingsViewModel = viewModel()) {
                             title = "Main GitHub:",
                             link = mainGithubLink,
                             onOpen = { uriHandler.openUri("https://$mainGithubLink") }
+                        )
+                        LinkRow(
                             title = "Main Telegram:",
                             link = mainTelegramLink,
                             onOpen = { uriHandler.openUri("https://$mainTelegramLink") }
+                        )
+                        LinkRow(
                             title = "MDV-HN Android Client:",
                             link = androidClientGithubLink,
                             onOpen = { uriHandler.openUri("https://$androidClientGithubLink") }
+                        )
+                    }
+                }
+            }
+            item {
                 val engineVersion = stringResource(R.string.engine_version)
+                Card(colors = CardDefaults.cardColors()) {
+                    Column(
                         modifier = Modifier
                             .fillMaxWidth()
                             .padding(12.dp),
-                        verticalArrangement = Arrangement.spacedBy(4.dp)
+                        verticalArrangement = Arrangement.spacedBy(6.dp)
+                    ) {
                         Text("Version Info", style = MaterialTheme.typography.titleMedium)
                         Row(
                             modifier = Modifier.fillMaxWidth(),
                             horizontalArrangement = Arrangement.SpaceBetween
-                            Text("App Version", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                            Text(BuildConfig.VERSION_NAME, style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.Medium)
-                            Text("Upstream Engine", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                            Text(engineVersion, style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.Medium)
+                        ) {
+                            Text(
+                                "App Version",
+                                style = MaterialTheme.typography.bodyMedium,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                            Text(
+                                BuildConfig.VERSION_NAME,
+                                style = MaterialTheme.typography.bodyMedium,
+                                fontWeight = FontWeight.Medium
+                            )
+                        }
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceBetween
+                        ) {
+                            Text(
+                                "Upstream Engine",
+                                style = MaterialTheme.typography.bodyMedium,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                            Text(
+                                engineVersion,
+                                style = MaterialTheme.typography.bodyMedium,
+                                fontWeight = FontWeight.Medium
+                            )
+                        }
+                    }
+                }
+            }
         }
     }
+
     if (showAppPicker) {
         val selectedApps = installedApps.filter { draftAppSelection.contains(it.packageName) }
         val availableApps = installedApps.filterNot { draftAppSelection.contains(it.packageName) }
+
         val selectedFiltered = selectedApps.filter {
             val q = selectedQuery.trim().lowercase()
             q.isEmpty() ||
                 it.label.lowercase().contains(q) ||
                 it.packageName.lowercase().contains(q)
         }.sortedWith(compareBy({ it.label.lowercase() }, { it.packageName }))
+
         val availableFiltered = availableApps.filter {
             val q = availableQuery.trim().lowercase()
+            q.isEmpty() ||
+                it.label.lowercase().contains(q) ||
+                it.packageName.lowercase().contains(q)
+        }.sortedWith(compareBy({ it.label.lowercase() }, { it.packageName }))
+
         Dialog(onDismissRequest = { showAppPicker = false }) {
             Surface(
                 modifier = Modifier
@@ -215,47 +275,78 @@ fun GlobalSettingsScreen(vm: GlobalSettingsViewModel = viewModel()) {
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f)
                     )
+
                     Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                         FilterChip(
                             selected = activeTab == "SELECTED",
                             onClick = { activeTab = "SELECTED" },
                             label = { Text("Selected ${selectedApps.size}") }
+                        )
+                        FilterChip(
                             selected = activeTab == "AVAILABLE",
                             onClick = { activeTab = "AVAILABLE" },
                             label = { Text("Available ${availableApps.size}") }
+                        )
+                    }
+
                     if (activeTab == "SELECTED") {
                         OutlinedTextField(
                             value = selectedQuery,
                             onValueChange = { selectedQuery = it },
                             label = { Text("Search selected apps") },
+                            modifier = Modifier.fillMaxWidth()
+                        )
                     } else {
+                        OutlinedTextField(
                             value = availableQuery,
                             onValueChange = { availableQuery = it },
                             label = { Text("Search available apps") },
+                            modifier = Modifier.fillMaxWidth()
+                        )
+                    }
+
+                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                         OutlinedButton(
+                            onClick = {
                                 draftAppSelection = draftAppSelection.toMutableSet().apply {
                                     addAll(availableFiltered.map { it.packageName })
+                                }
+                            },
                             modifier = Modifier.weight(1f)
+                        ) {
                             Text("Select Visible")
+                        }
+                        OutlinedButton(
                             onClick = { draftAppSelection = mutableSetOf() },
+                            modifier = Modifier.weight(1f)
+                        ) {
                             Text("Select None")
+                        }
+                    }
+
                     Surface(
                         modifier = Modifier.fillMaxWidth(),
                         shape = RoundedCornerShape(12.dp),
                         color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f)
+                    ) {
                         Column(
                             modifier = Modifier
                                 .fillMaxWidth()
                                 .padding(10.dp)
+                        ) {
                             val appsToShow = if (activeTab == "SELECTED") selectedFiltered else availableFiltered
                             val emptyText = if (activeTab == "SELECTED") {
                                 "No selected app matches your search"
                             } else {
                                 "No available app matches your search"
+                            }
+
                             Text(
                                 if (activeTab == "SELECTED") "Selected Apps" else "Available Apps",
                                 style = MaterialTheme.typography.labelLarge,
                                 color = MaterialTheme.colorScheme.primary
+                            )
+
                             if (appsToShow.isEmpty()) {
                                 Text(
                                     emptyText,
@@ -263,6 +354,7 @@ fun GlobalSettingsScreen(vm: GlobalSettingsViewModel = viewModel()) {
                                     color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f),
                                     modifier = Modifier.padding(top = 8.dp)
                                 )
+                            } else {
                                 LazyColumn(
                                     modifier = Modifier
                                         .fillMaxWidth()
@@ -279,14 +371,34 @@ fun GlobalSettingsScreen(vm: GlobalSettingsViewModel = viewModel()) {
                                             }
                                         )
                                     }
+                                }
+                            }
+                        }
+                    }
+
                     Row(
+                        modifier = Modifier.fillMaxWidth(),
                         horizontalArrangement = Arrangement.End
+                    ) {
                         TextButton(onClick = { showAppPicker = false }) {
                             Text("Cancel")
+                        }
+                        Button(
+                            onClick = {
                                 draft = draft.copy(splitPackagesCsv = draftAppSelection.sorted().joinToString(","))
                                 showAppPicker = false
+                            }
+                        ) {
                             Text("Apply")
+                        }
+                    }
+                }
+            }
+        }
+    }
 }
+
+@Composable
 private fun LinkRow(title: String, link: String, onOpen: () -> Unit) {
     Column(
         modifier = Modifier
@@ -299,6 +411,7 @@ private fun LinkRow(title: String, link: String, onOpen: () -> Unit) {
             style = MaterialTheme.typography.bodyMedium,
             color = MaterialTheme.colorScheme.onSurfaceVariant
         )
+        Text(
             text = link,
             style = MaterialTheme.typography.bodyMedium.copy(
                 textDecoration = TextDecoration.Underline,
@@ -307,6 +420,11 @@ private fun LinkRow(title: String, link: String, onOpen: () -> Unit) {
             color = MaterialTheme.colorScheme.primary,
             maxLines = 3,
             overflow = TextOverflow.Ellipsis
+        )
+    }
+}
+
+@Composable
 private fun AppRow(
     app: GlobalSettingsViewModel.AppEntry,
     checked: Boolean,
@@ -317,14 +435,19 @@ private fun AppRow(
         runCatching {
             context.packageManager.getApplicationIcon(app.packageName).toBitmap(48, 48)
         }.getOrNull()
+    }
     Row(
+        modifier = Modifier
+            .fillMaxWidth()
             .clickable { onToggle() }
             .padding(vertical = 4.dp),
         horizontalArrangement = Arrangement.SpaceBetween,
         verticalAlignment = Alignment.CenterVertically
+    ) {
         Row(
             modifier = Modifier.weight(1f),
             verticalAlignment = Alignment.CenterVertically
+        ) {
             if (appIconBitmap != null) {
                 Image(
                     bitmap = appIconBitmap.asImageBitmap(),
@@ -334,23 +457,41 @@ private fun AppRow(
             } else {
                 Icon(
                     imageVector = Icons.Filled.ArrowDropDown,
+                    contentDescription = null,
+                    modifier = Modifier.size(24.dp)
+                )
+            }
             Spacer(modifier = Modifier.size(8.dp))
             Column {
                 Text(text = app.label)
                 Text(text = app.packageName)
+            }
+        }
         Checkbox(
             checked = checked,
             onCheckedChange = { onToggle() }
+        )
+    }
+}
+
+@Composable
 private fun RowSwitch(title: String, checked: Boolean, onChecked: (Boolean) -> Unit) {
+    Row(
         modifier = Modifier.fillMaxWidth(),
         horizontalArrangement = Arrangement.SpaceBetween
+    ) {
         Text(title)
         Switch(checked = checked, onCheckedChange = onChecked)
+    }
+}
+
 private fun parseCsv(value: String): Set<String> {
     return value.split(",")
         .map { it.trim() }
         .filter { it.isNotBlank() }
         .toSet()
+}
+
 private fun normalize(settings: GlobalSettings): GlobalSettings {
     return settings.copy(
         connectionMode = settings.connectionMode.uppercase(),
@@ -361,3 +502,4 @@ private fun normalize(settings: GlobalSettings): GlobalSettings {
             .distinct()
             .joinToString(",")
     )
+}
