@@ -1,5 +1,7 @@
 package com.masterdns.vpn.ui.logs
 
+import android.content.Intent
+import android.net.Uri
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
@@ -9,10 +11,12 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ArrowBack
 import androidx.compose.material.icons.filled.AutoMode
 import androidx.compose.material.icons.filled.DeleteSweep
+import androidx.compose.material.icons.filled.Share
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
@@ -25,6 +29,19 @@ fun LogsScreen(onBack: () -> Unit) {
     val logs by VpnManager.logs.collectAsState()
     val listState = rememberLazyListState()
     var autoScrollEnabled by remember { mutableStateOf(true) }
+    val context = LocalContext.current
+    val scope = rememberCoroutineScope()
+
+    val shareLogs: () -> Unit = {
+        if (logs.isEmpty()) return
+        val content = logs.joinToString("\n")
+        val intent = Intent(Intent.ACTION_SEND).apply {
+            type = "text/plain"
+            putExtra(Intent.EXTRA_SUBJECT, "MasterDnsVPN Logs")
+            putExtra(Intent.EXTRA_TEXT, content)
+        }
+        context.startActivity(Intent.createChooser(intent, "Share Logs"))
+    }
 
     // Auto-scroll to bottom when new logs arrive
     LaunchedEffect(logs.size) {
@@ -43,6 +60,9 @@ fun LogsScreen(onBack: () -> Unit) {
                     }
                 },
                 actions = {
+                    IconButton(onClick = shareLogs) {
+                        Icon(Icons.Filled.Share, contentDescription = "Share Logs")
+                    }
                     FilledTonalIconButton(onClick = { autoScrollEnabled = !autoScrollEnabled }) {
                         Icon(Icons.Filled.AutoMode, contentDescription = "Auto")
                     }
