@@ -118,9 +118,18 @@ private val configFields = listOf(
         "Resolver",
         "RESOLVER_BALANCING_STRATEGY",
         "RESOLVER_BALANCING_STRATEGY",
-        "1=Random, 2=Round Robin, 3=Least Loss, 4=Lowest Latency, 5=Hybrid Score, 6=Loss Then Latency, 7=Least Loss Top Random, 8=Least Loss Top Round Robin",
+        "Resolver balancing strategy",
         type = FieldType.OPTION,
-        options = listOf("1", "2", "3", "4", "5", "6", "7", "8")
+        options = listOf(
+            "1 - Random",
+            "2 - Round Robin",
+            "3 - Least Loss",
+            "4 - Lowest Latency",
+            "5 - Hybrid Score",
+            "6 - Loss Then Latency",
+            "7 - Least Loss Top Random",
+            "8 - Least Loss Top Round Robin"
+        )
     ),
     SettingField("Resolver", "PACKET_DUPLICATION_COUNT", "PACKET_DUPLICATION_COUNT", "Runtime packet duplication count", keyboardType = KeyboardType.Number),
     SettingField("Resolver", "SETUP_PACKET_DUPLICATION_COUNT", "SETUP_PACKET_DUPLICATION_COUNT", "Setup packet duplication count", keyboardType = KeyboardType.Number),
