@@ -8,6 +8,7 @@
 package config
 
 import (
+	"encoding/base64"
 	"flag"
 	"os"
 	"path/filepath"
@@ -140,5 +141,160 @@ func TestServerConfigEffectiveSizingUsesSmartFloorsAndDerivedCapacities(t *testi
 	}
 	if got := cfg.EffectiveSOCKS5FragmentStoreCapacity(); got < 64 {
 		t.Fatalf("expected derived socks5 fragment store cap, got=%d", got)
+	}
+}
+
+func TestServerConfigClientPolicyLimitsAreSafelyClamped(t *testing.T) {
+	dir := t.TempDir()
+	configPath := filepath.Join(dir, "server_config.toml")
+
+	if err := os.WriteFile(configPath, []byte(`
+PROTOCOL_TYPE = "SOCKS5"
+UDP_PORT = 53
+DOMAIN = ["config.example.com"]
+DATA_ENCRYPTION_METHOD = 1
+SUPPORTED_UPLOAD_COMPRESSION_TYPES = [0, 3]
+SUPPORTED_DOWNLOAD_COMPRESSION_TYPES = [0, 3]
+MAX_ALLOWED_CLIENT_PACKET_DUPLICATION_COUNT = 999
+MAX_ALLOWED_CLIENT_SETUP_PACKET_DUPLICATION_COUNT = 999
+MAX_ALLOWED_CLIENT_ACTIVE_SESSION = 999
+MAX_ALLOWED_CLIENT_ACTIVE_STREAMS_PER_SESSION = 999999
+MAX_ALLOWED_CLIENT_UPLOAD_MTU = 999
+MAX_ALLOWED_CLIENT_DOWNLOAD_MTU = 999999
+MAX_ALLOWED_CLIENT_RX_TX_WORKERS = 999
+MIN_ALLOWED_CLIENT_PING_AGGRESSIVE_INTERVAL_SECONDS = 0.001
+MAX_ALLOWED_CLIENT_PACKETS_PER_BATCH = 999
+MAX_ALLOWED_CLIENT_ARQ_WINDOW_SIZE = 999999
+MAX_ALLOWED_CLIENT_ARQ_DATA_NACK_MAX_GAP = 999
+MIN_ALLOWED_CLIENT_COMPRESSION_MIN_SIZE = 999999
+MIN_ALLOWED_CLIENT_ARQ_INITIAL_RTO_SECONDS = 0.001
+`), 0o644); err != nil {
+		t.Fatalf("WriteFile config failed: %v", err)
+	}
+
+	cfg, err := LoadServerConfig(configPath)
+	if err != nil {
+		t.Fatalf("LoadServerConfig returned error: %v", err)
+	}
+
+	if cfg.ClientMaxPacketDuplicationCount != 15 {
+		t.Fatalf("unexpected packet duplication clamp: got=%d want=%d", cfg.ClientMaxPacketDuplicationCount, 15)
+	}
+	if cfg.ClientMaxSetupDuplicationCount != 15 {
+		t.Fatalf("unexpected setup duplication clamp: got=%d want=%d", cfg.ClientMaxSetupDuplicationCount, 15)
+	}
+	if cfg.MaxAllowedClientActiveSessions != 255 {
+		t.Fatalf("unexpected active session clamp: got=%d want=%d", cfg.MaxAllowedClientActiveSessions, 255)
+	}
+	if cfg.MaxAllowedClientActiveStreams != 65535 {
+		t.Fatalf("unexpected active streams clamp: got=%d want=%d", cfg.MaxAllowedClientActiveStreams, 65535)
+	}
+	if cfg.ClientMaxUploadMTU != 255 {
+		t.Fatalf("unexpected upload mtu clamp: got=%d want=%d", cfg.ClientMaxUploadMTU, 255)
+	}
+	if cfg.ClientMaxDownloadMTU != 65535 {
+		t.Fatalf("unexpected download mtu clamp: got=%d want=%d", cfg.ClientMaxDownloadMTU, 65535)
+	}
+	if cfg.ClientMaxRxTxWorkers != 255 {
+		t.Fatalf("unexpected worker clamp: got=%d want=%d", cfg.ClientMaxRxTxWorkers, 255)
+	}
+	if cfg.ClientMinPingAggressiveInterval != 0.05 {
+		t.Fatalf("unexpected ping interval clamp: got=%f want=%f", cfg.ClientMinPingAggressiveInterval, 0.05)
+	}
+	if cfg.ClientMaxPacketsPerBatch != 255 {
+		t.Fatalf("unexpected packets per batch clamp: got=%d want=%d", cfg.ClientMaxPacketsPerBatch, 255)
+	}
+	if cfg.ClientMaxARQWindowSize != 8000 {
+		t.Fatalf("unexpected arq window clamp: got=%d want=%d", cfg.ClientMaxARQWindowSize, 8000)
+	}
+	if cfg.ClientMaxARQDataNackMaxGap != 255 {
+		t.Fatalf("unexpected arq nack gap clamp: got=%d want=%d", cfg.ClientMaxARQDataNackMaxGap, 255)
+	}
+	if cfg.ClientMinCompressionMinSize != 65535 {
+		t.Fatalf("unexpected compression min size clamp: got=%d want=%d", cfg.ClientMinCompressionMinSize, 65535)
+	}
+	if cfg.ClientMinARQInitialRTOSeconds != 0.05 {
+		t.Fatalf("unexpected arq initial rto clamp: got=%f want=%f", cfg.ClientMinARQInitialRTOSeconds, 0.05)
+	}
+}
+
+func TestLoadServerConfigFallsBackToJSONWhenTOMLIsMissing(t *testing.T) {
+	dir := t.TempDir()
+
+	configPath := filepath.Join(dir, "server_config.toml")
+	jsonPath := filepath.Join(dir, "server_config.json")
+
+	if err := os.WriteFile(jsonPath, []byte(`{
+  "PROTOCOL_TYPE": "SOCKS5",
+  "UDP_PORT": 5300,
+  "DOMAIN": ["json.example.com"],
+  "DATA_ENCRYPTION_METHOD": 1,
+  "SUPPORTED_UPLOAD_COMPRESSION_TYPES": [0, 3],
+  "SUPPORTED_DOWNLOAD_COMPRESSION_TYPES": [0, 3]
+}`), 0o644); err != nil {
+		t.Fatalf("WriteFile JSON config failed: %v", err)
+	}
+
+	cfg, err := LoadServerConfig(configPath)
+	if err != nil {
+		t.Fatalf("LoadServerConfig returned error: %v", err)
+	}
+
+	if cfg.ConfigPath != jsonPath {
+		t.Fatalf("expected JSON fallback path: got=%q want=%q", cfg.ConfigPath, jsonPath)
+	}
+	if cfg.UDPPort != 5300 {
+		t.Fatalf("unexpected JSON UDP port: got=%d want=%d", cfg.UDPPort, 5300)
+	}
+}
+
+func TestLoadServerConfigFromJSONBase64AppliesDefaults(t *testing.T) {
+	rawJSON := `{
+  "PROTOCOL_TYPE": "SOCKS5",
+  "UDP_PORT": 5301,
+  "DOMAIN": ["base64.example.com"],
+  "DATA_ENCRYPTION_METHOD": 1,
+  "SUPPORTED_UPLOAD_COMPRESSION_TYPES": [0, 3],
+  "SUPPORTED_DOWNLOAD_COMPRESSION_TYPES": [0, 3]
+}`
+	encoded := base64.StdEncoding.EncodeToString([]byte(rawJSON))
+
+	cfg, err := LoadServerConfigFromJSONBase64(encoded)
+	if err != nil {
+		t.Fatalf("LoadServerConfigFromJSONBase64 returned error: %v", err)
+	}
+
+	if cfg.ConfigPath != "<json_base64>" {
+		t.Fatalf("unexpected config path: got=%q want=%q", cfg.ConfigPath, "<json_base64>")
+	}
+	if cfg.UDPPort != 5301 {
+		t.Fatalf("unexpected JSON base64 UDP port: got=%d want=%d", cfg.UDPPort, 5301)
+	}
+	if cfg.MaxPacketsPerBatch != defaultServerConfig().MaxPacketsPerBatch {
+		t.Fatalf("expected default max packets per batch to apply: got=%d want=%d", cfg.MaxPacketsPerBatch, defaultServerConfig().MaxPacketsPerBatch)
+	}
+}
+
+func TestLoadServerConfigFromJSONBase64WithOverridesAppliesBeforeFinalize(t *testing.T) {
+	rawJSON := `{
+  "PROTOCOL_TYPE": "SOCKS5",
+  "UDP_PORT": 5301,
+  "DATA_ENCRYPTION_METHOD": 1,
+  "SUPPORTED_UPLOAD_COMPRESSION_TYPES": [0, 3],
+  "SUPPORTED_DOWNLOAD_COMPRESSION_TYPES": [0, 3]
+}`
+	encoded := base64.StdEncoding.EncodeToString([]byte(rawJSON))
+
+	cfg, err := LoadServerConfigFromJSONBase64WithOverrides(encoded, ServerConfigOverrides{
+		Values: map[string]any{
+			"Domain": []string{"override.example.com"},
+		},
+	})
+	if err != nil {
+		t.Fatalf("LoadServerConfigFromJSONBase64WithOverrides returned error: %v", err)
+	}
+
+	if len(cfg.Domain) != 1 || cfg.Domain[0] != "override.example.com" {
+		t.Fatalf("unexpected override domain: %+v", cfg.Domain)
 	}
 }

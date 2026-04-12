@@ -245,6 +245,59 @@ ARQ_TERMINAL_DRAIN_TIMEOUT_SECONDS = 120.0
 ARQ_TERMINAL_ACK_WAIT_TIMEOUT_SECONDS = 90.0
 
 # ------------------------------------------------------------------------------
+# 8.0) Server-Side Session/Stream Limits
+# What this section does:
+# - Limits how many active sessions can exist at once on the server.
+# - Limits how many active non-control streams each session can open.
+# - These are enforced fully on the server and are not sent to the client
+#   during SESSION_ACCEPT.
+# ------------------------------------------------------------------------------
+
+MAX_ALLOWED_CLIENT_ACTIVE_SESSION = 255
+MAX_ALLOWED_CLIENT_ACTIVE_STREAMS_PER_SESSION = 2000
+
+# ------------------------------------------------------------------------------
+# 8.1) Client Policy Sync Limits
+# What this section does:
+# - Defines server-side limits/minimums that can later be sent to the client
+#   during SESSION_INIT/SESSION_ACCEPT synchronization.
+# - Values are clamped safely on load so they always fit into the intended
+#   on-wire integer size.
+# ------------------------------------------------------------------------------
+
+# Packed in one byte later (low nibble / high nibble), so each side is clamped
+# to 0..15.
+MAX_ALLOWED_CLIENT_PACKET_DUPLICATION_COUNT = 5
+MAX_ALLOWED_CLIENT_SETUP_PACKET_DUPLICATION_COUNT = 6
+
+# Fits in uint8.
+MAX_ALLOWED_CLIENT_UPLOAD_MTU = 150
+
+# Fits in uint16.
+MAX_ALLOWED_CLIENT_DOWNLOAD_MTU = 4096
+
+# Fits in uint8.
+MAX_ALLOWED_CLIENT_RX_TX_WORKERS = 255
+
+# Stored later as a scaled integer on wire. Allowed range here is 0.05..1.00.
+MIN_ALLOWED_CLIENT_PING_AGGRESSIVE_INTERVAL_SECONDS = 0.05
+
+# Fits in uint8.
+MAX_ALLOWED_CLIENT_PACKETS_PER_BATCH = 20
+
+# Fits in uint16 and also clamped to the current product policy ceiling.
+MAX_ALLOWED_CLIENT_ARQ_WINDOW_SIZE = 8000
+
+# Fits in uint8.
+MAX_ALLOWED_CLIENT_ARQ_DATA_NACK_MAX_GAP = 255
+
+# Fits in uint16.
+MIN_ALLOWED_CLIENT_COMPRESSION_MIN_SIZE = 120
+
+# Stored later as a scaled integer on wire. Allowed range here is 0.05..1.00.
+MIN_ALLOWED_CLIENT_ARQ_INITIAL_RTO_SECONDS = 0.05
+
+# ------------------------------------------------------------------------------
 # 9) Logging
 # What this section does:
 # - Controls server logger verbosity.

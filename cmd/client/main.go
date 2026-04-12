@@ -12,6 +12,7 @@ import (
 	"context"
 	"flag"
 	"fmt"
+	"io"
 	"os"
 	"os/signal"
 	"path/filepath"
@@ -48,73 +49,152 @@ func printClientUsage(fs *flag.FlagSet) {
 	fs.PrintDefaults()
 }
 
-func main() {
-	flag.CommandLine.SetOutput(os.Stdout)
-	flag.Usage = func() {
-		printClientUsage(flag.CommandLine)
+type clientCLIOptions struct {
+	configPath    string
+	jsonPath      string
+	jsonBase64    string
+	logPath       string
+	resolversPath string
+	showVersion   bool
+	showHelp      bool
+	domainsShort  string
+	keyShort      string
+}
+
+func newClientFlagSet(output io.Writer) (*flag.FlagSet, *clientCLIOptions, *config.ClientConfigFlagBinder, error) {
+	fs := flag.NewFlagSet("masterdnsvpn-client", flag.ContinueOnError)
+	fs.SetOutput(output)
+
+	opts := &clientCLIOptions{}
+	fs.Usage = func() {
+		printClientUsage(fs)
 	}
 
-	var configPath string
-	flag.StringVar(&configPath, "config", "client_config.toml", "Path to client configuration file")
-	flag.StringVar(&configPath, "c", "client_config.toml", "Alias for -config")
+	fs.StringVar(&opts.configPath, "config", "client_config.toml", "Path to client configuration file")
+	fs.StringVar(&opts.configPath, "c", "client_config.toml", "Alias for -config")
+	fs.StringVar(&opts.jsonPath, "json", "", "Path to client JSON configuration file")
+	fs.StringVar(&opts.jsonPath, "j", "", "Alias for -json")
+	fs.StringVar(&opts.jsonBase64, "json_base64", "", "Load client JSON configuration from base64")
+	fs.StringVar(&opts.jsonBase64, "json-base64", "", "Alias for -json_base64")
 
-	var logPath string
-	flag.StringVar(&logPath, "log", "", "Path to log file (optional)")
-	flag.StringVar(&logPath, "l", "", "Alias for -log")
+	fs.StringVar(&opts.logPath, "log", "", "Path to log file (optional)")
+	fs.StringVar(&opts.logPath, "l", "", "Alias for -log")
 
-	var resolversPath string
-	flag.StringVar(&resolversPath, "resolvers", "", "Path to resolver file override (optional)")
-	flag.StringVar(&resolversPath, "r", "", "Alias for -resolvers")
+	fs.StringVar(&opts.resolversPath, "resolvers", "", "Path to resolver file override (optional)")
+	fs.StringVar(&opts.resolversPath, "r", "", "Alias for -resolvers")
 
-	var showVersion bool
-	flag.BoolVar(&showVersion, "version", false, "Print version and exit")
-	flag.BoolVar(&showVersion, "v", false, "Alias for -version")
+	fs.BoolVar(&opts.showVersion, "version", false, "Print version and exit")
+	fs.BoolVar(&opts.showVersion, "v", false, "Alias for -version")
 
-	var showHelp bool
-	flag.BoolVar(&showHelp, "help", false, "Show help and exit")
-	flag.BoolVar(&showHelp, "h", false, "Alias for -help")
+	fs.BoolVar(&opts.showHelp, "help", false, "Show help and exit")
+	fs.BoolVar(&opts.showHelp, "h", false, "Alias for -help")
 
-	domainsShort := flag.String("d", "", "Alias for -domains (comma separated)")
-	keyShort := flag.String("k", "", "Alias for -encryption-key")
-	
-	configFlags, err := config.NewClientConfigFlagBinder(flag.CommandLine)
+	fs.StringVar(&opts.domainsShort, "d", "", "Alias for -domains (comma separated)")
+	fs.StringVar(&opts.keyShort, "k", "", "Alias for -encryption-key")
+	fs.StringVar(&opts.keyShort, "key", "", "Compatibility alias for -encryption-key")
+
+	configFlags, err := config.NewClientConfigFlagBinder(fs)
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "Client flag setup failed: %v\n", err)
+		return nil, nil, nil, err
+	}
+
+	return fs, opts, configFlags, nil
+}
+
+func parseClientCLIArgs(args []string, output io.Writer) (*clientCLIOptions, config.ClientConfigOverrides, error) {
+	fs, opts, configFlags, err := newClientFlagSet(output)
+	if err != nil {
+		return nil, config.ClientConfigOverrides{}, err
+	}
+	if err := fs.Parse(args); err != nil {
+		return nil, config.ClientConfigOverrides{}, err
+	}
+
+	if opts.showHelp {
+		return opts, configFlags.Overrides(), nil
+	}
+
+	overrides := configFlags.Overrides()
+	if opts.jsonPath != "" && opts.jsonBase64 != "" {
+		return nil, config.ClientConfigOverrides{}, fmt.Errorf("only one of -json and -json_base64 can be used")
+	}
+	if opts.resolversPath != "" {
+		resolvedResolversPath := runtimepath.Resolve(opts.resolversPath)
+		overrides.ResolversFilePath = &resolvedResolversPath
+	}
+	if opts.domainsShort != "" {
+		overrides.Values["Domains"] = strings.Split(opts.domainsShort, ",")
+	}
+	if opts.keyShort != "" {
+		overrides.Values["EncryptionKey"] = opts.keyShort
+	}
+
+	switch fs.NArg() {
+	case 0:
+	case 1:
+		if opts.jsonPath == "" && opts.jsonBase64 == "" && (opts.configPath == "" || opts.configPath == "client_config.toml") {
+			opts.configPath = fs.Arg(0)
+		} else {
+			return nil, config.ClientConfigOverrides{}, fmt.Errorf("unexpected positional arguments: %v", fs.Args())
+		}
+	case 2:
+		if opts.jsonPath == "" && opts.jsonBase64 == "" && (opts.configPath == "" || opts.configPath == "client_config.toml") && opts.resolversPath == "" {
+			opts.configPath = fs.Arg(0)
+			resolvedResolversPath := runtimepath.Resolve(fs.Arg(1))
+			overrides.ResolversFilePath = &resolvedResolversPath
+		} else {
+			return nil, config.ClientConfigOverrides{}, fmt.Errorf("unexpected positional arguments: %v", fs.Args())
+		}
+	default:
+		return nil, config.ClientConfigOverrides{}, fmt.Errorf("unexpected positional arguments: %v", fs.Args())
+	}
+
+	return opts, overrides, nil
+}
+
+func main() {
+	opts, overrides, err := parseClientCLIArgs(os.Args[1:], os.Stdout)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "%v\n\n", err)
+		fs, _, _, fsErr := newClientFlagSet(os.Stdout)
+		if fsErr == nil {
+			fs.Usage()
+		}
 		os.Exit(2)
 	}
-	flag.Parse()
 
-	if showHelp {
-		flag.Usage()
+	if opts.showHelp {
+		fs, _, _, err := newClientFlagSet(os.Stdout)
+		if err == nil {
+			fs.Usage()
+		}
 		return
 	}
 
-	if flag.NArg() > 0 {
-		fmt.Fprintf(os.Stderr, "Unexpected positional arguments: %v\n\n", flag.Args())
-		flag.Usage()
-		os.Exit(2)
-	}
-
-	if showVersion {
+	if opts.showVersion {
 		fmt.Printf("MasterDnsVPN Client Version: %s\n", version.GetVersion())
 		return
 	}
 
-	resolvedConfigPath := runtimepath.Resolve(configPath)
-	overrides := configFlags.Overrides()
-	if resolversPath != "" {
-		resolvedResolversPath := runtimepath.Resolve(resolversPath)
-		overrides.ResolversFilePath = &resolvedResolversPath
-	}
-	
-	if *domainsShort != "" {
-		overrides.Values["Domains"] = strings.Split(*domainsShort, ",")
-	}
-	if *keyShort != "" {
-		overrides.Values["EncryptionKey"] = *keyShort
-	}
+	resolvedConfigPath := runtimepath.Resolve(opts.configPath)
 
-	app, err := client.Bootstrap(resolvedConfigPath, logPath, overrides)
+	var app *client.Client
+	switch {
+	case opts.jsonBase64 != "":
+		cfg, err := config.LoadClientConfigFromJSONBase64WithOverrides(opts.jsonBase64, overrides)
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "Client startup failed: %v\n", err)
+			waitForExitInput()
+			os.Exit(1)
+		}
+		app, err = client.BootstrapLoadedConfig(cfg, opts.logPath)
+		resolvedConfigPath = cfg.ConfigPath
+	case opts.jsonPath != "":
+		app, err = client.Bootstrap(runtimepath.Resolve(opts.jsonPath), opts.logPath, overrides)
+		resolvedConfigPath = runtimepath.Resolve(opts.jsonPath)
+	default:
+		app, err = client.Bootstrap(resolvedConfigPath, opts.logPath, overrides)
+	}
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "Client startup failed: %v\n", err)
 		waitForExitInput()

@@ -118,8 +118,9 @@ private val configFields = listOf(
         "Resolver",
         "RESOLVER_BALANCING_STRATEGY",
         "RESOLVER_BALANCING_STRATEGY",
-        "1=Random, 2=Round Robin, 3=Least Loss, 4=Lowest Latency",
-        keyboardType = KeyboardType.Number
+        "1=Random, 2=Round Robin, 3=Least Loss, 4=Lowest Latency, 5=Hybrid Score, 6=Loss Then Latency, 7=Least Loss Top Random, 8=Least Loss Top Round Robin",
+        type = FieldType.OPTION,
+        options = listOf("1", "2", "3", "4", "5", "6", "7", "8")
     ),
     SettingField("Resolver", "PACKET_DUPLICATION_COUNT", "PACKET_DUPLICATION_COUNT", "Runtime packet duplication count", keyboardType = KeyboardType.Number),
     SettingField("Resolver", "SETUP_PACKET_DUPLICATION_COUNT", "SETUP_PACKET_DUPLICATION_COUNT", "Setup packet duplication count", keyboardType = KeyboardType.Number),
@@ -580,7 +581,7 @@ private fun defaultValuesFor(profile: ProfileEntity): Map<String, String> {
         put("SOCKS5_PASS", adv("SOCKS5_PASS", "master_dns_vpn"))
         put("LOCAL_DNS_ENABLED", adv("LOCAL_DNS_ENABLED", "false"))
         put("LOCAL_DNS_IP", adv("LOCAL_DNS_IP", "127.0.0.1"))
-        put("LOCAL_DNS_PORT", adv("LOCAL_DNS_PORT", "53"))
+        put("LOCAL_DNS_PORT", adv("LOCAL_DNS_PORT", "5353"))
         put("LOCAL_DNS_CACHE_MAX_RECORDS", adv("LOCAL_DNS_CACHE_MAX_RECORDS", "10000"))
         put("LOCAL_DNS_CACHE_TTL_SECONDS", adv("LOCAL_DNS_CACHE_TTL_SECONDS", "14400.0"))
         put("LOCAL_DNS_PENDING_TIMEOUT_SECONDS", adv("LOCAL_DNS_PENDING_TIMEOUT_SECONDS", "300.0"))
@@ -608,10 +609,10 @@ private fun defaultValuesFor(profile: ProfileEntity): Map<String, String> {
         put("MTU_TEST_PARALLELISM", adv("MTU_TEST_PARALLELISM", "16"))
         put("SAVE_MTU_SERVERS_TO_FILE", adv("SAVE_MTU_SERVERS_TO_FILE", "false"))
         put("MTU_SERVERS_FILE_NAME", adv("MTU_SERVERS_FILE_NAME", "masterdnsvpn_success_test_{time}.log"))
-        put("MTU_SERVERS_FILE_FORMAT", adv("MTU_SERVERS_FILE_FORMAT", "{IP} - UP: {UP_MTU} DOWN: {DOWN-MTU}"))
+        put("MTU_SERVERS_FILE_FORMAT", adv("MTU_SERVERS_FILE_FORMAT", "{IP} ({DOMAIN}) - UP: {UP_MTU} DOWN: {DOWN-MTU}"))
         put("MTU_USING_SECTION_SEPARATOR_TEXT", adv("MTU_USING_SECTION_SEPARATOR_TEXT", ""))
-        put("MTU_REMOVED_SERVER_LOG_FORMAT", adv("MTU_REMOVED_SERVER_LOG_FORMAT", "Resolver {IP} removed at {TIME} due to {CAUSE}"))
-        put("MTU_ADDED_SERVER_LOG_FORMAT", adv("MTU_ADDED_SERVER_LOG_FORMAT", "Resolver {IP} added back at {TIME} (UP {UP_MTU}, DOWN {DOWN_MTU})"))
+        put("MTU_REMOVED_SERVER_LOG_FORMAT", adv("MTU_REMOVED_SERVER_LOG_FORMAT", "Resolver {IP} ({DOMAIN}) removed at {TIME} due to {CAUSE}"))
+        put("MTU_ADDED_SERVER_LOG_FORMAT", adv("MTU_ADDED_SERVER_LOG_FORMAT", "Resolver {IP} ({DOMAIN}) added back at {TIME} (UP {UP_MTU}, DOWN {DOWN_MTU})"))
         put("MTU_EXPORT_URI", adv("MTU_EXPORT_URI", ""))
         put("RX_TX_WORKERS", adv("RX_TX_WORKERS", "4"))
         put("TUNNEL_PROCESS_WORKERS", adv("TUNNEL_PROCESS_WORKERS", "6"))

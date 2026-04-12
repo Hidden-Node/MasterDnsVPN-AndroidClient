@@ -756,8 +756,8 @@ func TestSweepRecentlyClosedStreamsPrunesExpiredEntries(t *testing.T) {
 	sessions := newSessionStore(8, 32)
 	record := newTestSessionRecord(23)
 	record.RecentlyClosedTTL = 10 * time.Minute
-	record.RecentlyClosed[5] = recentlyClosedStreamRecord{ClosedAt: time.Now().Add(-11 * time.Minute)}
-	record.RecentlyClosed[6] = recentlyClosedStreamRecord{ClosedAt: time.Now().Add(-2 * time.Minute)}
+	record.noteStreamClosed(5, time.Now().Add(-11*time.Minute), false)
+	record.noteStreamClosed(6, time.Now().Add(-2*time.Minute), false)
 	sessions.byID[record.ID] = record
 
 	sessions.SweepRecentlyClosedStreams(time.Now())

@@ -112,7 +112,11 @@ LOCAL_DNS_CACHE_FLUSH_INTERVAL_SECONDS = 60.0
 # 2 = Round Robin
 # 3 = Least Loss
 # 4 = Lowest Latency
-# Modes 3 and 4 use runtime feedback from sends/successes.
+# 5 = Hybrid Score (loss-first + latency-aware)
+# 6 = Loss Then Latency (loss shortlist, then latency, then rotate among near-top)
+# 7 = Least Loss Top Random (random choice inside the best 10% loss tier)
+# 8 = Least Loss Top Round Robin (round-robin inside the best 10% loss tier)
+# Modes 3, 4, 5, 6, 7, and 8 use runtime feedback from sends/successes.
 RESOLVER_BALANCING_STRATEGY = 2
 
 # Duplicate each normal outgoing tunnel packet this many times.
@@ -198,10 +202,10 @@ SAVE_MTU_SERVERS_TO_FILE = false
 # Supported placeholders depend on the logger path:
 # {time}, {IP}, {UP_MTU}, {DOWN_MTU}, {DOWN-MTU}, {CAUSE}, {TIME}
 MTU_SERVERS_FILE_NAME = "masterdnsvpn_success_test_{time}.log"
-MTU_SERVERS_FILE_FORMAT = "{IP} - UP: {UP_MTU} DOWN: {DOWN-MTU}"
+MTU_SERVERS_FILE_FORMAT = "{IP} ({DOMAIN}) - UP: {UP_MTU} DOWN: {DOWN-MTU}"
 MTU_USING_SECTION_SEPARATOR_TEXT = ""
-MTU_REMOVED_SERVER_LOG_FORMAT = "Resolver {IP} removed at {TIME} due to {CAUSE}"
-MTU_ADDED_SERVER_LOG_FORMAT = "Resolver {IP} added back at {TIME} (UP {UP_MTU}, DOWN {DOWN_MTU})"
+MTU_REMOVED_SERVER_LOG_FORMAT = "Resolver {IP} ({DOMAIN}) removed at {TIME} due to {CAUSE}"
+MTU_ADDED_SERVER_LOG_FORMAT = "Resolver {IP} ({DOMAIN}) added back at {TIME} (UP {UP_MTU}, DOWN {DOWN_MTU})"
 
 # ------------------------------------------------------------------------------
 # 7) Runtime Workers, Queues, and Timers

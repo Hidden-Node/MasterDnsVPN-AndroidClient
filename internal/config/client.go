@@ -28,6 +28,7 @@ type ClientConfig struct {
 	ConfigPath                            string            `toml:"-"`
 	ResolversFilePath                     string            `toml:"-"`
 	explicitRX_TX_Workers                 bool              `toml:"-"`
+	explicitTunnelProcessWorkers          bool              `toml:"-"`
 	ProtocolType                          string            `toml:"PROTOCOL_TYPE"`
 	Domains                               []string          `toml:"DOMAINS"`
 	ListenIP                              string            `toml:"LISTEN_IP"`
@@ -138,45 +139,45 @@ func defaultClientConfig() ClientConfig {
 		LocalDNSEnabled:                       false,
 		LocalDNSIP:                            "127.0.0.1",
 		LocalDNSPort:                          53,
-		LocalDNSCacheMaxRecords:               5000,
-		LocalDNSCacheTTLSeconds:               28800.0,
+		LocalDNSCacheMaxRecords:               10000,
+		LocalDNSCacheTTLSeconds:               14400.0,
 		LocalDNSPendingTimeoutSec:             300.0,
 		LocalDNSCachePersist:                  true,
 		LocalDNSCacheFlushSec:                 60.0,
-		ResolverBalancingStrategy:             0,
-		PacketDuplicationCount:                5,
-		SetupPacketDuplicationCount:           5,
+		ResolverBalancingStrategy:             2,
+		PacketDuplicationCount:                2,
+		SetupPacketDuplicationCount:           2,
 		StreamResolverFailoverResendThreshold: 2,
-		StreamResolverFailoverCooldownSec:     1.0,
+		StreamResolverFailoverCooldownSec:     2.5,
 		RecheckInactiveServersEnabled:         true,
 		AutoDisableTimeoutServers:             true,
-		AutoDisableTimeoutWindowSeconds:       180.0,
+		AutoDisableTimeoutWindowSeconds:       30.0,
 		BaseEncodeData:                        false,
 		UploadCompressionType:                 compression.TypeOff,
 		DownloadCompressionType:               compression.TypeOff,
 		CompressionMinSize:                    compression.DefaultMinSize,
 		DataEncryptionMethod:                  1,
 		EncryptionKey:                         "",
-		MinUploadMTU:                          40,
+		MinUploadMTU:                          38,
 		MinDownloadMTU:                        100,
-		MaxUploadMTU:                          64,
-		MaxDownloadMTU:                        140,
+		MaxUploadMTU:                          150,
+		MaxDownloadMTU:                        500,
 		MTUTestRetries:                        2,
-		MTUTestTimeout:                        4.0,
+		MTUTestTimeout:                        2.0,
 		MTUTestParallelism:                    16,
-		RX_TX_Workers:                         6,
-		TunnelProcessWorkers:                  4,
-		TunnelPacketTimeoutSec:                8.0,
+		RX_TX_Workers:                         4,
+		TunnelProcessWorkers:                  0,
+		TunnelPacketTimeoutSec:                10.0,
 		DispatcherIdlePollIntervalSeconds:     0.020,
-		PingAggressiveIntervalSeconds:         0.300,
-		PingLazyIntervalSeconds:               1.0,
-		PingCooldownIntervalSeconds:           3.0,
-		PingColdIntervalSeconds:               30.0,
-		PingWarmThresholdSeconds:              5.0,
-		PingCoolThresholdSeconds:              10.0,
-		PingColdThresholdSeconds:              20.0,
+		PingAggressiveIntervalSeconds:         0.100,
+		PingLazyIntervalSeconds:               0.750,
+		PingCooldownIntervalSeconds:           2.0,
+		PingColdIntervalSeconds:               15.0,
+		PingWarmThresholdSeconds:              8.0,
+		PingCoolThresholdSeconds:              20.0,
+		PingColdThresholdSeconds:              30.0,
 		RXChannelSize:                         4096,
-		DNSResponseFragmentTimeoutSeconds:     10.0,
+		DNSResponseFragmentTimeoutSeconds:     60.0,
 		SOCKSUDPAssociateReadTimeoutSeconds:   30.0,
 		ClientTerminalStreamRetentionSeconds:  45.0,
 		ClientCancelledSetupRetentionSeconds:  120.0,
@@ -188,27 +189,27 @@ func defaultClientConfig() ClientConfig {
 		SessionInitRacingCount:                3,
 		SaveMTUServersToFile:                  false,
 		MTUServersFileName:                    "masterdnsvpn_success_test_{time}.log",
-		MTUServersFileFormat:                  "{IP} - UP: {UP_MTU} DOWN: {DOWN-MTU}",
+		MTUServersFileFormat:                  "{IP} ({DOMAIN}) - UP: {UP_MTU} DOWN: {DOWN-MTU}",
 		MTUUsingSeparatorText:                 "",
-		MTURemovedServerLogFormat:             "Resolver {IP} removed at {TIME} due to {CAUSE}",
-		MTUAddedServerLogFormat:               "Resolver {IP} added back at {TIME} (UP {UP_MTU}, DOWN {DOWN_MTU})",
+		MTURemovedServerLogFormat:             "Resolver {IP} ({DOMAIN}) removed at {TIME} due to {CAUSE}",
+		MTUAddedServerLogFormat:               "Resolver {IP} ({DOMAIN}) added back at {TIME} (UP {UP_MTU}, DOWN {DOWN_MTU})",
 		LogLevel:                              "INFO",
 		MaxPacketsPerBatch:                    8,
-		ARQWindowSize:                         2000,
+		ARQWindowSize:                         600,
 		ARQInitialRTOSeconds:                  1.0,
-		ARQMaxRTOSeconds:                      8.0,
-		ARQControlInitialRTOSeconds:           1.0,
-		ARQControlMaxRTOSeconds:               8.0,
-		ARQMaxControlRetries:                  80,
+		ARQMaxRTOSeconds:                      5.0,
+		ARQControlInitialRTOSeconds:           0.5,
+		ARQControlMaxRTOSeconds:               3.0,
+		ARQMaxControlRetries:                  400,
 		ARQInactivityTimeoutSeconds:           1800.0,
-		ARQDataPacketTTLSeconds:               1800.0,
-		ARQControlPacketTTLSeconds:            900.0,
-		ARQMaxDataRetries:                     800,
-		ARQDataNackMaxGap:                     0,
-		ARQDataNackInitialDelaySeconds:        0.4,
+		ARQDataPacketTTLSeconds:               2400.0,
+		ARQControlPacketTTLSeconds:            1200.0,
+		ARQMaxDataRetries:                     1200,
+		ARQDataNackMaxGap:                     16,
+		ARQDataNackInitialDelaySeconds:        0.1,
 		ARQDataNackRepeatSeconds:              1.0,
-		ARQTerminalDrainTimeoutSec:            90.0,
-		ARQTerminalAckWaitTimeoutSec:          60.0,
+		ARQTerminalDrainTimeoutSec:            120.0,
+		ARQTerminalAckWaitTimeoutSec:          90.0,
 	}
 }
 
@@ -222,24 +223,62 @@ func LoadClientConfig(filename string) (ClientConfig, error) {
 
 func loadClientConfigFile(filename string) (ClientConfig, error) {
 	cfg := defaultClientConfig()
-	path, err := filepath.Abs(filename)
+	path, format, err := resolveConfigPathWithJSONFallback(filename)
 	if err != nil {
 		return cfg, err
-	}
-
-	if _, err := os.Stat(path); err != nil {
-		return cfg, fmt.Errorf("config file not found: %s", path)
-	}
-
-	meta, err := toml.DecodeFile(path, &cfg)
-	if err != nil {
-		return cfg, fmt.Errorf("parse TOML failed for %s: %w", path, err)
 	}
 
 	cfg.ConfigPath = path
 	cfg.ConfigDir = filepath.Dir(path)
 	cfg.ResolversFilePath = ""
-	cfg.explicitRX_TX_Workers = meta.IsDefined("RX_TX_WORKERS")
+
+	switch format {
+	case configSourceJSON:
+		raw, err := os.ReadFile(path)
+		if err != nil {
+			return cfg, err
+		}
+		defined, err := decodeConfigJSONInto(&cfg, raw)
+		if err != nil {
+			return cfg, fmt.Errorf("parse JSON failed for %s: %w", path, err)
+		}
+		cfg.explicitRX_TX_Workers = defined["RX_TX_Workers"]
+		cfg.explicitTunnelProcessWorkers = defined["TunnelProcessWorkers"]
+	default:
+		meta, err := toml.DecodeFile(path, &cfg)
+		if err != nil {
+			return cfg, fmt.Errorf("parse TOML failed for %s: %w", path, err)
+		}
+		cfg.explicitRX_TX_Workers = meta.IsDefined("RX_TX_WORKERS")
+		cfg.explicitTunnelProcessWorkers = meta.IsDefined("TUNNEL_PROCESS_WORKERS")
+	}
+
+	return cfg, nil
+}
+
+func LoadClientConfigFromJSONBase64(encoded string) (ClientConfig, error) {
+	cfg, err := loadClientConfigFromJSONBase64(encoded)
+	if err != nil {
+		return cfg, err
+	}
+	return finalizeClientConfig(cfg)
+}
+
+func loadClientConfigFromJSONBase64(encoded string) (ClientConfig, error) {
+	cfg := defaultClientConfig()
+	raw, err := decodeBase64ConfigJSON(encoded)
+	if err != nil {
+		return cfg, fmt.Errorf("decode client JSON base64 failed: %w", err)
+	}
+	defined, err := decodeConfigJSONInto(&cfg, raw)
+	if err != nil {
+		return cfg, fmt.Errorf("parse client JSON base64 failed: %w", err)
+	}
+	cfg.ConfigDir = currentWorkingConfigDir()
+	cfg.ConfigPath = "<json_base64>"
+	cfg.ResolversFilePath = ""
+	cfg.explicitRX_TX_Workers = defined["RX_TX_Workers"]
+	cfg.explicitTunnelProcessWorkers = defined["TunnelProcessWorkers"]
 	return cfg, nil
 }
 
@@ -255,6 +294,30 @@ func LoadClientConfigWithOverrides(filename string, overrides ClientConfigOverri
 	if len(overrides.Values) > 0 {
 		if err := applyClientConfigOverrideValues(&cfg, overrides.Values); err != nil {
 			return cfg, err
+		}
+		if _, ok := overrides.Values["TunnelProcessWorkers"]; ok {
+			cfg.explicitTunnelProcessWorkers = true
+		}
+	}
+
+	return finalizeClientConfig(cfg)
+}
+
+func LoadClientConfigFromJSONBase64WithOverrides(encoded string, overrides ClientConfigOverrides) (ClientConfig, error) {
+	cfg, err := loadClientConfigFromJSONBase64(encoded)
+	if err != nil {
+		return cfg, err
+	}
+
+	if overrides.ResolversFilePath != nil {
+		cfg.ResolversFilePath = strings.TrimSpace(*overrides.ResolversFilePath)
+	}
+	if len(overrides.Values) > 0 {
+		if err := applyClientConfigOverrideValues(&cfg, overrides.Values); err != nil {
+			return cfg, err
+		}
+		if _, ok := overrides.Values["TunnelProcessWorkers"]; ok {
+			cfg.explicitTunnelProcessWorkers = true
 		}
 	}
 
@@ -304,9 +367,9 @@ func finalizeClientConfig(cfg ClientConfig) (ClientConfig, error) {
 		return cfg, fmt.Errorf("invalid LOCAL_DNS_PORT: %d", cfg.LocalDNSPort)
 	}
 
-	cfg.LocalDNSCacheMaxRecords = defaultIntBelow(cfg.LocalDNSCacheMaxRecords, 1, 2000)
-	cfg.LocalDNSCacheTTLSeconds = defaultFloatAtMostZero(cfg.LocalDNSCacheTTLSeconds, 3600.0)
-	cfg.LocalDNSPendingTimeoutSec = defaultFloatAtMostZero(cfg.LocalDNSPendingTimeoutSec, 600.0)
+	cfg.LocalDNSCacheMaxRecords = defaultIntBelow(cfg.LocalDNSCacheMaxRecords, 1, 10000)
+	cfg.LocalDNSCacheTTLSeconds = defaultFloatAtMostZero(cfg.LocalDNSCacheTTLSeconds, 14400.0)
+	cfg.LocalDNSPendingTimeoutSec = defaultFloatAtMostZero(cfg.LocalDNSPendingTimeoutSec, 300.0)
 	cfg.LocalDNSCacheFlushSec = defaultFloatAtMostZero(cfg.LocalDNSCacheFlushSec, 60.0)
 
 	if cfg.UploadCompressionType < compression.TypeOff || cfg.UploadCompressionType > compression.TypeZLIB {
@@ -319,32 +382,32 @@ func finalizeClientConfig(cfg ClientConfig) (ClientConfig, error) {
 
 	cfg.CompressionMinSize = defaultIntBelow(cfg.CompressionMinSize, 100, compression.DefaultMinSize)
 
-	if cfg.ResolverBalancingStrategy < 0 || cfg.ResolverBalancingStrategy > 4 {
+	if cfg.ResolverBalancingStrategy < 0 || cfg.ResolverBalancingStrategy > 8 {
 		return cfg, fmt.Errorf("invalid RESOLVER_BALANCING_STRATEGY: %d", cfg.ResolverBalancingStrategy)
 	}
 
-	cfg.PacketDuplicationCount = clampInt(defaultIntBelow(cfg.PacketDuplicationCount, 1, 1), 1, 4)
+	cfg.PacketDuplicationCount = clampInt(defaultIntBelow(cfg.PacketDuplicationCount, 1, 2), 1, 4)
 	cfg.SetupPacketDuplicationCount = clampInt(defaultIntBelow(cfg.SetupPacketDuplicationCount, 1, max(2, cfg.PacketDuplicationCount)), cfg.PacketDuplicationCount, 5)
 	cfg.StreamResolverFailoverResendThreshold = clampInt(defaultIntBelow(cfg.StreamResolverFailoverResendThreshold, 1, 2), 1, 128)
-	cfg.StreamResolverFailoverCooldownSec = clampFloat(defaultFloatAtMostZero(cfg.StreamResolverFailoverCooldownSec, 1.0), 0.1, 120.0)
-	cfg.AutoDisableTimeoutWindowSeconds = clampFloat(defaultFloatAtMostZero(cfg.AutoDisableTimeoutWindowSeconds, 180.0), 1.0, 86400.0)
-	cfg.MaxPacketsPerBatch = clampInt(defaultIntBelow(cfg.MaxPacketsPerBatch, 1, 10), 1, 64)
+	cfg.StreamResolverFailoverCooldownSec = clampFloat(defaultFloatAtMostZero(cfg.StreamResolverFailoverCooldownSec, 2.5), 0.1, 120.0)
+	cfg.AutoDisableTimeoutWindowSeconds = clampFloat(defaultFloatAtMostZero(cfg.AutoDisableTimeoutWindowSeconds, 30.0), 1.0, 86400.0)
+	cfg.MaxPacketsPerBatch = clampInt(defaultIntBelow(cfg.MaxPacketsPerBatch, 1, 8), 1, 64)
 	cfg.ARQWindowSize = clampInt(defaultIntBelow(cfg.ARQWindowSize, 1, 600), 1, 6000)
 	cfg.ARQInitialRTOSeconds = clampFloat(defaultFloatAtMostZero(cfg.ARQInitialRTOSeconds, 1.0), 0.05, 60.0)
-	cfg.ARQMaxRTOSeconds = clampFloat(defaultFloatAtMostZero(cfg.ARQMaxRTOSeconds, 8.0), cfg.ARQInitialRTOSeconds, 120.0)
-	cfg.ARQControlInitialRTOSeconds = clampFloat(defaultFloatAtMostZero(cfg.ARQControlInitialRTOSeconds, 1.0), 0.05, 60.0)
-	cfg.ARQControlMaxRTOSeconds = clampFloat(defaultFloatAtMostZero(cfg.ARQControlMaxRTOSeconds, 8.0), cfg.ARQControlInitialRTOSeconds, 120.0)
-	cfg.ARQMaxControlRetries = clampInt(defaultIntBelow(cfg.ARQMaxControlRetries, 1, 80), 5, 5000)
+	cfg.ARQMaxRTOSeconds = clampFloat(defaultFloatAtMostZero(cfg.ARQMaxRTOSeconds, 5.0), cfg.ARQInitialRTOSeconds, 120.0)
+	cfg.ARQControlInitialRTOSeconds = clampFloat(defaultFloatAtMostZero(cfg.ARQControlInitialRTOSeconds, 0.5), 0.05, 60.0)
+	cfg.ARQControlMaxRTOSeconds = clampFloat(defaultFloatAtMostZero(cfg.ARQControlMaxRTOSeconds, 3.0), cfg.ARQControlInitialRTOSeconds, 120.0)
+	cfg.ARQMaxControlRetries = clampInt(defaultIntBelow(cfg.ARQMaxControlRetries, 1, 400), 5, 5000)
 	cfg.ARQInactivityTimeoutSeconds = clampFloat(defaultFloatAtMostZero(cfg.ARQInactivityTimeoutSeconds, 1800.0), 30.0, 86400.0)
-	cfg.ARQDataPacketTTLSeconds = clampFloat(defaultFloatAtMostZero(cfg.ARQDataPacketTTLSeconds, 1800.0), 30.0, 86400.0)
-	cfg.ARQControlPacketTTLSeconds = clampFloat(defaultFloatAtMostZero(cfg.ARQControlPacketTTLSeconds, 900.0), 30.0, 86400.0)
-	cfg.ARQMaxDataRetries = clampInt(defaultIntBelow(cfg.ARQMaxDataRetries, 1, 800), 60, 100000)
+	cfg.ARQDataPacketTTLSeconds = clampFloat(defaultFloatAtMostZero(cfg.ARQDataPacketTTLSeconds, 2400.0), 30.0, 86400.0)
+	cfg.ARQControlPacketTTLSeconds = clampFloat(defaultFloatAtMostZero(cfg.ARQControlPacketTTLSeconds, 1200.0), 30.0, 86400.0)
+	cfg.ARQMaxDataRetries = clampInt(defaultIntBelow(cfg.ARQMaxDataRetries, 1, 1200), 60, 100000)
 	dataNackGapCap := min(max(cfg.ARQWindowSize/8, 4), 128)
-	cfg.ARQDataNackMaxGap = clampInt(defaultIntBelow(cfg.ARQDataNackMaxGap, 0, 0), 0, dataNackGapCap)
-	cfg.ARQDataNackInitialDelaySeconds = clampFloat(defaultFloatAtMostZero(cfg.ARQDataNackInitialDelaySeconds, 0.0), 0.1, 30.0)
-	cfg.ARQDataNackRepeatSeconds = clampFloat(defaultFloatAtMostZero(cfg.ARQDataNackRepeatSeconds, 2.0), 0.2, 30.0)
-	cfg.ARQTerminalDrainTimeoutSec = clampFloat(defaultFloatAtMostZero(cfg.ARQTerminalDrainTimeoutSec, 90.0), 10.0, 3600.0)
-	cfg.ARQTerminalAckWaitTimeoutSec = clampFloat(defaultFloatAtMostZero(cfg.ARQTerminalAckWaitTimeoutSec, 60.0), 5.0, 3600.0)
+	cfg.ARQDataNackMaxGap = clampInt(defaultIntBelow(cfg.ARQDataNackMaxGap, 0, 16), 0, dataNackGapCap)
+	cfg.ARQDataNackInitialDelaySeconds = clampFloat(defaultFloatAtMostZero(cfg.ARQDataNackInitialDelaySeconds, 0.1), 0.1, 30.0)
+	cfg.ARQDataNackRepeatSeconds = clampFloat(defaultFloatAtMostZero(cfg.ARQDataNackRepeatSeconds, 1.0), 0.2, 30.0)
+	cfg.ARQTerminalDrainTimeoutSec = clampFloat(defaultFloatAtMostZero(cfg.ARQTerminalDrainTimeoutSec, 120.0), 10.0, 3600.0)
+	cfg.ARQTerminalAckWaitTimeoutSec = clampFloat(defaultFloatAtMostZero(cfg.ARQTerminalAckWaitTimeoutSec, 90.0), 5.0, 3600.0)
 
 	if cfg.MinUploadMTU < 0 || cfg.MinDownloadMTU < 0 || cfg.MaxUploadMTU < 0 || cfg.MaxDownloadMTU < 0 {
 		return cfg, fmt.Errorf("mtu values cannot be negative")
@@ -359,27 +422,31 @@ func finalizeClientConfig(cfg ClientConfig) (ClientConfig, error) {
 	}
 
 	cfg.MTUTestRetries = defaultIntBelow(cfg.MTUTestRetries, 1, 1)
-	cfg.MTUTestTimeout = defaultFloatAtMostZero(cfg.MTUTestTimeout, 1.0)
+	cfg.MTUTestTimeout = defaultFloatAtMostZero(cfg.MTUTestTimeout, 2.0)
 	cfg.MTUTestParallelism = defaultIntBelow(cfg.MTUTestParallelism, 1, 1)
 	legacyRX_TX_Workers := max(cfg.LegacyTunnelReaderWorkers, cfg.LegacyTunnelWriterWorkers)
 	if !cfg.explicitRX_TX_Workers && legacyRX_TX_Workers > 0 {
 		cfg.RX_TX_Workers = legacyRX_TX_Workers
 	}
 
-	cfg.RX_TX_Workers = clampInt(defaultIntBelow(cfg.RX_TX_Workers, 1, 6), 1, 64)
-	cfg.TunnelProcessWorkers = max(clampInt(defaultIntBelow(cfg.TunnelProcessWorkers, 1, 4), 1, 64), cfg.RX_TX_Workers)
+	cfg.RX_TX_Workers = clampInt(defaultIntBelow(cfg.RX_TX_Workers, 1, 4), 1, 128)
+	cfg.TunnelProcessWorkers = deriveConfiguredTunnelProcessWorkers(
+		cfg.TunnelProcessWorkers,
+		cfg.RX_TX_Workers,
+		cfg.explicitTunnelProcessWorkers,
+	)
 
-	cfg.TunnelPacketTimeoutSec = clampFloat(defaultFloatAtMostZero(cfg.TunnelPacketTimeoutSec, 8.0), 0.5, 120.0)
+	cfg.TunnelPacketTimeoutSec = clampFloat(defaultFloatAtMostZero(cfg.TunnelPacketTimeoutSec, 10.0), 0.5, 120.0)
 	cfg.DispatcherIdlePollIntervalSeconds = clampFloat(defaultFloatAtMostZero(cfg.DispatcherIdlePollIntervalSeconds, 0.020), 0.001, 1.0)
-	cfg.PingAggressiveIntervalSeconds = clampFloat(defaultFloatAtMostZero(cfg.PingAggressiveIntervalSeconds, 0.300), 0.1, 30.0)
-	cfg.PingLazyIntervalSeconds = clampFloat(defaultFloatAtMostZero(cfg.PingLazyIntervalSeconds, 1.0), cfg.PingAggressiveIntervalSeconds, 60.0)
-	cfg.PingCooldownIntervalSeconds = clampFloat(defaultFloatAtMostZero(cfg.PingCooldownIntervalSeconds, 3.0), cfg.PingLazyIntervalSeconds, 300.0)
-	cfg.PingColdIntervalSeconds = clampFloat(defaultFloatAtMostZero(cfg.PingColdIntervalSeconds, 30.0), cfg.PingCooldownIntervalSeconds, 3600.0)
-	cfg.PingWarmThresholdSeconds = clampFloat(defaultFloatAtMostZero(cfg.PingWarmThresholdSeconds, 5.0), 0.1, 600.0)
-	cfg.PingCoolThresholdSeconds = clampFloat(defaultFloatAtMostZero(cfg.PingCoolThresholdSeconds, 10.0), cfg.PingWarmThresholdSeconds, 1800.0)
-	cfg.PingColdThresholdSeconds = clampFloat(defaultFloatAtMostZero(cfg.PingColdThresholdSeconds, 20.0), cfg.PingCoolThresholdSeconds, 3600.0)
+	cfg.PingAggressiveIntervalSeconds = clampFloat(defaultFloatAtMostZero(cfg.PingAggressiveIntervalSeconds, 0.100), 0.1, 30.0)
+	cfg.PingLazyIntervalSeconds = clampFloat(defaultFloatAtMostZero(cfg.PingLazyIntervalSeconds, 0.750), cfg.PingAggressiveIntervalSeconds, 60.0)
+	cfg.PingCooldownIntervalSeconds = clampFloat(defaultFloatAtMostZero(cfg.PingCooldownIntervalSeconds, 2.0), cfg.PingLazyIntervalSeconds, 300.0)
+	cfg.PingColdIntervalSeconds = clampFloat(defaultFloatAtMostZero(cfg.PingColdIntervalSeconds, 15.0), cfg.PingCooldownIntervalSeconds, 3600.0)
+	cfg.PingWarmThresholdSeconds = clampFloat(defaultFloatAtMostZero(cfg.PingWarmThresholdSeconds, 8.0), 0.1, 600.0)
+	cfg.PingCoolThresholdSeconds = clampFloat(defaultFloatAtMostZero(cfg.PingCoolThresholdSeconds, 20.0), cfg.PingWarmThresholdSeconds, 1800.0)
+	cfg.PingColdThresholdSeconds = clampFloat(defaultFloatAtMostZero(cfg.PingColdThresholdSeconds, 30.0), cfg.PingCoolThresholdSeconds, 3600.0)
 	cfg.RXChannelSize = clampInt(defaultIntBelow(cfg.RXChannelSize, 1, 4096), 64, 65536)
-	cfg.DNSResponseFragmentTimeoutSeconds = clampFloat(defaultFloatAtMostZero(cfg.DNSResponseFragmentTimeoutSeconds, 10.0), 1.0, 600.0)
+	cfg.DNSResponseFragmentTimeoutSeconds = clampFloat(defaultFloatAtMostZero(cfg.DNSResponseFragmentTimeoutSeconds, 60.0), 1.0, 600.0)
 	cfg.SOCKSUDPAssociateReadTimeoutSeconds = clampFloat(defaultFloatAtMostZero(cfg.SOCKSUDPAssociateReadTimeoutSeconds, 30.0), 1.0, 3600.0)
 	cfg.ClientTerminalStreamRetentionSeconds = clampFloat(defaultFloatAtMostZero(cfg.ClientTerminalStreamRetentionSeconds, 45.0), 1.0, 3600.0)
 	cfg.ClientCancelledSetupRetentionSeconds = clampFloat(defaultFloatAtMostZero(cfg.ClientCancelledSetupRetentionSeconds, 120.0), 1.0, 3600.0)
@@ -978,4 +1045,23 @@ func clampFloat(value float64, minValue float64, maxValue float64) float64 {
 		return maxValue
 	}
 	return value
+}
+
+func deriveConfiguredTunnelProcessWorkers(current int, rxWorkers int, explicit bool) int {
+	recommended := deriveRecommendedTunnelProcessWorkers(rxWorkers)
+	if explicit {
+		current = clampInt(current, 1, 256)
+		if current < rxWorkers {
+			return rxWorkers
+		}
+		return current
+	}
+	return recommended
+}
+
+func deriveRecommendedTunnelProcessWorkers(rxWorkers int) int {
+	if rxWorkers < 1 {
+		rxWorkers = 1
+	}
+	return clampInt(max(4, rxWorkers+1), rxWorkers, 256)
 }

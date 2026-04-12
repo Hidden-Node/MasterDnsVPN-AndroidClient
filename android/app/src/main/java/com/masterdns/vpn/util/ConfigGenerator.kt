@@ -62,7 +62,7 @@ object ConfigGenerator {
                 "LOCAL_DNS_ENABLED = ${localDnsEnabledOverride?.let { it.toString() } ?: cfg("LOCAL_DNS_ENABLED", "false")}"
             )
             appendLine("LOCAL_DNS_IP = \"${escapeToml(localDnsIpOverride ?: cfg("LOCAL_DNS_IP", "127.0.0.1"))}\"")
-            appendLine("LOCAL_DNS_PORT = ${localDnsPortOverride ?: cfgInt("LOCAL_DNS_PORT", "53")}")
+            appendLine("LOCAL_DNS_PORT = ${localDnsPortOverride ?: cfgInt("LOCAL_DNS_PORT", "5353")}")
             appendLine("LOCAL_DNS_CACHE_MAX_RECORDS = ${cfg("LOCAL_DNS_CACHE_MAX_RECORDS", "10000")}")
             appendLine("LOCAL_DNS_CACHE_TTL_SECONDS = ${cfg("LOCAL_DNS_CACHE_TTL_SECONDS", "14400.0")}")
             appendLine("LOCAL_DNS_PENDING_TIMEOUT_SECONDS = ${cfg("LOCAL_DNS_PENDING_TIMEOUT_SECONDS", "300.0")}")
@@ -99,10 +99,10 @@ object ConfigGenerator {
             appendLine("MTU_TEST_PARALLELISM = ${cfg("MTU_TEST_PARALLELISM", "16")}")
             appendLine("SAVE_MTU_SERVERS_TO_FILE = ${cfg("SAVE_MTU_SERVERS_TO_FILE", "false")}")
             appendLine("MTU_SERVERS_FILE_NAME = \"${escapeToml(cfg("MTU_SERVERS_FILE_NAME", "masterdnsvpn_success_test_{time}.log"))}\"")
-            appendLine("MTU_SERVERS_FILE_FORMAT = \"${escapeToml(cfg("MTU_SERVERS_FILE_FORMAT", "{IP} - UP: {UP_MTU} DOWN: {DOWN-MTU}"))}\"")
+            appendLine("MTU_SERVERS_FILE_FORMAT = \"${escapeToml(cfg("MTU_SERVERS_FILE_FORMAT", "{IP} ({DOMAIN}) - UP: {UP_MTU} DOWN: {DOWN-MTU}"))}\"")
             appendLine("MTU_USING_SECTION_SEPARATOR_TEXT = \"${escapeToml(cfg("MTU_USING_SECTION_SEPARATOR_TEXT", ""))}\"")
-            appendLine("MTU_REMOVED_SERVER_LOG_FORMAT = \"${escapeToml(cfg("MTU_REMOVED_SERVER_LOG_FORMAT", "Resolver {IP} removed at {TIME} due to {CAUSE}"))}\"")
-            appendLine("MTU_ADDED_SERVER_LOG_FORMAT = \"${escapeToml(cfg("MTU_ADDED_SERVER_LOG_FORMAT", "Resolver {IP} added back at {TIME} (UP {UP_MTU}, DOWN {DOWN_MTU})"))}\"")
+            appendLine("MTU_REMOVED_SERVER_LOG_FORMAT = \"${escapeToml(cfg("MTU_REMOVED_SERVER_LOG_FORMAT", "Resolver {IP} ({DOMAIN}) removed at {TIME} due to {CAUSE}"))}\"")
+            appendLine("MTU_ADDED_SERVER_LOG_FORMAT = \"${escapeToml(cfg("MTU_ADDED_SERVER_LOG_FORMAT", "Resolver {IP} ({DOMAIN}) added back at {TIME} (UP {UP_MTU}, DOWN {DOWN_MTU})"))}\"")
             appendLine()
 
             // Section 7: Runtime Workers

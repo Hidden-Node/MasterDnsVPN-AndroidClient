@@ -8,6 +8,7 @@
 package config
 
 import (
+	"encoding/base64"
 	"flag"
 	"os"
 	"path/filepath"
@@ -107,7 +108,7 @@ func TestLoadClientConfigRejectsInvalidResolverBalancingStrategy(t *testing.T) {
 	if err := os.WriteFile(configPath, []byte(`
 PROTOCOL_TYPE = "SOCKS5"
 DOMAINS = ["v.domain.com"]
-RESOLVER_BALANCING_STRATEGY = 8
+RESOLVER_BALANCING_STRATEGY = 9
 DATA_ENCRYPTION_METHOD = 1
 ENCRYPTION_KEY = "secret"
 `), 0o644); err != nil {
@@ -155,28 +156,28 @@ ENCRYPTION_KEY = "secret"
 		t.Fatalf("LoadClientConfig returned error: %v", err)
 	}
 
-	if cfg.LocalDNSCacheMaxRecords != 2000 {
-		t.Fatalf("unexpected local dns records default: got=%d want=%d", cfg.LocalDNSCacheMaxRecords, 2000)
+	if cfg.LocalDNSCacheMaxRecords != 10000 {
+		t.Fatalf("unexpected local dns records default: got=%d want=%d", cfg.LocalDNSCacheMaxRecords, 10000)
 	}
-	if cfg.ARQInitialRTOSeconds != 1.0 || cfg.ARQMaxRTOSeconds != 8.0 {
+	if cfg.ARQInitialRTOSeconds != 1.0 || cfg.ARQMaxRTOSeconds != 5.0 {
 		t.Fatalf("unexpected arq rto defaults: initial=%v max=%v", cfg.ARQInitialRTOSeconds, cfg.ARQMaxRTOSeconds)
 	}
-	if cfg.ARQDataNackMaxGap != 0 {
-		t.Fatalf("unexpected ARQ data NACK gap default: got=%d want=0", cfg.ARQDataNackMaxGap)
+	if cfg.ARQDataNackMaxGap != 16 {
+		t.Fatalf("unexpected ARQ data NACK gap default: got=%d want=16", cfg.ARQDataNackMaxGap)
 	}
 	if cfg.ARQDataNackRepeatSeconds != 1.0 {
 		t.Fatalf("unexpected ARQ data NACK repeat default: got=%v want=%v", cfg.ARQDataNackRepeatSeconds, 1.0)
 	}
-	if cfg.ARQMaxControlRetries != 80 || cfg.ARQMaxDataRetries != 800 {
+	if cfg.ARQMaxControlRetries != 400 || cfg.ARQMaxDataRetries != 1200 {
 		t.Fatalf("unexpected arq retry defaults: control=%d data=%d", cfg.ARQMaxControlRetries, cfg.ARQMaxDataRetries)
 	}
 	if cfg.CompressionMinSize != compression.DefaultMinSize {
 		t.Fatalf("unexpected compression min size default: got=%d want=%d", cfg.CompressionMinSize, compression.DefaultMinSize)
 	}
-	if cfg.MTUTestRetries != 1 || cfg.MTUTestTimeout != 1.0 || cfg.MTUTestParallelism != 1 {
+	if cfg.MTUTestRetries != 1 || cfg.MTUTestTimeout != 2.0 || cfg.MTUTestParallelism != 1 {
 		t.Fatalf("unexpected mtu defaults: retries=%d timeout=%v parallelism=%d", cfg.MTUTestRetries, cfg.MTUTestTimeout, cfg.MTUTestParallelism)
 	}
-	if cfg.MTUServersFileName != "masterdnsvpn_success_test_{time}.log" || cfg.MTUServersFileFormat != "{IP} - UP: {UP_MTU} DOWN: {DOWN-MTU}" {
+	if cfg.MTUServersFileName != "masterdnsvpn_success_test_{time}.log" || cfg.MTUServersFileFormat != "{IP} ({DOMAIN}) - UP: {UP_MTU} DOWN: {DOWN-MTU}" {
 		t.Fatalf("unexpected mtu file defaults: file=%q format=%q", cfg.MTUServersFileName, cfg.MTUServersFileFormat)
 	}
 	if cfg.ProtocolType != "TCP" {
@@ -312,6 +313,35 @@ TUNNEL_PROCESS_WORKERS = 2
 	}
 }
 
+func TestLoadClientConfigAutoDerivesTunnelProcessWorkersAboveRXTX(t *testing.T) {
+	dir := t.TempDir()
+
+	configPath := filepath.Join(dir, "client_config.toml")
+	resolversPath := filepath.Join(dir, "client_resolvers.txt")
+
+	if err := os.WriteFile(configPath, []byte(`
+PROTOCOL_TYPE = "SOCKS5"
+DOMAINS = ["v.domain.com"]
+DATA_ENCRYPTION_METHOD = 1
+ENCRYPTION_KEY = "secret"
+RX_TX_WORKERS = 6
+`), 0o644); err != nil {
+		t.Fatalf("WriteFile config failed: %v", err)
+	}
+	if err := os.WriteFile(resolversPath, []byte("8.8.8.8\n"), 0o644); err != nil {
+		t.Fatalf("WriteFile resolvers failed: %v", err)
+	}
+
+	cfg, err := LoadClientConfig(configPath)
+	if err != nil {
+		t.Fatalf("LoadClientConfig returned error: %v", err)
+	}
+
+	if cfg.TunnelProcessWorkers != 7 {
+		t.Fatalf("expected process workers to be auto-derived above RX/TX count: got=%d want=%d", cfg.TunnelProcessWorkers, 7)
+	}
+}
+
 func TestLoadClientConfigWithOverridesReplacesResolversDomainsAndMTURange(t *testing.T) {
 	dir := t.TempDir()
 
@@ -406,5 +436,120 @@ func TestClientConfigFlagBinderBuildsOverridesForSetFlagsOnly(t *testing.T) {
 	}
 	if _, exists := overrides.Values["MaxUploadMTU"]; exists {
 		t.Fatalf("did not expect unset flag to appear in overrides: %#v", overrides.Values["MaxUploadMTU"])
+	}
+}
+
+func TestLoadClientConfigFallsBackToJSONWhenTOMLIsMissing(t *testing.T) {
+	dir := t.TempDir()
+
+	configPath := filepath.Join(dir, "client_config.toml")
+	jsonPath := filepath.Join(dir, "client_config.json")
+	resolversPath := filepath.Join(dir, "client_resolvers.txt")
+
+	if err := os.WriteFile(jsonPath, []byte(`{
+  "PROTOCOL_TYPE": "SOCKS5",
+  "DOMAINS": ["json.example.com"],
+  "DATA_ENCRYPTION_METHOD": 1,
+  "ENCRYPTION_KEY": "json-secret",
+  "MAX_UPLOAD_MTU": 140
+}`), 0o644); err != nil {
+		t.Fatalf("WriteFile JSON config failed: %v", err)
+	}
+	if err := os.WriteFile(resolversPath, []byte("8.8.8.8\n"), 0o644); err != nil {
+		t.Fatalf("WriteFile resolvers failed: %v", err)
+	}
+
+	cfg, err := LoadClientConfig(configPath)
+	if err != nil {
+		t.Fatalf("LoadClientConfig returned error: %v", err)
+	}
+
+	if cfg.ConfigPath != jsonPath {
+		t.Fatalf("expected JSON fallback path: got=%q want=%q", cfg.ConfigPath, jsonPath)
+	}
+	if cfg.MaxUploadMTU != 140 {
+		t.Fatalf("unexpected JSON MTU value: got=%d want=%d", cfg.MaxUploadMTU, 140)
+	}
+	if len(cfg.Domains) != 1 || cfg.Domains[0] != "json.example.com" {
+		t.Fatalf("unexpected JSON domains: %+v", cfg.Domains)
+	}
+}
+
+func TestLoadClientConfigFromJSONBase64AppliesDefaultsAndLoadsResolvers(t *testing.T) {
+	dir := t.TempDir()
+	resolversPath := filepath.Join(dir, "client_resolvers.txt")
+
+	if err := os.WriteFile(resolversPath, []byte("1.1.1.1\n"), 0o644); err != nil {
+		t.Fatalf("WriteFile resolvers failed: %v", err)
+	}
+
+	previousWD, err := os.Getwd()
+	if err != nil {
+		t.Fatalf("Getwd failed: %v", err)
+	}
+	defer func() {
+		_ = os.Chdir(previousWD)
+	}()
+	if err := os.Chdir(dir); err != nil {
+		t.Fatalf("Chdir failed: %v", err)
+	}
+
+	rawJSON := `{
+  "PROTOCOL_TYPE": "SOCKS5",
+  "DOMAINS": ["base64.example.com"],
+  "DATA_ENCRYPTION_METHOD": 1,
+  "ENCRYPTION_KEY": "base64-secret"
+}`
+	encoded := base64.StdEncoding.EncodeToString([]byte(rawJSON))
+
+	cfg, err := LoadClientConfigFromJSONBase64(encoded)
+	if err != nil {
+		t.Fatalf("LoadClientConfigFromJSONBase64 returned error: %v", err)
+	}
+
+	if cfg.ConfigPath != "<json_base64>" {
+		t.Fatalf("unexpected config path: got=%q want=%q", cfg.ConfigPath, "<json_base64>")
+	}
+	if cfg.MaxUploadMTU != defaultClientConfig().MaxUploadMTU {
+		t.Fatalf("expected default upload mtu to apply: got=%d want=%d", cfg.MaxUploadMTU, defaultClientConfig().MaxUploadMTU)
+	}
+	if cfg.ResolverMap["1.1.1.1"] != 53 {
+		t.Fatalf("expected resolvers file from cwd to be loaded, got=%d", cfg.ResolverMap["1.1.1.1"])
+	}
+}
+
+func TestLoadClientConfigFromJSONBase64WithOverridesAppliesBeforeFinalize(t *testing.T) {
+	dir := t.TempDir()
+	overrideResolversPath := filepath.Join(dir, "override_resolvers.txt")
+
+	if err := os.WriteFile(overrideResolversPath, []byte("9.9.9.9\n"), 0o644); err != nil {
+		t.Fatalf("WriteFile override resolvers failed: %v", err)
+	}
+
+	rawJSON := `{
+  "PROTOCOL_TYPE": "SOCKS5",
+  "DATA_ENCRYPTION_METHOD": 1
+}`
+	encoded := base64.StdEncoding.EncodeToString([]byte(rawJSON))
+
+	cfg, err := LoadClientConfigFromJSONBase64WithOverrides(encoded, ClientConfigOverrides{
+		ResolversFilePath: &overrideResolversPath,
+		Values: map[string]any{
+			"Domains":       []string{"override.example.com"},
+			"EncryptionKey": "override-secret",
+		},
+	})
+	if err != nil {
+		t.Fatalf("LoadClientConfigFromJSONBase64WithOverrides returned error: %v", err)
+	}
+
+	if len(cfg.Domains) != 1 || cfg.Domains[0] != "override.example.com" {
+		t.Fatalf("unexpected override domains: %+v", cfg.Domains)
+	}
+	if cfg.EncryptionKey != "override-secret" {
+		t.Fatalf("unexpected override encryption key: got=%q", cfg.EncryptionKey)
+	}
+	if cfg.ResolverMap["9.9.9.9"] != 53 {
+		t.Fatalf("expected override resolvers to be loaded, got=%d", cfg.ResolverMap["9.9.9.9"])
 	}
 }

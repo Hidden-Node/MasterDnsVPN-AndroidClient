@@ -61,6 +61,284 @@ func TestBalancerLowestLatencyUsesRuntimeStats(t *testing.T) {
 	}
 }
 
+func TestBalancerHybridPrefersLowerLossWhenLatencyIsClose(t *testing.T) {
+	b := NewBalancer(BalancingHybridScore, nil)
+	connections := []*Connection{
+		{Key: "a", IsValid: true},
+		{Key: "b", IsValid: true},
+	}
+	b.SetConnections(connections)
+	_ = b.SetConnectionValidity("a", true)
+	_ = b.SetConnectionValidity("b", true)
+
+	for i := 0; i < 10; i++ {
+		b.ReportSend("a")
+		b.ReportSuccess("a", 12*time.Millisecond)
+		b.ReportSend("b")
+		b.ReportSuccess("b", 8*time.Millisecond)
+	}
+	for i := 0; i < 3; i++ {
+		b.ReportSend("a")
+		b.ReportTimeout("a", time.Now(), 10*time.Second, 1)
+	}
+
+	best, ok := b.GetBestConnection()
+	if !ok {
+		t.Fatal("expected best connection")
+	}
+	if best.Key != "b" {
+		t.Fatalf("expected hybrid mode to prefer lower-loss resolver b, got %q", best.Key)
+	}
+}
+
+func TestBalancerHybridPrefersLowerLatencyWhenLossIsEqual(t *testing.T) {
+	b := NewBalancer(BalancingHybridScore, nil)
+	connections := []*Connection{
+		{Key: "a", IsValid: true},
+		{Key: "b", IsValid: true},
+	}
+	b.SetConnections(connections)
+	_ = b.SetConnectionValidity("a", true)
+	_ = b.SetConnectionValidity("b", true)
+
+	for i := 0; i < 6; i++ {
+		b.ReportSend("a")
+		b.ReportSuccess("a", 12*time.Millisecond)
+		b.ReportSend("b")
+		b.ReportSuccess("b", 3*time.Millisecond)
+	}
+
+	best, ok := b.GetBestConnection()
+	if !ok {
+		t.Fatal("expected best connection")
+	}
+	if best.Key != "b" {
+		t.Fatalf("expected hybrid mode to prefer lower-latency resolver b when loss is equal, got %q", best.Key)
+	}
+}
+
+func TestBalancerHybridFallsBackToRoundRobinWithoutStats(t *testing.T) {
+	b := NewBalancer(BalancingHybridScore, nil)
+	connections := []*Connection{
+		{Key: "a", IsValid: true},
+		{Key: "b", IsValid: true},
+		{Key: "c", IsValid: true},
+	}
+	b.SetConnections(connections)
+	_ = b.SetConnectionValidity("a", true)
+	_ = b.SetConnectionValidity("b", true)
+	_ = b.SetConnectionValidity("c", true)
+
+	first, ok := b.GetBestConnection()
+	if !ok {
+		t.Fatal("expected first connection")
+	}
+	second, ok := b.GetBestConnection()
+	if !ok {
+		t.Fatal("expected second connection")
+	}
+	third, ok := b.GetBestConnection()
+	if !ok {
+		t.Fatal("expected third connection")
+	}
+
+	if first.Key != "a" || second.Key != "b" || third.Key != "c" {
+		t.Fatalf("expected round-robin a,b,c before hybrid stats, got %q,%q,%q", first.Key, second.Key, third.Key)
+	}
+}
+
+func TestBalancerLossThenLatencyPrefersLowerLossFirst(t *testing.T) {
+	b := NewBalancer(BalancingLossThenLatency, nil)
+	connections := []*Connection{
+		{Key: "a", IsValid: true},
+		{Key: "b", IsValid: true},
+	}
+	b.SetConnections(connections)
+	_ = b.SetConnectionValidity("a", true)
+	_ = b.SetConnectionValidity("b", true)
+
+	for i := 0; i < 10; i++ {
+		b.ReportSend("a")
+		b.ReportSuccess("a", 4*time.Millisecond)
+		b.ReportSend("b")
+		b.ReportSuccess("b", 10*time.Millisecond)
+	}
+	for i := 0; i < 2; i++ {
+		b.ReportSend("a")
+		b.ReportTimeout("a", time.Now(), 10*time.Second, 1)
+	}
+
+	best, ok := b.GetBestConnection()
+	if !ok {
+		t.Fatal("expected best connection")
+	}
+	if best.Key != "b" {
+		t.Fatalf("expected loss-then-latency mode to prefer lower-loss resolver b, got %q", best.Key)
+	}
+}
+
+func TestBalancerLossThenLatencyUsesLatencyInsideLossTier(t *testing.T) {
+	b := NewBalancer(BalancingLossThenLatency, nil)
+	connections := []*Connection{
+		{Key: "a", IsValid: true},
+		{Key: "b", IsValid: true},
+	}
+	b.SetConnections(connections)
+	_ = b.SetConnectionValidity("a", true)
+	_ = b.SetConnectionValidity("b", true)
+
+	for i := 0; i < 8; i++ {
+		b.ReportSend("a")
+		b.ReportSuccess("a", 15*time.Millisecond)
+		b.ReportSend("b")
+		b.ReportSuccess("b", 4*time.Millisecond)
+	}
+
+	best, ok := b.GetBestConnection()
+	if !ok {
+		t.Fatal("expected best connection")
+	}
+	if best.Key != "b" {
+		t.Fatalf("expected lower-latency resolver b inside equal-loss tier, got %q", best.Key)
+	}
+}
+
+func TestBalancerLossThenLatencyRoundRobinsAcrossNearTopCandidates(t *testing.T) {
+	b := NewBalancer(BalancingLossThenLatency, nil)
+	connections := []*Connection{
+		{Key: "a", IsValid: true},
+		{Key: "b", IsValid: true},
+	}
+	b.SetConnections(connections)
+	_ = b.SetConnectionValidity("a", true)
+	_ = b.SetConnectionValidity("b", true)
+
+	for i := 0; i < 8; i++ {
+		b.ReportSend("a")
+		b.ReportSuccess("a", 10*time.Millisecond)
+		b.ReportSend("b")
+		b.ReportSuccess("b", 12*time.Millisecond)
+	}
+
+	seen := map[string]bool{}
+	for i := 0; i < 10; i++ {
+		best, ok := b.GetBestConnection()
+		if !ok {
+			t.Fatal("expected best connection")
+		}
+		seen[best.Key] = true
+	}
+
+	if !seen["a"] || !seen["b"] {
+		t.Fatalf("expected round-robin across near-top candidates, seen=%v", seen)
+	}
+}
+
+func TestBalancerLeastLossTopRandomFallsBackToRoundRobinWithoutStats(t *testing.T) {
+	b := NewBalancer(BalancingLeastLossTopRandom, nil)
+	connections := []*Connection{
+		{Key: "a", IsValid: true},
+		{Key: "b", IsValid: true},
+		{Key: "c", IsValid: true},
+	}
+	b.SetConnections(connections)
+	_ = b.SetConnectionValidity("a", true)
+	_ = b.SetConnectionValidity("b", true)
+	_ = b.SetConnectionValidity("c", true)
+
+	first, _ := b.GetBestConnection()
+	second, _ := b.GetBestConnection()
+	third, _ := b.GetBestConnection()
+	if first.Key != "a" || second.Key != "b" || third.Key != "c" {
+		t.Fatalf("expected round-robin a,b,c before loss-top-random stats, got %q,%q,%q", first.Key, second.Key, third.Key)
+	}
+}
+
+func TestBalancerLeastLossTopRandomUsesTopLossTier(t *testing.T) {
+	b := NewBalancer(BalancingLeastLossTopRandom, nil)
+	connections := []*Connection{
+		{Key: "a", IsValid: true},
+		{Key: "b", IsValid: true},
+		{Key: "c", IsValid: true},
+		{Key: "d", IsValid: true},
+	}
+	b.SetConnections(connections)
+	for _, key := range []string{"a", "b", "c", "d"} {
+		_ = b.SetConnectionValidity(key, true)
+	}
+
+	for i := 0; i < 10; i++ {
+		for _, key := range []string{"a", "b", "c", "d"} {
+			b.ReportSend(key)
+			b.ReportSuccess(key, 5*time.Millisecond)
+		}
+	}
+	for i := 0; i < 1; i++ {
+		b.ReportSend("c")
+		b.ReportTimeout("c", time.Now(), 10*time.Second, 1)
+		b.ReportSend("d")
+		b.ReportTimeout("d", time.Now(), 10*time.Second, 1)
+	}
+
+	seen := map[string]bool{}
+	for i := 0; i < 20; i++ {
+		best, ok := b.GetBestConnection()
+		if !ok {
+			t.Fatal("expected best connection")
+		}
+		seen[best.Key] = true
+		if best.Key == "c" || best.Key == "d" {
+			t.Fatalf("expected picks only from lower-loss top tier, got %q", best.Key)
+		}
+	}
+
+	if !seen["a"] || !seen["b"] {
+		t.Fatalf("expected random selection among top loss tier, seen=%v", seen)
+	}
+}
+
+func TestBalancerLeastLossTopRoundRobinUsesTopLossTier(t *testing.T) {
+	b := NewBalancer(BalancingLeastLossTopRoundRobin, nil)
+	connections := []*Connection{
+		{Key: "a", IsValid: true},
+		{Key: "b", IsValid: true},
+		{Key: "c", IsValid: true},
+		{Key: "d", IsValid: true},
+	}
+	b.SetConnections(connections)
+	for _, key := range []string{"a", "b", "c", "d"} {
+		_ = b.SetConnectionValidity(key, true)
+	}
+
+	for i := 0; i < 10; i++ {
+		for _, key := range []string{"a", "b", "c", "d"} {
+			b.ReportSend(key)
+			b.ReportSuccess(key, 5*time.Millisecond)
+		}
+	}
+	for i := 0; i < 1; i++ {
+		b.ReportSend("c")
+		b.ReportTimeout("c", time.Now(), 10*time.Second, 1)
+		b.ReportSend("d")
+		b.ReportTimeout("d", time.Now(), 10*time.Second, 1)
+	}
+
+	first, ok := b.GetBestConnection()
+	if !ok {
+		t.Fatal("expected best connection")
+	}
+	second, ok := b.GetBestConnection()
+	if !ok {
+		t.Fatal("expected best connection")
+	}
+	if (first.Key != "a" && first.Key != "b") || (second.Key != "a" && second.Key != "b") {
+		t.Fatalf("expected picks only from lower-loss top tier, got %q then %q", first.Key, second.Key)
+	}
+	if first.Key == second.Key {
+		t.Fatalf("expected round-robin across top loss tier, got %q then %q", first.Key, second.Key)
+	}
+}
+
 func TestBalancerStatsHalfLifeAlsoAppliesOnSend(t *testing.T) {
 	b := NewBalancer(BalancingLeastLoss, nil)
 	connections := []*Connection{

@@ -33,6 +33,10 @@ func waitForExitInput() {
 
 func main() {
 	configPath := flag.String("config", "server_config.toml", "Path to server configuration file")
+	jsonPath := flag.String("json", "", "Path to server JSON configuration file")
+	jsonPathShort := flag.String("j", "", "Alias for -json")
+	jsonBase64 := flag.String("json_base64", "", "Load server JSON configuration from base64")
+	jsonBase64Alias := flag.String("json-base64", "", "Alias for -json_base64")
 	logPath := flag.String("log", "", "Path to log file (optional)")
 	versionFlag := flag.Bool("version", false, "Print version and exit")
 	genKeyFlag := flag.Bool("genkey", false, "Generate encryption key and exit")
@@ -49,9 +53,36 @@ func main() {
 		return
 	}
 
-	resolvedConfigPath := runtimepath.Resolve(*configPath)
+	effectiveJSONPath := *jsonPath
+	if effectiveJSONPath == "" {
+		effectiveJSONPath = *jsonPathShort
+	}
+	effectiveJSONBase64 := *jsonBase64
+	if effectiveJSONBase64 == "" {
+		effectiveJSONBase64 = *jsonBase64Alias
+	}
+	if effectiveJSONPath != "" && effectiveJSONBase64 != "" {
+		_, _ = fmt.Fprintln(os.Stderr, "Server startup failed: only one of -json and -json_base64 can be used")
+		if !*nowaitFlag {
+			waitForExitInput()
+		}
+		os.Exit(1)
+	}
 
-	cfg, err := config.LoadServerConfigWithOverrides(resolvedConfigPath, configFlags.Overrides())
+	resolvedConfigPath := runtimepath.Resolve(*configPath)
+	overrides := configFlags.Overrides()
+
+	var cfg config.ServerConfig
+	switch {
+	case effectiveJSONBase64 != "":
+		cfg, err = config.LoadServerConfigFromJSONBase64WithOverrides(effectiveJSONBase64, overrides)
+		resolvedConfigPath = cfg.ConfigPath
+	case effectiveJSONPath != "":
+		resolvedConfigPath = runtimepath.Resolve(effectiveJSONPath)
+		cfg, err = config.LoadServerConfigWithOverrides(resolvedConfigPath, overrides)
+	default:
+		cfg, err = config.LoadServerConfigWithOverrides(resolvedConfigPath, overrides)
+	}
 	if err != nil {
 		_, _ = fmt.Fprintf(os.Stderr, "Server startup failed: %v\n", err)
 		if !*nowaitFlag {

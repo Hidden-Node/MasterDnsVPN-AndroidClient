@@ -979,13 +979,11 @@ func TestARQ_ClearAllQueuesDropsRememberedDataNacks(t *testing.T) {
 
 	a.mu.Lock()
 	a.clearAllQueues(true)
-	a.mu.Unlock()
-
-	a.dataNackMu.Lock()
-	defer a.dataNackMu.Unlock()
 	if len(a.lastDataNackSent) != 0 {
+		a.mu.Unlock()
 		t.Fatalf("expected remembered data NACK state to be cleared, got %#v", a.lastDataNackSent)
 	}
+	a.mu.Unlock()
 }
 
 func TestARQ_DataAckUpdatesAdaptiveBaseRTO(t *testing.T) {

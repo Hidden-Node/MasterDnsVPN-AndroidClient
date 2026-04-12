@@ -97,11 +97,10 @@ class SettingsViewModel @Inject constructor(
     }
 
     private fun normalizeResolverBalancingStrategy(value: String?, fallback: Int): Int {
-        return when (value?.trim()?.toIntOrNull()) {
-            0 -> 2
-            1, 2, 3, 4 -> value.trim().toInt()
-            else -> if (fallback == 0) 2 else fallback
-        }
+        val parsed = value?.trim()?.toIntOrNull()
+        if (parsed in 1..8) return parsed
+        if (parsed == 0) return 2
+        return if (fallback in 1..8) fallback else 2
     }
 
     private fun buildUpdatedProfile(profile: ProfileEntity, values: Map<String, String>): ProfileEntity {
