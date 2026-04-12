@@ -137,7 +137,6 @@ class MasterDnsVpnService : VpnService() {
                         runtimeProfile = profile.copy(advancedJson = Gson().toJson(advancedMutable))
                         mtuExportTargetUri = exportUri
                         mtuConfigDir = configDir
-                        mtuResultsFilePath = null
                         VpnManager.appendLog("MTU results will be saved to config directory")
                         VpnManager.appendLog("MTU export destination selected via file manager")
                     } else {
