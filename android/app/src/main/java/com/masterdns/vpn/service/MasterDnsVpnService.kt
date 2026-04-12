@@ -329,18 +329,18 @@ class MasterDnsVpnService : VpnService() {
                 VpnManager.appendLog("Stopping VPN...")
 
                 // Stop Go client and Tun bridge
-                try {
+                runCatching {
                     if (mobile.Mobile.isRunning()) {
                         mobile.Mobile.stopClient()
                     } else {
                         VpnManager.appendLog("Go core already stopped")
                     }
-                } catch (e: Exception) {
+                }.onFailure { e ->
                     Log.e(TAG, "Error stopping Go core", e)
                 }
 
                 // Close TUN interface
-                vpnInterface?.close()
+                runCatching { vpnInterface?.close() }
                 vpnInterface = null
 
                 // Cancel coroutines
@@ -363,7 +363,12 @@ class MasterDnsVpnService : VpnService() {
                 }.onFailure {
                     Log.w(TAG, "Failed to stop foreground cleanly", it)
                 }
+
+                // Delay to allow UI to update before stopping service
+                delay(500L)
                 runCatching { stopSelf() }
+            } catch (e: Exception) {
+                Log.e(TAG, "Error in stopVpn", e)
             } finally {
                 isStopping = false
             }
