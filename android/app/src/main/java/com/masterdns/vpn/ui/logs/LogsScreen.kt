@@ -33,7 +33,7 @@ fun LogsScreen(onBack: () -> Unit) {
     val scope = rememberCoroutineScope()
 
     val shareLogs: () -> Unit = {
-        if (logs.isEmpty()) return
+        if (logs.isEmpty()) return@shareLogs
         val content = logs.joinToString("\n")
         val intent = Intent(Intent.ACTION_SEND).apply {
             type = "text/plain"
