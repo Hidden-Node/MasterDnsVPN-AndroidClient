@@ -33,14 +33,15 @@ fun LogsScreen(onBack: () -> Unit) {
     val scope = rememberCoroutineScope()
 
     val shareLogs: () -> Unit = {
-        if (logs.isEmpty()) return@shareLogs
-        val content = logs.joinToString("\n")
-        val intent = Intent(Intent.ACTION_SEND).apply {
-            type = "text/plain"
-            putExtra(Intent.EXTRA_SUBJECT, "MasterDnsVPN Logs")
-            putExtra(Intent.EXTRA_TEXT, content)
+        if (logs.isNotEmpty()) {
+            val content = logs.joinToString("\n")
+            val intent = Intent(Intent.ACTION_SEND).apply {
+                type = "text/plain"
+                putExtra(Intent.EXTRA_SUBJECT, "MasterDnsVPN Logs")
+                putExtra(Intent.EXTRA_TEXT, content)
+            }
+            context.startActivity(Intent.createChooser(intent, "Share Logs"))
         }
-        context.startActivity(Intent.createChooser(intent, "Share Logs"))
     }
 
     // Auto-scroll to bottom when new logs arrive
