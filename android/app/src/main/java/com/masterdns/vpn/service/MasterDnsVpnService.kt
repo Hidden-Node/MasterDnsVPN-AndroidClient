@@ -62,7 +62,7 @@ class MasterDnsVpnService : VpnService() {
     private var wakeLock: PowerManager.WakeLock? = null
     private var mtuExportTargetUri: String? = null
     private var mtuTempOutputDir: File? = null
-    private var mtuResultsFileName: String? = null
+    private var mtuResultsFilePath: String? = null
     @Volatile
     private var isStopping = false
     @Volatile
@@ -121,7 +121,7 @@ class MasterDnsVpnService : VpnService() {
                 val resolversFile = File(configDir, "client_resolvers.txt")
                 mtuExportTargetUri = null
                 mtuTempOutputDir = null
-                mtuResultsFileName = null
+                mtuResultsFilePath = null
                 val advanced = parseAdvanced(profile.advancedJson)
                 val saveMtuToFile = advanced["SAVE_MTU_SERVERS_TO_FILE"].equals("true", ignoreCase = true)
                 var runtimeProfile = profile
@@ -139,7 +139,7 @@ class MasterDnsVpnService : VpnService() {
                         runtimeProfile = profile.copy(advancedJson = Gson().toJson(advancedMutable))
                         mtuExportTargetUri = exportUri
                         mtuTempOutputDir = tmpDir
-                        mtuResultsFileName = "mtu_results.log"
+                        mtuResultsFilePath = tmpPath
                         VpnManager.appendLog("MTU results temp path: $tmpPath")
                         VpnManager.appendLog("MTU export destination selected via file manager")
                     } else {
@@ -456,9 +456,9 @@ class MasterDnsVpnService : VpnService() {
     private fun exportMtuResultsIfNeeded() {
         val target = mtuExportTargetUri?.takeIf { it.isNotBlank() } ?: return
         val dir = mtuTempOutputDir ?: return
-        val fileName = mtuResultsFileName ?: return
-        val sourceFile = File(dir, fileName)
-        if (!sourceFile.exists() || sourceFile.length() <= 0) {
+        val preferred = mtuResultsFilePath?.let { File(it) }
+        val sourceFile = resolveMtuResultsSourceFile(preferred, dir)
+        if (sourceFile == null) {
             VpnManager.appendLog("MTU export skipped: no results generated")
             return
         }
@@ -472,6 +472,22 @@ class MasterDnsVpnService : VpnService() {
         }.onFailure {
             VpnManager.appendLog("MTU export failed: ${it.message}")
         }
+    }
+
+    private fun resolveMtuResultsSourceFile(preferred: File?, dir: File): File? {
+        // Go may flush MTU writes shortly after stop; retry briefly before exporting.
+        repeat(5) {
+            if (preferred != null && preferred.exists() && preferred.length() > 0L) {
+                return preferred
+            }
+            Thread.sleep(200L)
+        }
+
+        // Fallback: pick the newest non-empty file in MTU export temp directory.
+        return dir.listFiles()
+            ?.asSequence()
+            ?.filter { it.isFile && it.length() > 0L }
+            ?.maxByOrNull { it.lastModified() }
     }
 
     private suspend fun ensureSocksPortAvailable(port: Int) {
