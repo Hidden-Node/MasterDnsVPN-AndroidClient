@@ -38,7 +38,7 @@ class MasterDnsVpnService : VpnService() {
         private const val TAG = "MasterDnsVPN"
         private const val NOTIFICATION_ID = 1
         private const val DEFAULT_SOCKS_PORT = 18000
-        private const val SOCKS_STARTUP_TIMEOUT_MS = 8 * 60 * 1000L
+        private const val SOCKS_STARTUP_TIMEOUT_MS = 30 * 60 * 1000L
         private const val SOCKS_POLL_INTERVAL_MS = 500L
 
         // Companion packages that browsers and apps rely on for network access.
