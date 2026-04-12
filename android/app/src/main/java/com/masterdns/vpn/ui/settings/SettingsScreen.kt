@@ -155,6 +155,7 @@ private val configFields = listOf(
     SettingField("MTU", "MTU_USING_SECTION_SEPARATOR_TEXT", "MTU_USING_SECTION_SEPARATOR_TEXT", "Optional separator text between sections"),
     SettingField("MTU", "MTU_REMOVED_SERVER_LOG_FORMAT", "MTU_REMOVED_SERVER_LOG_FORMAT", "Log format when resolver is removed"),
     SettingField("MTU", "MTU_ADDED_SERVER_LOG_FORMAT", "MTU_ADDED_SERVER_LOG_FORMAT", "Log format when resolver is re-added"),
+    SettingField("MTU", "MTU_REACTIVE_ADDED_SERVER_LOG_FORMAT", "MTU_REACTIVE_ADDED_SERVER_LOG_FORMAT", "Log format when resolver is re-added after reactive recheck"),
     SettingField("Runtime", "RX_TX_WORKERS", "RX_TX_WORKERS", "Combined RX/TX worker count", keyboardType = KeyboardType.Number),
     SettingField("Runtime", "TUNNEL_PROCESS_WORKERS", "TUNNEL_PROCESS_WORKERS", "Processor worker count", keyboardType = KeyboardType.Number),
     SettingField("Runtime", "TUNNEL_PACKET_TIMEOUT_SECONDS", "TUNNEL_PACKET_TIMEOUT_SECONDS", "Packet timeout seconds", keyboardType = KeyboardType.Decimal),
@@ -622,6 +623,7 @@ private fun defaultValuesFor(profile: ProfileEntity): Map<String, String> {
         put("MTU_USING_SECTION_SEPARATOR_TEXT", adv("MTU_USING_SECTION_SEPARATOR_TEXT", ""))
         put("MTU_REMOVED_SERVER_LOG_FORMAT", adv("MTU_REMOVED_SERVER_LOG_FORMAT", "Resolver {IP} ({DOMAIN}) removed at {TIME} due to {CAUSE}"))
         put("MTU_ADDED_SERVER_LOG_FORMAT", adv("MTU_ADDED_SERVER_LOG_FORMAT", "Resolver {IP} ({DOMAIN}) added back at {TIME} (UP {UP_MTU}, DOWN {DOWN_MTU})"))
+        put("MTU_REACTIVE_ADDED_SERVER_LOG_FORMAT", adv("MTU_REACTIVE_ADDED_SERVER_LOG_FORMAT", "Resolver {IP} ({DOMAIN}) added back at {TIME} after reactive recheck (UP {UP_MTU}, DOWN {DOWN_MTU})"))
         put("MTU_EXPORT_URI", adv("MTU_EXPORT_URI", ""))
         put("RX_TX_WORKERS", adv("RX_TX_WORKERS", "4"))
         put("TUNNEL_PROCESS_WORKERS", adv("TUNNEL_PROCESS_WORKERS", "6"))

@@ -67,6 +67,7 @@ type Client struct {
 	mtuUsingSeparatorText                 string
 	mtuRemovedServerLogFormat             string
 	mtuAddedServerLogFormat               string
+	mtuReactiveAddedServerLogFormat       string
 	streamResolverFailoverResendThreshold int
 	streamResolverFailoverCooldown        time.Duration
 
@@ -268,6 +269,7 @@ func New(cfg config.ClientConfig, log *logger.Logger, codec *security.Codec) *Cl
 		mtuUsingSeparatorText:                 cfg.MTUUsingSeparatorText,
 		mtuRemovedServerLogFormat:             cfg.MTURemovedServerLogFormat,
 		mtuAddedServerLogFormat:               cfg.MTUAddedServerLogFormat,
+		mtuReactiveAddedServerLogFormat:       cfg.MTUReactiveAddedServerLogFormat,
 		streamResolverFailoverResendThreshold: cfg.StreamResolverFailoverResendThreshold,
 		streamResolverFailoverCooldown:        time.Duration(cfg.StreamResolverFailoverCooldownSec * float64(time.Second)),
 
@@ -313,6 +315,15 @@ func New(cfg config.ClientConfig, log *logger.Logger, codec *security.Codec) *Cl
 		cfg.AutoDisableTimeoutServers,
 		time.Duration(cfg.AutoDisableTimeoutWindowSeconds*float64(time.Second)),
 	)
+
+	c.balancer.SetResolverDisabledHandler(func(conn *Connection, cause string) {
+		c.appendMTURemovedServerLine(conn, cause)
+	})
+
+	c.balancer.SetResolverDownConfirmHandler(func(conn *Connection, window time.Duration) bool {
+		return c.confirmResolverDown(conn, window)
+	})
+
 	c.pingManager = newPingManager(c)
 	return c
 }

@@ -103,6 +103,7 @@ object ConfigGenerator {
             appendLine("MTU_USING_SECTION_SEPARATOR_TEXT = \"${escapeToml(cfg("MTU_USING_SECTION_SEPARATOR_TEXT", ""))}\"")
             appendLine("MTU_REMOVED_SERVER_LOG_FORMAT = \"${escapeToml(cfg("MTU_REMOVED_SERVER_LOG_FORMAT", "Resolver {IP} ({DOMAIN}) removed at {TIME} due to {CAUSE}"))}\"")
             appendLine("MTU_ADDED_SERVER_LOG_FORMAT = \"${escapeToml(cfg("MTU_ADDED_SERVER_LOG_FORMAT", "Resolver {IP} ({DOMAIN}) added back at {TIME} (UP {UP_MTU}, DOWN {DOWN_MTU})"))}\"")
+            appendLine("MTU_REACTIVE_ADDED_SERVER_LOG_FORMAT = \"${escapeToml(cfg("MTU_REACTIVE_ADDED_SERVER_LOG_FORMAT", "Resolver {IP} ({DOMAIN}) added back at {TIME} after reactive recheck (UP {UP_MTU}, DOWN {DOWN_MTU})"))}\"")
             appendLine()
 
             // Section 7: Runtime Workers
