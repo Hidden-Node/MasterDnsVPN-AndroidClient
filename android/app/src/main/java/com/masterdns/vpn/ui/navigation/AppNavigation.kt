@@ -35,12 +35,16 @@ fun AppNavigation() {
 
     val bottomBarScreens = listOf(Screen.Home, Screen.Profiles, Screen.Logs, Screen.Settings)
     fun navigateToRoot(screen: Screen) {
+        val currentRoute = currentDestination?.route
+        if (currentRoute == screen.route) {
+            return
+        }
         navController.navigate(screen.route) {
             popUpTo(navController.graph.findStartDestination().id) {
-                saveState = true
+                saveState = false
             }
             launchSingleTop = true
-            restoreState = true
+            restoreState = false
         }
     }
     val icons = mapOf(
