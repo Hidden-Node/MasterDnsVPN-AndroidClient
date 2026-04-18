@@ -109,9 +109,11 @@ fun GlobalSettingsScreen(vm: GlobalSettingsViewModel = viewModel()) {
                                 }
                                 return@IconButton
                             }
+                            val safeSocksPort = socksPortValue ?: return@IconButton
+                            val safeHttpPort = httpPortValue ?: return@IconButton
                             draft = draft.copy(
-                                internetSharingSocksPort = socksPortValue,
-                                internetSharingHttpPort = httpPortValue
+                                internetSharingSocksPort = safeSocksPort,
+                                internetSharingHttpPort = safeHttpPort
                             )
                             vm.save(normalize(draft))
                             scope.launch { snackbarHostState.showSnackbar("Global settings saved and applied") }
