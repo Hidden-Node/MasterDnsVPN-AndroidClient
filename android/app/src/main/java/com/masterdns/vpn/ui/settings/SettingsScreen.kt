@@ -1,6 +1,7 @@
 package com.masterdns.vpn.ui.settings
 
 import android.content.Context
+import android.content.Intent
 import android.net.Uri
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
@@ -260,6 +261,12 @@ fun SettingsScreen(
         ActivityResultContracts.CreateDocument("text/plain")
     ) { uri ->
         if (uri != null) {
+            runCatching {
+                context.contentResolver.takePersistableUriPermission(
+                    uri,
+                    Intent.FLAG_GRANT_READ_URI_PERMISSION or Intent.FLAG_GRANT_WRITE_URI_PERMISSION
+                )
+            }
             fieldsState["MTU_EXPORT_URI"] = uri.toString()
             scope.launch { snackbarHostState.showSnackbar("MTU export destination selected") }
         }
