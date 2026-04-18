@@ -18,6 +18,7 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ArrowDropDown
+import androidx.compose.material.icons.filled.Save
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
@@ -33,6 +34,7 @@ import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
 import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Surface
@@ -87,7 +89,24 @@ fun GlobalSettingsScreen(vm: GlobalSettingsViewModel = viewModel()) {
     val httpPortRequiresRoot = httpPortValue != null && httpPortValue in 1..1024
 
     Scaffold(
-        topBar = { TopAppBar(title = { Text("Settings") }) },
+        topBar = {
+            TopAppBar(
+                title = { Text("Settings") },
+                actions = {
+                    IconButton(
+                        onClick = {
+                            vm.save(normalize(draft))
+                            scope.launch { snackbarHostState.showSnackbar("Global settings saved and applied") }
+                        }
+                    ) {
+                        Icon(
+                            imageVector = Icons.Filled.Save,
+                            contentDescription = "Save"
+                        )
+                    }
+                }
+            )
+        },
         snackbarHost = { SnackbarHost(hostState = snackbarHostState) }
     ) { padding ->
         LazyColumn(
@@ -158,15 +177,6 @@ fun GlobalSettingsScreen(vm: GlobalSettingsViewModel = viewModel()) {
                             }
                         }
 
-                        Button(
-                            onClick = {
-                                vm.save(normalize(draft))
-                                scope.launch { snackbarHostState.showSnackbar("Global settings saved and applied") }
-                            },
-                            modifier = Modifier.fillMaxWidth()
-                        ) {
-                            Text("Save Global Settings")
-                        }
                     }
                 }
             }
