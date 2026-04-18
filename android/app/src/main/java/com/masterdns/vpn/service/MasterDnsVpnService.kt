@@ -660,6 +660,7 @@ private suspend fun handleHttpProxyClient(client: java.net.Socket, username: Str
                 output.write("HTTP/1.1 405 Method Not Allowed\r\n\r\n")
                 output.flush()
             }
-        } catch (_: Exception) {}
+} catch (_: Exception) {}
         runCatching { client.close() }
+    }
 }
