@@ -7,21 +7,26 @@ import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.*
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.PowerSettingsNew
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.scale
 import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.SpanStyle
 import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.font.FontWeight
@@ -31,13 +36,15 @@ import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
 import com.google.gson.Gson
 import com.google.gson.reflect.TypeToken
+import com.masterdns.vpn.R
 import com.masterdns.vpn.ui.theme.*
 import com.masterdns.vpn.util.VpnManager
 
 @Composable
 fun HomeScreen(
     viewModel: HomeViewModel = hiltViewModel(),
-    onNavigateToProfiles: () -> Unit
+    onNavigateToProfiles: () -> Unit,
+    onOpenInfo: () -> Unit
 ) {
     val vpnState by VpnManager.state.collectAsState()
     val upBps by VpnManager.uploadSpeedBps.collectAsState()
@@ -109,9 +116,44 @@ fun HomeScreen(
             .fillMaxSize()
             .background(MaterialTheme.colorScheme.background)
             .padding(24.dp),
-        horizontalAlignment = Alignment.CenterHorizontally,
-        verticalArrangement = Arrangement.Center
+        horizontalAlignment = Alignment.CenterHorizontally
     ) {
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Row(
+                modifier = Modifier
+                    .clip(RoundedCornerShape(12.dp))
+                    .clickable { onOpenInfo() }
+                    .padding(horizontal = 8.dp, vertical = 6.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Image(
+                    painter = painterResource(id = R.drawable.ic_launcher_foreground_raw),
+                    contentDescription = "Open info page",
+                    modifier = Modifier.size(32.dp)
+                )
+                Spacer(modifier = Modifier.width(8.dp))
+                Text(
+                    text = "MDV-HN",
+                    style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold)
+                )
+            }
+            FilledIconButton(
+                onClick = onOpenInfo,
+                colors = IconButtonDefaults.filledIconButtonColors(
+                    containerColor = MaterialTheme.colorScheme.primaryContainer
+                )
+            ) {
+                Icon(
+                    imageVector = Icons.Filled.Info,
+                    contentDescription = "Open info page"
+                )
+            }
+        }
+
         // Status text
         Text(
             text = when (vpnState) {

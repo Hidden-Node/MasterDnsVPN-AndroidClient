@@ -14,6 +14,7 @@ import androidx.navigation.compose.composable
 import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
 import com.masterdns.vpn.ui.home.HomeScreen
+import com.masterdns.vpn.ui.info.InfoScreen
 import com.masterdns.vpn.ui.logs.LogsScreen
 import com.masterdns.vpn.ui.profiles.ProfilesScreen
 import com.masterdns.vpn.ui.settings.GlobalSettingsScreen
@@ -24,6 +25,7 @@ sealed class Screen(val route: String, val title: String) {
     data object Profiles : Screen("profiles", "Profiles")
     data object Logs : Screen("logs", "Logs")
     data object Settings : Screen("settings", "Settings")
+    data object Info : Screen("info", "Info")
     data object ProfileSettings : Screen("profile_settings/{profileId}", "Profile Settings")
 }
 
@@ -86,7 +88,8 @@ fun AppNavigation() {
                 HomeScreen(
                     onNavigateToProfiles = {
                         navController.navigate(Screen.Profiles.route)
-                    }
+                    },
+                    onOpenInfo = { navController.navigate(Screen.Info.route) }
                 )
             }
             composable(Screen.Profiles.route) {
@@ -109,6 +112,9 @@ fun AppNavigation() {
                 SettingsScreen(
                     onBack = { navController.popBackStack() }
                 )
+            }
+            composable(Screen.Info.route) {
+                InfoScreen(onBack = { navController.popBackStack() })
             }
         }
     }

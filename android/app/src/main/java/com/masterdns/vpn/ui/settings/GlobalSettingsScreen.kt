@@ -11,7 +11,6 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
@@ -51,22 +50,16 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.asImageBitmap
-import androidx.compose.ui.platform.LocalUriHandler
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.PasswordVisualTransformation
-import androidx.compose.ui.text.style.TextDecoration
-import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Dialog
 import androidx.core.graphics.drawable.toBitmap
 import androidx.lifecycle.viewmodel.compose.viewModel
-import com.masterdns.vpn.R
 import com.masterdns.vpn.util.GlobalSettings
 import kotlinx.coroutines.launch
-import com.masterdns.vpn.BuildConfig
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -88,7 +81,6 @@ fun GlobalSettingsScreen(vm: GlobalSettingsViewModel = viewModel()) {
     var draftAppSelection by remember { mutableStateOf(parseCsv(current.splitPackagesCsv).toMutableSet()) }
     val snackbarHostState = remember { SnackbarHostState() }
     val scope = rememberCoroutineScope()
-    val uriHandler = LocalUriHandler.current
     val socksPortValue = sharingSocksPortText.toIntOrNull()
     val httpPortValue = sharingHttpPortText.toIntOrNull()
     val socksPortRequiresRoot = socksPortValue != null && socksPortValue in 1..1024
@@ -282,77 +274,6 @@ fun GlobalSettingsScreen(vm: GlobalSettingsViewModel = viewModel()) {
                     }
                 }
             }
-            item {
-                Card(colors = CardDefaults.cardColors()) {
-                    Column(
-                        modifier = Modifier.padding(12.dp),
-                        verticalArrangement = Arrangement.spacedBy(8.dp)
-                    ) {
-                        Text("Project Links", style = MaterialTheme.typography.titleMedium)
-                        val mainGithubLink = stringResource(R.string.project_main_github)
-                        val mainTelegramLink = stringResource(R.string.project_main_telegram)
-                        val androidClientGithubLink = stringResource(R.string.project_android_client_github)
-                        LinkRow(
-                            title = "Main GitHub:",
-                            link = mainGithubLink,
-                            onOpen = { uriHandler.openUri("https://$mainGithubLink") }
-                        )
-                        LinkRow(
-                            title = "Main Telegram:",
-                            link = mainTelegramLink,
-                            onOpen = { uriHandler.openUri("https://$mainTelegramLink") }
-                        )
-                        LinkRow(
-                            title = "MDV-HN Android Client:",
-                            link = androidClientGithubLink,
-                            onOpen = { uriHandler.openUri("https://$androidClientGithubLink") }
-                        )
-                    }
-                }
-            }
-            item {
-                val engineVersion = stringResource(R.string.engine_version)
-                Card(colors = CardDefaults.cardColors()) {
-                    Column(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(12.dp),
-                        verticalArrangement = Arrangement.spacedBy(6.dp)
-                    ) {
-                        Text("Version Info", style = MaterialTheme.typography.titleMedium)
-                        Row(
-                            modifier = Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.SpaceBetween
-                        ) {
-                            Text(
-                                "App Version",
-                                style = MaterialTheme.typography.bodyMedium,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant
-                            )
-                            Text(
-                                BuildConfig.VERSION_NAME,
-                                style = MaterialTheme.typography.bodyMedium,
-                                fontWeight = FontWeight.Medium
-                            )
-                        }
-                        Row(
-                            modifier = Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.SpaceBetween
-                        ) {
-                            Text(
-                                "Upstream Engine",
-                                style = MaterialTheme.typography.bodyMedium,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant
-                            )
-                            Text(
-                                engineVersion,
-                                style = MaterialTheme.typography.bodyMedium,
-                                fontWeight = FontWeight.Medium
-                            )
-                        }
-                    }
-                }
-            }
         }
     }
 
@@ -514,32 +435,6 @@ fun GlobalSettingsScreen(vm: GlobalSettingsViewModel = viewModel()) {
                 }
             }
         }
-    }
-}
-
-@Composable
-private fun LinkRow(title: String, link: String, onOpen: () -> Unit) {
-    Column(
-        modifier = Modifier
-            .fillMaxWidth()
-            .clickable(onClick = onOpen)
-            .padding(vertical = 6.dp)
-    ) {
-        Text(
-            text = title,
-            style = MaterialTheme.typography.bodyMedium,
-            color = MaterialTheme.colorScheme.onSurfaceVariant
-        )
-        Text(
-            text = link,
-            style = MaterialTheme.typography.bodyMedium.copy(
-                textDecoration = TextDecoration.Underline,
-                fontWeight = FontWeight.Medium
-            ),
-            color = MaterialTheme.colorScheme.primary,
-            maxLines = 3,
-            overflow = TextOverflow.Ellipsis
-        )
     }
 }
 
