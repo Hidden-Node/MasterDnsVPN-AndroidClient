@@ -28,12 +28,21 @@ object VpnManager {
     enum class VpnState {
         DISCONNECTED, CONNECTING, CONNECTED, DISCONNECTING, ERROR
     }
+    enum class LogSource {
+        CORE, ANDROID
+    }
+    data class LogEntry(
+        val line: String,
+        val source: LogSource
+    )
 
     private val _state = MutableStateFlow(VpnState.DISCONNECTED)
     val state: StateFlow<VpnState> = _state.asStateFlow()
 
     private val _logs = MutableStateFlow<List<String>>(emptyList())
     val logs: StateFlow<List<String>> = _logs.asStateFlow()
+    private val _logEntries = MutableStateFlow<List<LogEntry>>(emptyList())
+    val logEntries: StateFlow<List<LogEntry>> = _logEntries.asStateFlow()
 
     private val _errorMessage = MutableStateFlow<String?>(null)
     val errorMessage: StateFlow<String?> = _errorMessage.asStateFlow()
@@ -83,17 +92,27 @@ object VpnManager {
     }
 
     fun appendLog(line: String) {
+        appendLogInternal(line, LogSource.ANDROID)
+    }
+
+    fun appendCoreLog(line: String) {
+        appendLogInternal(line, LogSource.CORE)
+    }
+
+    private fun appendLogInternal(line: String, source: LogSource) {
         val normalizedLine = normalizeLogTimestampToLocal(line)
-        val current = _logs.value.toMutableList()
-        current.add(normalizedLine)
+        val current = _logEntries.value.toMutableList()
+        current.add(LogEntry(normalizedLine, source))
         if (current.size > MAX_LOG_LINES) {
             current.removeAt(0)
         }
-        _logs.value = current
+        _logEntries.value = current
+        _logs.value = current.map { it.line }
         parseScanLine(normalizedLine)
     }
 
     fun clearLogs() {
+        _logEntries.value = emptyList()
         _logs.value = emptyList()
         _scanStatus.value = ScanStatus()
     }

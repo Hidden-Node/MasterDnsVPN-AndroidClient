@@ -545,7 +545,7 @@ class MasterDnsVpnService : VpnService() {
                     while (true) {
                         val line = raf.readLine() ?: break
                         if (line.isNotBlank()) {
-                            VpnManager.appendLog(line)
+                            VpnManager.appendCoreLog(line)
                             maybeReportSocksAuthIssue(line)
                         }
                     }

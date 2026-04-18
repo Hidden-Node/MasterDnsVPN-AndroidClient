@@ -32,13 +32,13 @@ private enum class LogFilter(val label: String) {
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun LogsScreen(onBack: () -> Unit) {
-    val logs by VpnManager.logs.collectAsState()
+    val logEntries by VpnManager.logEntries.collectAsState()
     var activeFilter by remember { mutableStateOf(LogFilter.ALL) }
-    val filteredLogs = remember(logs, activeFilter) {
+    val filteredLogs = remember(logEntries, activeFilter) {
         when (activeFilter) {
-            LogFilter.ALL -> logs
-            LogFilter.CORE -> logs.filter { isCoreLog(it) }
-            LogFilter.ANDROID -> logs.filterNot { isCoreLog(it) }
+            LogFilter.ALL -> logEntries
+            LogFilter.CORE -> logEntries.filter { it.source == VpnManager.LogSource.CORE }
+            LogFilter.ANDROID -> logEntries.filter { it.source == VpnManager.LogSource.ANDROID }
         }
     }
     val listState = rememberLazyListState()
@@ -49,7 +49,7 @@ fun LogsScreen(onBack: () -> Unit) {
 
     val shareLogs: () -> Unit = {
         if (filteredLogs.isNotEmpty()) {
-            val content = filteredLogs.joinToString("\n")
+            val content = filteredLogs.joinToString("\n") { it.line }
             val intent = Intent(Intent.ACTION_SEND).apply {
                 type = "text/plain"
                 putExtra(Intent.EXTRA_SUBJECT, "MasterDnsVPN Logs")
@@ -135,7 +135,8 @@ fun LogsScreen(onBack: () -> Unit) {
                 state = listState,
                 contentPadding = PaddingValues(8.dp)
             ) {
-                items(filteredLogs) { line ->
+                items(filteredLogs) { entry ->
+                    val line = entry.line
                     val color = when {
                         line.contains("[ERROR]", ignoreCase = true) -> Color(0xFFE57373)
                         line.contains("[WARN]", ignoreCase = true) -> Color(0xFFFFB74D)
@@ -153,8 +154,4 @@ fun LogsScreen(onBack: () -> Unit) {
             }
         }
     }
-}
-
-private fun isCoreLog(line: String): Boolean {
-    return Regex("^\\d{4}-\\d{2}-\\d{2}[ T]\\d{2}:\\d{2}:\\d{2}").containsMatchIn(line)
 }
