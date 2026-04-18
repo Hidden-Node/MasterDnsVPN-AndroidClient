@@ -23,10 +23,24 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.masterdns.vpn.util.VpnManager
 
+private enum class LogFilter(val label: String) {
+    ALL("All"),
+    CORE("Core"),
+    ANDROID("Android")
+}
+
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun LogsScreen(onBack: () -> Unit) {
     val logs by VpnManager.logs.collectAsState()
+    var activeFilter by remember { mutableStateOf(LogFilter.ALL) }
+    val filteredLogs = remember(logs, activeFilter) {
+        when (activeFilter) {
+            LogFilter.ALL -> logs
+            LogFilter.CORE -> logs.filter { isCoreLog(it) }
+            LogFilter.ANDROID -> logs.filterNot { isCoreLog(it) }
+        }
+    }
     val listState = rememberLazyListState()
     var autoScrollEnabled by remember { mutableStateOf(true) }
     var lockedIndex by remember { mutableStateOf(0) }
@@ -34,8 +48,8 @@ fun LogsScreen(onBack: () -> Unit) {
     val context = LocalContext.current
 
     val shareLogs: () -> Unit = {
-        if (logs.isNotEmpty()) {
-            val content = logs.joinToString("\n")
+        if (filteredLogs.isNotEmpty()) {
+            val content = filteredLogs.joinToString("\n")
             val intent = Intent(Intent.ACTION_SEND).apply {
                 type = "text/plain"
                 putExtra(Intent.EXTRA_SUBJECT, "MasterDnsVPN Logs")
@@ -53,12 +67,12 @@ fun LogsScreen(onBack: () -> Unit) {
     }
 
     // Auto-scroll to bottom when new logs arrive, otherwise keep viewport locked
-    LaunchedEffect(logs.size) {
-        if (logs.isEmpty()) return@LaunchedEffect
+    LaunchedEffect(filteredLogs.size, activeFilter) {
+        if (filteredLogs.isEmpty()) return@LaunchedEffect
         if (autoScrollEnabled) {
-            listState.animateScrollToItem(logs.size - 1)
+            listState.animateScrollToItem(filteredLogs.size - 1)
         } else {
-            val safeIndex = lockedIndex.coerceIn(0, (logs.size - 1).coerceAtLeast(0))
+            val safeIndex = lockedIndex.coerceIn(0, (filteredLogs.size - 1).coerceAtLeast(0))
             listState.scrollToItem(safeIndex, lockedOffset)
         }
     }
@@ -97,29 +111,50 @@ fun LogsScreen(onBack: () -> Unit) {
             )
         }
     ) { padding ->
-        LazyColumn(
+        Column(
             modifier = Modifier
                 .fillMaxSize()
                 .padding(padding)
-                .background(MaterialTheme.colorScheme.background),
-            state = listState,
-            contentPadding = PaddingValues(8.dp)
+                .background(MaterialTheme.colorScheme.background)
         ) {
-            items(logs) { line ->
-                val color = when {
-                    line.contains("[ERROR]", ignoreCase = true) -> Color(0xFFE57373)
-                    line.contains("[WARN]", ignoreCase = true) -> Color(0xFFFFB74D)
-                    line.contains("[INFO]", ignoreCase = true) -> Color(0xFF81C784)
-                    else -> MaterialTheme.colorScheme.onSurface.copy(alpha = 0.85f)
+            Row(
+                modifier = Modifier.padding(horizontal = 8.dp, vertical = 6.dp),
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                LogFilter.entries.forEach { filter ->
+                    FilterChip(
+                        selected = activeFilter == filter,
+                        onClick = { activeFilter = filter },
+                        label = { Text(filter.label) }
+                    )
                 }
-                Text(
-                    text = line,
-                    fontFamily = FontFamily.Monospace,
-                    fontSize = 12.sp,
-                    color = color,
-                    modifier = Modifier.padding(vertical = 1.dp)
-                )
+            }
+
+            LazyColumn(
+                modifier = Modifier.fillMaxSize(),
+                state = listState,
+                contentPadding = PaddingValues(8.dp)
+            ) {
+                items(filteredLogs) { line ->
+                    val color = when {
+                        line.contains("[ERROR]", ignoreCase = true) -> Color(0xFFE57373)
+                        line.contains("[WARN]", ignoreCase = true) -> Color(0xFFFFB74D)
+                        line.contains("[INFO]", ignoreCase = true) -> Color(0xFF81C784)
+                        else -> MaterialTheme.colorScheme.onSurface.copy(alpha = 0.85f)
+                    }
+                    Text(
+                        text = line,
+                        fontFamily = FontFamily.Monospace,
+                        fontSize = 12.sp,
+                        color = color,
+                        modifier = Modifier.padding(vertical = 1.dp)
+                    )
+                }
             }
         }
     }
+}
+
+private fun isCoreLog(line: String): Boolean {
+    return Regex("^\\d{4}-\\d{2}-\\d{2}[ T]\\d{2}:\\d{2}:\\d{2}").containsMatchIn(line)
 }
