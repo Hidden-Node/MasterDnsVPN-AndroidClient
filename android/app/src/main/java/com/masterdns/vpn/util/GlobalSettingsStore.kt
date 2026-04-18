@@ -66,8 +66,8 @@ object GlobalSettingsStore {
             splitTunnelingEnabled = this[KEY_SPLIT_TUNNELING_ENABLED] ?: false,
             splitPackagesCsv = this[KEY_SPLIT_PACKAGES] ?: "",
             internetSharingEnabled = this[KEY_INTERNET_SHARING_ENABLED] ?: false,
-            internetSharingSocksPort = this[KEY_INTERNET_SHARING_SOCKS_PORT]?.toIntOrNull() ?: 1080,
-            internetSharingHttpPort = this[KEY_INTERNET_SHARING_HTTP_PORT]?.toIntOrNull() ?: 1081,
+            internetSharingSocksPort = this[KEY_INTERNET_SHARING_SOCKS_PORT]?.toIntOrNull() ?: 8090,
+            internetSharingHttpPort = this[KEY_INTERNET_SHARING_HTTP_PORT]?.toIntOrNull() ?: 8091,
             internetSharingUser = this[KEY_INTERNET_SHARING_USER] ?: "",
             internetSharingPass = this[KEY_INTERNET_SHARING_PASS] ?: ""
         )

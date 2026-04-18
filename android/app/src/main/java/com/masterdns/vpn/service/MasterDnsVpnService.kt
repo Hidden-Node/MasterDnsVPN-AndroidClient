@@ -59,6 +59,7 @@ class MasterDnsVpnService : VpnService() {
     private var vpnInterface: ParcelFileDescriptor? = null
     private var goClientJob: Job? = null
     private var httpProxyJob: Job? = null
+    private var sharingSocksJob: Job? = null
     private var logTailJob: Job? = null
     private var wakeLock: PowerManager.WakeLock? = null
     private var mtuExportTargetUri: String? = null
@@ -67,6 +68,8 @@ class MasterDnsVpnService : VpnService() {
     private var isStopping = false
     @Volatile
     private var socksAuthWarningShown = false
+    @Volatile
+    private var activeLocalSocksPort: Int = DEFAULT_SOCKS_PORT
 
     override fun onCreate() {
         super.onCreate()
@@ -105,6 +108,7 @@ class MasterDnsVpnService : VpnService() {
                 val profile = db.profileDao().getProfileById(profileId)
                     ?: throw IllegalStateException("Profile not found")
                 val socksPort = profile.listenPort.takeIf { it in 1..65535 } ?: DEFAULT_SOCKS_PORT
+                activeLocalSocksPort = socksPort
                 val globalSettings = GlobalSettingsStore.load(this@MasterDnsVpnService)
                 val proxyMode = globalSettings.connectionMode.equals("PROXY", ignoreCase = true)
                 val protocolOverride = "SOCKS5"
@@ -353,6 +357,7 @@ class MasterDnsVpnService : VpnService() {
                 // Cancel coroutines
                 goClientJob?.cancel()
                 httpProxyJob?.cancel()
+                sharingSocksJob?.cancel()
                 logTailJob?.cancel()
 
                 VpnManager.updateState(VpnManager.VpnState.DISCONNECTED)
@@ -585,6 +590,24 @@ class MasterDnsVpnService : VpnService() {
     }
 
     private fun startInternetSharing(socksPort: Int, httpPort: Int, username: String, password: String) {
+        sharingSocksJob?.cancel()
+        sharingSocksJob = serviceScope.launch {
+            try {
+                val server = java.net.ServerSocket(socksPort, 50, InetAddress.getByName("0.0.0.0"))
+                server.reuseAddress = true
+                VpnManager.appendLog("Sharing SOCKS5 proxy ready on 0.0.0.0:$socksPort")
+                while (isActive) {
+                    val client = server.accept() ?: continue
+                    launch(Dispatchers.IO) {
+                        handleSharingSocksClient(client)
+                    }
+                }
+            } catch (e: Exception) {
+                Log.e(TAG, "Sharing SOCKS5 proxy error", e)
+                VpnManager.appendLog("Sharing SOCKS5 proxy error: ${e.message}")
+            }
+        }
+
         httpProxyJob?.cancel()
         httpProxyJob = serviceScope.launch {
             try {
@@ -594,16 +617,30 @@ class MasterDnsVpnService : VpnService() {
                 while (isActive) {
                     val client = server.accept() ?: continue
                     launch(Dispatchers.IO) {
-                        handleHttpProxyClient(client, username, password)
+                        handleHttpProxyClient(client, socksPort, username, password)
                     }
                 }
             } catch (e: Exception) {
                 Log.e(TAG, "HTTP proxy error", e)
+                VpnManager.appendLog("HTTP proxy error: ${e.message}")
             }
         }
     }
 
-private suspend fun handleHttpProxyClient(client: java.net.Socket, username: String, password: String) {
+    private fun handleSharingSocksClient(client: java.net.Socket) {
+        var upstream: java.net.Socket? = null
+        try {
+            upstream = java.net.Socket("127.0.0.1", activeLocalSocksPort)
+            upstream.soTimeout = 30000
+            bridgeBidirectional(client, upstream)
+        } catch (_: Exception) {
+        } finally {
+            runCatching { upstream?.close() }
+            runCatching { client.close() }
+        }
+    }
+
+private suspend fun handleHttpProxyClient(client: java.net.Socket, upstreamSocksPort: Int, username: String, password: String) {
         try {
             val input = client.getInputStream().bufferedReader()
             val output = client.getOutputStream().bufferedWriter()
@@ -618,6 +655,30 @@ private suspend fun handleHttpProxyClient(client: java.net.Socket, username: Str
             val method = parts[0]
             val url = parts[1]
 
+            var authHeader: String? = null
+            while (true) {
+                val line = input.readLine() ?: break
+                if (line.isBlank()) break
+                val idx = line.indexOf(':')
+                if (idx <= 0) continue
+                val name = line.substring(0, idx).trim()
+                val value = line.substring(idx + 1).trim()
+                if (name.equals("Proxy-Authorization", ignoreCase = true)) {
+                    authHeader = value
+                }
+            }
+
+            val requiresAuth = username.isNotBlank() || password.isNotBlank()
+            if (requiresAuth && !isValidBasicProxyAuth(authHeader, username, password)) {
+                output.write(
+                    "HTTP/1.1 407 Proxy Authentication Required\r\n" +
+                        "Proxy-Authenticate: Basic realm=\"MasterDnsVPN\"\r\n" +
+                        "Connection: close\r\n\r\n"
+                )
+                output.flush()
+                return
+            }
+
             if (method == "CONNECT") {
                 val hostPort = url.split(":")
                 val host = hostPort[0]
@@ -626,41 +687,130 @@ private suspend fun handleHttpProxyClient(client: java.net.Socket, username: Str
                 output.write("HTTP/1.1 200 Connection Established\r\n\r\n")
                 output.flush()
 
-                val upstream = java.net.Socket(host, port)
+                val upstream = createSocks5Tunnel(upstreamSocksPort, host, port)
                 upstream.soTimeout = 30000
 
-                val clientIn = client.getInputStream()
-                val clientOut = client.getOutputStream()
-                val upIn = upstream.getInputStream()
-                val upOut = upstream.getOutputStream()
-                val buffer = ByteArray(8192)
-
-                serviceScope.launch(Dispatchers.IO) {
-                    try {
-                        while (!client.isClosed && !upstream.isClosed) {
-                            val r = clientIn.read(buffer)
-                            if (r <= 0) break
-                            upOut.write(buffer, 0, r)
-                            upOut.flush()
-                        }
-                    } catch (_: Exception) {}
-                }
-
-                serviceScope.launch(Dispatchers.IO) {
-                    try {
-                        while (!client.isClosed && !upstream.isClosed) {
-                            val r = upIn.read(buffer)
-                            if (r <= 0) break
-                            clientOut.write(buffer, 0, r)
-                            clientOut.flush()
-                        }
-                    } catch (_: Exception) {}
-                }
+                bridgeBidirectional(client, upstream)
             } else {
                 output.write("HTTP/1.1 405 Method Not Allowed\r\n\r\n")
                 output.flush()
             }
 } catch (_: Exception) {}
         runCatching { client.close() }
+    }
+
+    private fun bridgeBidirectional(client: java.net.Socket, upstream: java.net.Socket) {
+        val upToClient = serviceScope.launch(Dispatchers.IO) {
+            val buffer = ByteArray(8192)
+            try {
+                val input = upstream.getInputStream()
+                val output = client.getOutputStream()
+                while (isActive && !client.isClosed && !upstream.isClosed) {
+                    val read = input.read(buffer)
+                    if (read <= 0) break
+                    output.write(buffer, 0, read)
+                    output.flush()
+                }
+            } catch (_: Exception) {
+            } finally {
+                runCatching { client.shutdownOutput() }
+            }
+        }
+
+        val clientToUp = serviceScope.launch(Dispatchers.IO) {
+            val buffer = ByteArray(8192)
+            try {
+                val input = client.getInputStream()
+                val output = upstream.getOutputStream()
+                while (isActive && !client.isClosed && !upstream.isClosed) {
+                    val read = input.read(buffer)
+                    if (read <= 0) break
+                    output.write(buffer, 0, read)
+                    output.flush()
+                }
+            } catch (_: Exception) {
+            } finally {
+                runCatching { upstream.shutdownOutput() }
+            }
+        }
+
+        runBlocking {
+            joinAll(upToClient, clientToUp)
+        }
+        runCatching { upstream.close() }
+        runCatching { client.close() }
+    }
+
+    private fun createSocks5Tunnel(socksPort: Int, targetHost: String, targetPort: Int): java.net.Socket {
+        val socket = java.net.Socket("127.0.0.1", socksPort)
+        socket.soTimeout = 15000
+        val input = socket.getInputStream()
+        val output = socket.getOutputStream()
+
+        output.write(byteArrayOf(0x05, 0x01, 0x00))
+        output.flush()
+        val greeting = ByteArray(2)
+        readFully(input, greeting, 0, greeting.size)
+        if (greeting[0] != 0x05.toByte() || greeting[1] != 0x00.toByte()) {
+            throw IllegalStateException("SOCKS5 upstream greeting failed")
+        }
+
+        val hostBytes = targetHost.toByteArray(Charsets.UTF_8)
+        if (hostBytes.size > 255) {
+            throw IllegalArgumentException("Target host is too long")
+        }
+        val req = ByteArray(7 + hostBytes.size)
+        req[0] = 0x05
+        req[1] = 0x01
+        req[2] = 0x00
+        req[3] = 0x03
+        req[4] = hostBytes.size.toByte()
+        System.arraycopy(hostBytes, 0, req, 5, hostBytes.size)
+        req[5 + hostBytes.size] = ((targetPort shr 8) and 0xFF).toByte()
+        req[6 + hostBytes.size] = (targetPort and 0xFF).toByte()
+        output.write(req)
+        output.flush()
+
+        val header = ByteArray(4)
+        readFully(input, header, 0, header.size)
+        if (header[0] != 0x05.toByte() || header[1] != 0x00.toByte()) {
+            throw IllegalStateException("SOCKS5 connect failed with code ${header[1].toInt() and 0xFF}")
+        }
+
+        val addrLen = when (header[3].toInt() and 0xFF) {
+            0x01 -> 4
+            0x03 -> {
+                val size = input.read()
+                if (size < 0) throw IllegalStateException("SOCKS5 malformed bind address length")
+                size
+            }
+            0x04 -> 16
+            else -> throw IllegalStateException("SOCKS5 unsupported bind address type")
+        }
+        val skip = ByteArray(addrLen + 2)
+        readFully(input, skip, 0, skip.size)
+        return socket
+    }
+
+    private fun isValidBasicProxyAuth(header: String?, username: String, password: String): Boolean {
+        if (username.isBlank() && password.isBlank()) return true
+        val value = header?.trim().orEmpty()
+        if (!value.startsWith("Basic ", ignoreCase = true)) return false
+        val encoded = value.substringAfter(" ", "").trim()
+        if (encoded.isBlank()) return false
+        val decoded = runCatching {
+            val bytes = android.util.Base64.decode(encoded, android.util.Base64.DEFAULT)
+            String(bytes, Charsets.UTF_8)
+        }.getOrNull() ?: return false
+        return decoded == "$username:$password"
+    }
+
+    private fun readFully(input: java.io.InputStream, buffer: ByteArray, offset: Int, length: Int) {
+        var total = 0
+        while (total < length) {
+            val read = input.read(buffer, offset + total, length - total)
+            if (read < 0) throw IllegalStateException("Unexpected EOF while reading SOCKS5 response")
+            total += read
+        }
     }
 }
