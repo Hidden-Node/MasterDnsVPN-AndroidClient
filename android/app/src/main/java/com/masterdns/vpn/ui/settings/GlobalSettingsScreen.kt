@@ -74,6 +74,12 @@ fun GlobalSettingsScreen(vm: GlobalSettingsViewModel = viewModel()) {
     val current by vm.settings.collectAsState()
     val installedApps by vm.installedApps.collectAsState()
     var draft by remember(current) { mutableStateOf(current) }
+    var sharingSocksPortText by remember(current.internetSharingSocksPort) {
+        mutableStateOf(current.internetSharingSocksPort.toString())
+    }
+    var sharingHttpPortText by remember(current.internetSharingHttpPort) {
+        mutableStateOf(current.internetSharingHttpPort.toString())
+    }
     var modeExpanded by remember { mutableStateOf(false) }
     var showAppPicker by remember { mutableStateOf(false) }
     var availableQuery by remember { mutableStateOf("") }
@@ -203,8 +209,12 @@ fun GlobalSettingsScreen(vm: GlobalSettingsViewModel = viewModel()) {
                                 horizontalArrangement = Arrangement.spacedBy(8.dp)
                             ) {
                                 OutlinedTextField(
-                                    value = draft.internetSharingSocksPort.toString(),
+                                    value = sharingSocksPortText,
                                     onValueChange = {
+                                        if (it.any { ch -> !ch.isDigit() } || it.length > 5) {
+                                            return@OutlinedTextField
+                                        }
+                                        sharingSocksPortText = it
                                         val port = it.toIntOrNull()
                                         if (port != null && port in 1..65535) {
                                             draft = draft.copy(internetSharingSocksPort = port)
@@ -215,8 +225,12 @@ fun GlobalSettingsScreen(vm: GlobalSettingsViewModel = viewModel()) {
                                     modifier = Modifier.weight(1f)
                                 )
                                 OutlinedTextField(
-                                    value = draft.internetSharingHttpPort.toString(),
+                                    value = sharingHttpPortText,
                                     onValueChange = {
+                                        if (it.any { ch -> !ch.isDigit() } || it.length > 5) {
+                                            return@OutlinedTextField
+                                        }
+                                        sharingHttpPortText = it
                                         val port = it.toIntOrNull()
                                         if (port != null && port in 1..65535) {
                                             draft = draft.copy(internetSharingHttpPort = port)
