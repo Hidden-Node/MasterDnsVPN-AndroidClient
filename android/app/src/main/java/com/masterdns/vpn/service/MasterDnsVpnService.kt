@@ -663,25 +663,3 @@ private suspend fun handleHttpProxyClient(client: java.net.Socket, username: Str
         } catch (_: Exception) {}
         runCatching { client.close() }
 }
-}
-                    } catch (_: Exception) {}
-                    runCatching { upstream.close() }
-                }
-
-                val clientToUpstream = client.getInputStream()
-                val upstreamToClient = upstream.getOutputStream()
-                val buffer = ByteArray(8192)
-                while (!client.isClosed && !upstream.isClosed) {
-                    val read = clientToUpstream.read(buffer)
-                    if (read <= 0) break
-                    upstreamToClient.write(buffer, 0, read)
-                    upstreamToClient.flush()
-                }
-            } else {
-                output.write("HTTP/1.1 405 Method Not Allowed\r\n\r\n")
-                output.flush()
-            }
-        } catch (_: Exception) {}
-        runCatching { client.close() }
-    }
-}
