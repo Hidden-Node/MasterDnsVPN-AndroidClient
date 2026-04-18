@@ -58,6 +58,7 @@ class MasterDnsVpnService : VpnService() {
     private var connectJob: Job? = null
     private var vpnInterface: ParcelFileDescriptor? = null
     private var goClientJob: Job? = null
+    private var httpProxyJob: Job? = null
     private var logTailJob: Job? = null
     private var wakeLock: PowerManager.WakeLock? = null
     private var mtuExportTargetUri: String? = null
@@ -215,6 +216,15 @@ class MasterDnsVpnService : VpnService() {
                 )
                 VpnManager.appendLog("SOCKS5 proxy is ready on 127.0.0.1:$socksPort")
 
+                // Start Internet Sharing proxies if enabled
+                if (globalSettings.internetSharingEnabled) {
+                    val socksPort = globalSettings.internetSharingSocksPort
+                    val httpPort = globalSettings.internetSharingHttpPort
+                    val user = globalSettings.internetSharingUser
+                    val pass = globalSettings.internetSharingPass
+                    startInternetSharing(socksPort, httpPort, user, pass)
+                }
+
                 if (proxyMode) {
                     VpnManager.appendLog("Proxy mode active: skipping Android VpnService TUN setup")
                     VpnManager.updateState(VpnManager.VpnState.CONNECTED)
@@ -342,6 +352,7 @@ class MasterDnsVpnService : VpnService() {
 
                 // Cancel coroutines
                 goClientJob?.cancel()
+                httpProxyJob?.cancel()
                 logTailJob?.cancel()
 
                 VpnManager.updateState(VpnManager.VpnState.DISCONNECTED)
@@ -571,5 +582,106 @@ class MasterDnsVpnService : VpnService() {
             runCatching { lock.release() }
         }
         wakeLock = null
+    }
+
+    private fun startInternetSharing(socksPort: Int, httpPort: Int, username: String, password: String) {
+        httpProxyJob?.cancel()
+        httpProxyJob = serviceScope.launch {
+            try {
+                val server = java.net.ServerSocket(httpPort, 50, InetAddress.getByName("0.0.0.0"))
+                server.reuseAddress = true
+                VpnManager.appendLog("HTTP proxy ready on 0.0.0.0:$httpPort")
+                while (isActive) {
+                    val client = server.accept() ?: continue
+                    launch(Dispatchers.IO) {
+                        handleHttpProxyClient(client, username, password)
+                    }
+                }
+            } catch (e: Exception) {
+                Log.e(TAG, "HTTP proxy error", e)
+            }
+        }
+    }
+
+private suspend fun handleHttpProxyClient(client: java.net.Socket, username: String, password: String) {
+        try {
+            val input = client.getInputStream().bufferedReader()
+            val output = client.getOutputStream().bufferedWriter()
+
+            val requestLine = input.readLine() ?: return
+            val parts = requestLine.split(" ")
+            if (parts.size < 2) {
+                client.close()
+                return
+            }
+
+            val method = parts[0]
+            val url = parts[1]
+
+            if (method == "CONNECT") {
+                val hostPort = url.split(":")
+                val host = hostPort[0]
+                val port = hostPort.getOrElse(1) { "80" }.toIntOrNull() ?: 80
+
+                output.write("HTTP/1.1 200 Connection Established\r\n\r\n")
+                output.flush()
+
+                val upstream = java.net.Socket(host, port)
+                upstream.soTimeout = 30000
+
+                val clientIn = client.getInputStream()
+                val clientOut = client.getOutputStream()
+                val upIn = upstream.getInputStream()
+                val upOut = upstream.getOutputStream()
+                val buffer = ByteArray(8192)
+
+                launch(Dispatchers.IO) {
+                    try {
+                        while (!client.isClosed && !upstream.isClosed) {
+                            val r = clientIn.read(buffer)
+                            if (r <= 0) break
+                            upOut.write(buffer, 0, r)
+                            upOut.flush()
+                        }
+                    } catch (_: Exception) {}
+                }
+
+                launch(Dispatchers.IO) {
+                    try {
+                        while (!client.isClosed && !upstream.isClosed) {
+                            val r = upIn.read(buffer)
+                            if (r <= 0) break
+                            clientOut.write(buffer, 0, r)
+                            clientOut.flush()
+                        }
+                    } catch (_: Exception) {}
+                }
+            } else {
+                output.write("HTTP/1.1 405 Method Not Allowed\r\n\r\n")
+                output.flush()
+            }
+        } catch (_: Exception) {}
+        runCatching { client.close() }
+}
+}
+                    } catch (_: Exception) {}
+                    runCatching { upstream.close() }
+                }
+
+                val clientToUpstream = client.getInputStream()
+                val upstreamToClient = upstream.getOutputStream()
+                val buffer = ByteArray(8192)
+                while (!client.isClosed && !upstream.isClosed) {
+                    val read = clientToUpstream.read(buffer)
+                    if (read <= 0) break
+                    upstreamToClient.write(buffer, 0, read)
+                    upstreamToClient.flush()
+                }
+            } else {
+                output.write("HTTP/1.1 405 Method Not Allowed\r\n\r\n")
+                output.flush()
+            }
+        } catch (_: Exception) {}
+        runCatching { client.close() }
     }
 }

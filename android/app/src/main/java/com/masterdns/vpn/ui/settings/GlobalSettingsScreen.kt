@@ -11,7 +11,9 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -31,6 +33,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
+import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Surface
@@ -52,6 +55,8 @@ import androidx.compose.ui.platform.LocalUriHandler
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.input.KeyboardType
+import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -159,6 +164,90 @@ fun GlobalSettingsScreen(vm: GlobalSettingsViewModel = viewModel()) {
                             modifier = Modifier.fillMaxWidth()
                         ) {
                             Text("Save Global Settings")
+                        }
+                    }
+                }
+            }
+            item {
+                Card(colors = CardDefaults.cardColors()) {
+                    Column(
+                        modifier = Modifier.padding(12.dp),
+                        verticalArrangement = Arrangement.spacedBy(10.dp)
+                    ) {
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Text("Sharing Internet", style = MaterialTheme.typography.titleMedium)
+                            Switch(
+                                checked = draft.internetSharingEnabled,
+                                onCheckedChange = { draft = draft.copy(internetSharingEnabled = it) }
+                            )
+                        }
+
+                        if (draft.internetSharingEnabled) {
+                            val localIp = remember { getSystemLocalIp() }
+
+                            if (localIp != null) {
+                                Text(
+                                    "Local IP: $localIp",
+                                    style = MaterialTheme.typography.bodyMedium,
+                                    fontWeight = FontWeight.Medium,
+                                    color = MaterialTheme.colorScheme.primary
+                                )
+                            }
+
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.spacedBy(8.dp)
+                            ) {
+                                OutlinedTextField(
+                                    value = draft.internetSharingSocksPort.toString(),
+                                    onValueChange = {
+                                        val port = it.toIntOrNull()
+                                        if (port != null && port in 1..65535) {
+                                            draft = draft.copy(internetSharingSocksPort = port)
+                                        }
+                                    },
+                                    label = { Text("SOCKS5 Port") },
+                                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                                    modifier = Modifier.weight(1f)
+                                )
+                                OutlinedTextField(
+                                    value = draft.internetSharingHttpPort.toString(),
+                                    onValueChange = {
+                                        val port = it.toIntOrNull()
+                                        if (port != null && port in 1..65535) {
+                                            draft = draft.copy(internetSharingHttpPort = port)
+                                        }
+                                    },
+                                    label = { Text("HTTP Port") },
+                                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                                    modifier = Modifier.weight(1f)
+                                )
+                            }
+
+                            OutlinedTextField(
+                                value = draft.internetSharingUser,
+                                onValueChange = { draft = draft.copy(internetSharingUser = it) },
+                                label = { Text("Username") },
+                                modifier = Modifier.fillMaxWidth()
+                            )
+
+                            OutlinedTextField(
+                                value = draft.internetSharingPass,
+                                onValueChange = { draft = draft.copy(internetSharingPass = it) },
+                                label = { Text("Password") },
+                                visualTransformation = PasswordVisualTransformation(),
+                                modifier = Modifier.fillMaxWidth()
+                            )
+
+                            Text(
+                                "Use these endpoints to share your VPN connection with other devices or apps on the same network.",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
                         }
                     }
                 }
@@ -502,4 +591,23 @@ private fun normalize(settings: GlobalSettings): GlobalSettings {
             .distinct()
             .joinToString(",")
     )
+}
+
+private fun getSystemLocalIp(): String? {
+    return try {
+        val interfaces = java.net.NetworkInterface.getNetworkInterfaces()
+        while (interfaces.hasMoreElements()) {
+            val iface = interfaces.nextElement()
+            val addresses = iface.inetAddresses
+            while (addresses.hasMoreElements()) {
+                val addr = addresses.nextElement()
+                if (!addr.isLoopbackAddress && addr is java.net.Inet4Address) {
+                    return addr.hostAddress
+                }
+            }
+        }
+        null
+    } catch (_: Exception) {
+        null
+    }
 }
