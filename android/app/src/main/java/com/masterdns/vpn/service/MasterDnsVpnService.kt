@@ -635,7 +635,7 @@ private suspend fun handleHttpProxyClient(client: java.net.Socket, username: Str
                 val upOut = upstream.getOutputStream()
                 val buffer = ByteArray(8192)
 
-                launch(Dispatchers.IO) {
+                serviceScope.launch(Dispatchers.IO) {
                     try {
                         while (!client.isClosed && !upstream.isClosed) {
                             val r = clientIn.read(buffer)
@@ -646,7 +646,7 @@ private suspend fun handleHttpProxyClient(client: java.net.Socket, username: Str
                     } catch (_: Exception) {}
                 }
 
-                launch(Dispatchers.IO) {
+                serviceScope.launch(Dispatchers.IO) {
                     try {
                         while (!client.isClosed && !upstream.isClosed) {
                             val r = upIn.read(buffer)
