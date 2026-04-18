@@ -476,6 +476,19 @@ class MasterDnsVpnService : VpnService() {
         }
         runCatching {
             val uri = Uri.parse(target)
+            runCatching {
+                grantUriPermission(
+                    packageName,
+                    uri,
+                    Intent.FLAG_GRANT_READ_URI_PERMISSION or Intent.FLAG_GRANT_WRITE_URI_PERMISSION
+                )
+            }
+            runCatching {
+                contentResolver.takePersistableUriPermission(
+                    uri,
+                    Intent.FLAG_GRANT_READ_URI_PERMISSION or Intent.FLAG_GRANT_WRITE_URI_PERMISSION
+                )
+            }
             contentResolver.openOutputStream(uri, "wt")?.use { out ->
                 FileInputStream(sourceFile).use { input -> input.copyTo(out) }
             } ?: error("Cannot open selected destination")
