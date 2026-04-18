@@ -89,6 +89,10 @@ fun GlobalSettingsScreen(vm: GlobalSettingsViewModel = viewModel()) {
     val snackbarHostState = remember { SnackbarHostState() }
     val scope = rememberCoroutineScope()
     val uriHandler = LocalUriHandler.current
+    val socksPortValue = sharingSocksPortText.toIntOrNull()
+    val httpPortValue = sharingHttpPortText.toIntOrNull()
+    val socksPortRequiresRoot = socksPortValue != null && socksPortValue in 1..1024
+    val httpPortRequiresRoot = httpPortValue != null && httpPortValue in 1..1024
 
     Scaffold(
         topBar = { TopAppBar(title = { Text("Settings") }) },
@@ -216,11 +220,17 @@ fun GlobalSettingsScreen(vm: GlobalSettingsViewModel = viewModel()) {
                                         }
                                         sharingSocksPortText = it
                                         val port = it.toIntOrNull()
-                                        if (port != null && port in 1..65535) {
+                                        if (port != null && port in 1025..65535) {
                                             draft = draft.copy(internetSharingSocksPort = port)
                                         }
                                     },
                                     label = { Text("SOCKS5 Port") },
+                                    isError = socksPortRequiresRoot,
+                                    supportingText = {
+                                        if (socksPortRequiresRoot) {
+                                            Text("Port must be greater than 1024 (ports <=1024 require root).")
+                                        }
+                                    },
                                     keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
                                     modifier = Modifier.weight(1f)
                                 )
@@ -232,11 +242,17 @@ fun GlobalSettingsScreen(vm: GlobalSettingsViewModel = viewModel()) {
                                         }
                                         sharingHttpPortText = it
                                         val port = it.toIntOrNull()
-                                        if (port != null && port in 1..65535) {
+                                        if (port != null && port in 1025..65535) {
                                             draft = draft.copy(internetSharingHttpPort = port)
                                         }
                                     },
                                     label = { Text("HTTP Port") },
+                                    isError = httpPortRequiresRoot,
+                                    supportingText = {
+                                        if (httpPortRequiresRoot) {
+                                            Text("Port must be greater than 1024 (ports <=1024 require root).")
+                                        }
+                                    },
                                     keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
                                     modifier = Modifier.weight(1f)
                                 )
