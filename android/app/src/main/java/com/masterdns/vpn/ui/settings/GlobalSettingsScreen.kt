@@ -89,6 +89,28 @@ fun GlobalSettingsScreen(vm: GlobalSettingsViewModel = viewModel()) {
     val httpPortMissing = sharingHttpPortText.isBlank()
     val socksPortRequiresRoot = socksPortValue != null && socksPortValue in 1..1024
     val httpPortRequiresRoot = httpPortValue != null && httpPortValue in 1..1024
+    fun saveGlobalSettings() {
+        if (socksPortMissing || httpPortMissing) {
+            scope.launch {
+                snackbarHostState.showSnackbar("Please enter both SOCKS5 and HTTP ports.")
+            }
+            return
+        }
+        if (socksPortValue !in 1025..65535 || httpPortValue !in 1025..65535) {
+            scope.launch {
+                snackbarHostState.showSnackbar("Ports must be between 1025 and 65535.")
+            }
+            return
+        }
+        val safeSocksPort = socksPortValue ?: return
+        val safeHttpPort = httpPortValue ?: return
+        draft = draft.copy(
+            internetSharingSocksPort = safeSocksPort,
+            internetSharingHttpPort = safeHttpPort
+        )
+        vm.save(normalize(draft))
+        scope.launch { snackbarHostState.showSnackbar("Global settings saved and applied") }
+    }
 
     Scaffold(
         topBar = {
@@ -96,28 +118,7 @@ fun GlobalSettingsScreen(vm: GlobalSettingsViewModel = viewModel()) {
                 title = { Text("Settings") },
                 actions = {
                     IconButton(
-                        onClick = {
-                            if (socksPortMissing || httpPortMissing) {
-                                scope.launch {
-                                    snackbarHostState.showSnackbar("Please enter both SOCKS5 and HTTP ports.")
-                                }
-                                return@IconButton
-                            }
-                            if (socksPortValue !in 1025..65535 || httpPortValue !in 1025..65535) {
-                                scope.launch {
-                                    snackbarHostState.showSnackbar("Ports must be between 1025 and 65535.")
-                                }
-                                return@IconButton
-                            }
-                            val safeSocksPort = socksPortValue ?: return@IconButton
-                            val safeHttpPort = httpPortValue ?: return@IconButton
-                            draft = draft.copy(
-                                internetSharingSocksPort = safeSocksPort,
-                                internetSharingHttpPort = safeHttpPort
-                            )
-                            vm.save(normalize(draft))
-                            scope.launch { snackbarHostState.showSnackbar("Global settings saved and applied") }
-                        }
+                        onClick = ::saveGlobalSettings
                     ) {
                         Icon(
                             imageVector = Icons.Filled.Save,
@@ -304,6 +305,14 @@ fun GlobalSettingsScreen(vm: GlobalSettingsViewModel = viewModel()) {
                             )
                         }
                     }
+                }
+            }
+            item {
+                Button(
+                    onClick = ::saveGlobalSettings,
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Text("Save Global Settings")
                 }
             }
         }
