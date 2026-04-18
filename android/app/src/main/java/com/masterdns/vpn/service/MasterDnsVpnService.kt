@@ -69,6 +69,8 @@ class MasterDnsVpnService : VpnService() {
     @Volatile
     private var socksAuthWarningShown = false
     @Volatile
+    private var sessionBusyWarningShown = false
+    @Volatile
     private var activeLocalSocksPort: Int = DEFAULT_SOCKS_PORT
 
     override fun onCreate() {
@@ -98,6 +100,7 @@ class MasterDnsVpnService : VpnService() {
                 VpnManager.updateState(VpnManager.VpnState.CONNECTING)
                 VpnManager.clearError()
                 socksAuthWarningShown = false
+                sessionBusyWarningShown = false
 
                 // Show foreground notification
                 startForeground(NOTIFICATION_ID, buildNotification(getString(R.string.notification_connecting)))
@@ -560,6 +563,7 @@ class MasterDnsVpnService : VpnService() {
                         if (line.isNotBlank()) {
                             VpnManager.appendCoreLog(line)
                             maybeReportSocksAuthIssue(line)
+                            maybeReportSessionBusyIssue(line)
                         }
                     }
                     pointer = raf.filePointer
@@ -581,6 +585,18 @@ class MasterDnsVpnService : VpnService() {
 
         socksAuthWarningShown = true
         val message = "SOCKS5 authentication failed. Check SOCKS5_AUTH, SOCKS5_USER, and SOCKS5_PASS in profile settings."
+        VpnManager.appendLog(message)
+        VpnManager.setError(message)
+    }
+
+    private fun maybeReportSessionBusyIssue(line: String) {
+        if (sessionBusyWarningShown) return
+        val normalized = line.uppercase()
+        val isSessionBusy = normalized.contains("SESSION RESTART REQUESTED: SESSION BUSY RECEIVED")
+        if (!isSessionBusy) return
+
+        sessionBusyWarningShown = true
+        val message = "Server is busy and cannot accept new sessions at the moment."
         VpnManager.appendLog(message)
         VpnManager.setError(message)
     }
