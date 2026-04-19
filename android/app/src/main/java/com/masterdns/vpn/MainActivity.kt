@@ -4,6 +4,9 @@ import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
+import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.ui.unit.LayoutDirection
+import androidx.compose.ui.platform.LocalLayoutDirection
 import com.masterdns.vpn.ui.navigation.AppNavigation
 import com.masterdns.vpn.ui.theme.MasterDnsVPNTheme
 import dagger.hilt.android.AndroidEntryPoint
@@ -14,8 +17,10 @@ class MainActivity : ComponentActivity() {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
         setContent {
-            MasterDnsVPNTheme {
-                AppNavigation()
+            CompositionLocalProvider(LocalLayoutDirection provides LayoutDirection.Ltr) {
+                MasterDnsVPNTheme {
+                    AppNavigation()
+                }
             }
         }
     }
