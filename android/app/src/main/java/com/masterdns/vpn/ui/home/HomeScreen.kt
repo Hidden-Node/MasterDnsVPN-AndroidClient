@@ -12,6 +12,8 @@ import androidx.compose.animation.core.infiniteRepeatable
 import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -173,6 +175,7 @@ fun HomeScreen(
             Column(
                 modifier = Modifier
                     .fillMaxSize()
+                    .verticalScroll(rememberScrollState())
                     .padding(horizontal = metrics.horizontalPadding, vertical = metrics.verticalPadding)
             ) {
                 MdvHomeHeader(onOpenInfo = onOpenInfo)
@@ -249,6 +252,7 @@ fun HomeScreen(
             Column(
                 modifier = Modifier
                     .fillMaxSize()
+                    .verticalScroll(rememberScrollState())
                     .padding(horizontal = metrics.horizontalPadding, vertical = metrics.verticalPadding)
                     .widthIn(max = 640.dp),
                 horizontalAlignment = Alignment.CenterHorizontally
