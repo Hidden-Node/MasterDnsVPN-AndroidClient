@@ -61,7 +61,7 @@ fun InfoScreen(onBack: () -> Unit) {
         containerColor = MdvColor.Background,
         topBar = {
             MdvBackTopAppBar(
-                title = "Info",
+                title = stringResource(R.string.title_info),
                 onBack = onBack
             )
         }
@@ -94,7 +94,7 @@ fun InfoScreen(onBack: () -> Unit) {
                         Row(verticalAlignment = Alignment.CenterVertically) {
                             Image(
                                 painter = painterResource(id = R.drawable.ic_launcher_foreground_raw),
-                                contentDescription = "App logo",
+                                contentDescription = stringResource(R.string.info_app_logo),
                                 modifier = Modifier
                                     .size(64.dp)
                                     .clip(CircleShape)
@@ -102,12 +102,12 @@ fun InfoScreen(onBack: () -> Unit) {
                             Spacer(modifier = Modifier.size(12.dp))
                             Column {
                                 Text(
-                                    text = "MasterDnsVPN",
+                                    text = stringResource(R.string.info_app_name_title),
                                     style = MaterialTheme.typography.titleLarge,
                                     fontWeight = FontWeight.Bold
                                 )
                                 Text(
-                                    text = "Project overview and build details",
+                                    text = stringResource(R.string.info_overview_subtitle),
                                     style = MaterialTheme.typography.bodyMedium,
                                     color = MdvColor.OnSurfaceVariant
                                 )
@@ -115,7 +115,7 @@ fun InfoScreen(onBack: () -> Unit) {
                                 AssistChip(
                                     onClick = {},
                                     enabled = false,
-                                    label = { Text("Build Information") },
+                                    label = { Text(stringResource(R.string.info_build_information)) },
                                     leadingIcon = {
                                         Icon(
                                             imageVector = Icons.Filled.Info,
@@ -140,19 +140,19 @@ fun InfoScreen(onBack: () -> Unit) {
                         modifier = Modifier.padding(14.dp),
                         verticalArrangement = Arrangement.spacedBy(6.dp)
                     ) {
-                        Text("Project Links", style = MaterialTheme.typography.titleMedium)
+                        Text(stringResource(R.string.info_project_links), style = MaterialTheme.typography.titleMedium)
                         InfoLinkRow(
-                            title = "Main GitHub",
+                            title = stringResource(R.string.info_main_github),
                             link = mainGithubLink,
                             onOpen = { uriHandler.openUri("https://$mainGithubLink") }
                         )
                         InfoLinkRow(
-                            title = "Main Telegram",
+                            title = stringResource(R.string.info_main_telegram),
                             link = mainTelegramLink,
                             onOpen = { uriHandler.openUri("https://$mainTelegramLink") }
                         )
                         InfoLinkRow(
-                            title = "MDV-HN Android Client",
+                            title = stringResource(R.string.info_android_client),
                             link = androidClientGithubLink,
                             onOpen = { uriHandler.openUri("https://$androidClientGithubLink") }
                         )
@@ -165,9 +165,9 @@ fun InfoScreen(onBack: () -> Unit) {
                         modifier = Modifier.padding(14.dp),
                         verticalArrangement = Arrangement.spacedBy(8.dp)
                     ) {
-                        Text("Version Info", style = MaterialTheme.typography.titleMedium)
-                        InfoValueRow(label = "App Version", value = BuildConfig.VERSION_NAME)
-                        InfoValueRow(label = "Upstream Engine", value = engineVersion)
+                        Text(stringResource(R.string.info_version_info), style = MaterialTheme.typography.titleMedium)
+                        InfoValueRow(label = stringResource(R.string.info_app_version), value = BuildConfig.VERSION_NAME)
+                        InfoValueRow(label = stringResource(R.string.info_upstream_engine), value = engineVersion)
                     }
                 }
             }
@@ -200,7 +200,7 @@ private fun InfoLinkRow(title: String, link: String, onOpen: () -> Unit) {
         Spacer(modifier = Modifier.width(10.dp))
         Icon(
             imageVector = Icons.Filled.OpenInNew,
-            contentDescription = "Open link",
+            contentDescription = stringResource(R.string.info_open_link),
             tint = MdvColor.PrimaryContainer
         )
     }

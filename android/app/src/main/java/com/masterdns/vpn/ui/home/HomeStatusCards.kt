@@ -13,11 +13,13 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.SpanStyle
 import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
+import com.masterdns.vpn.R
 import com.masterdns.vpn.ui.components.mdv.cards.MdvCardHigh
 import com.masterdns.vpn.ui.components.mdv.cards.MdvCardLow
 import com.masterdns.vpn.ui.theme.ConnectedGreen
@@ -45,18 +47,18 @@ fun MdvConnectionTelemetryCard(
     MdvCardLow(modifier = Modifier.fillMaxWidth()) {
         Column(modifier = Modifier.fillMaxWidth().padding(MdvSpace.S3)) {
             Text(
-                text = "CONNECTION STATUS",
+                text = stringResource(R.string.home_connection_status_title),
                 style = MaterialTheme.typography.labelSmall,
                 color = MdvColor.PrimaryDim
             )
             androidx.compose.foundation.layout.Spacer(modifier = Modifier.height(MdvSpace.S1))
             Text(
                 text = when (vpnState) {
-                    VpnManager.VpnState.CONNECTED -> "Connected and running"
-                    VpnManager.VpnState.CONNECTING -> "Preparing tunnel (tap again to cancel)"
-                    VpnManager.VpnState.DISCONNECTING -> "Disconnecting..."
-                    VpnManager.VpnState.ERROR -> "Error - check logs"
-                    else -> "Disconnected"
+                    VpnManager.VpnState.CONNECTED -> stringResource(R.string.home_connection_running)
+                    VpnManager.VpnState.CONNECTING -> stringResource(R.string.home_connection_preparing)
+                    VpnManager.VpnState.DISCONNECTING -> stringResource(R.string.home_state_disconnecting)
+                    VpnManager.VpnState.ERROR -> stringResource(R.string.home_connection_error_check_logs)
+                    else -> stringResource(R.string.home_state_disconnected)
                 },
                 style = MaterialTheme.typography.bodyMedium,
                 color = MdvColor.OnSurface
@@ -65,7 +67,11 @@ fun MdvConnectionTelemetryCard(
             if (scanStatus.lastResolver.isNotBlank()) {
                 androidx.compose.foundation.layout.Spacer(modifier = Modifier.height(MdvSpace.S1))
                 Text(
-                    text = "Resolver: ${scanStatus.lastResolver}  ${scanStatus.lastDecision}",
+                    text = stringResource(
+                        R.string.home_resolver_row,
+                        scanStatus.lastResolver,
+                        scanStatus.lastDecision
+                    ),
                     style = MaterialTheme.typography.bodySmall,
                     color = MdvColor.OnSurfaceVariant
                 )
@@ -74,11 +80,11 @@ fun MdvConnectionTelemetryCard(
                 androidx.compose.foundation.layout.Spacer(modifier = Modifier.height(2.dp))
                 Text(
                     text = buildAnnotatedString {
-                        append("Valid: ")
+                        append(stringResource(R.string.home_valid_prefix))
                         pushStyle(SpanStyle(color = ConnectedGreen, fontWeight = FontWeight.Bold))
                         append(scanStatus.validCount.toString())
                         pop()
-                        append("   Rejected: ")
+                        append(stringResource(R.string.home_rejected_prefix))
                         pushStyle(SpanStyle(color = DisconnectedRed, fontWeight = FontWeight.Bold))
                         append(scanStatus.rejectedCount.toString())
                         pop()
@@ -89,7 +95,7 @@ fun MdvConnectionTelemetryCard(
             if (scanStatus.scanning || isConnecting) {
                 androidx.compose.foundation.layout.Spacer(modifier = Modifier.height(MdvSpace.S2))
                 Text(
-                    text = "DNS Scan Progress: $scannedCount / $totalResolvers",
+                    text = stringResource(R.string.home_dns_scan_progress, scannedCount, totalResolvers),
                     style = MaterialTheme.typography.bodySmall,
                     color = MdvColor.OnSurfaceVariant
                 )
@@ -106,7 +112,11 @@ fun MdvConnectionTelemetryCard(
             if (scanStatus.syncedUploadMtu > 0 || scanStatus.syncedDownloadMtu > 0) {
                 androidx.compose.foundation.layout.Spacer(modifier = Modifier.height(2.dp))
                 Text(
-                    text = "Synced MTU: UP ${scanStatus.syncedUploadMtu} / DOWN ${scanStatus.syncedDownloadMtu}",
+                    text = stringResource(
+                        R.string.home_synced_mtu,
+                        scanStatus.syncedUploadMtu,
+                        scanStatus.syncedDownloadMtu
+                    ),
                     style = MaterialTheme.typography.bodySmall,
                     color = MdvColor.OnSurfaceVariant
                 )
@@ -114,40 +124,40 @@ fun MdvConnectionTelemetryCard(
             if (scanStatus.activeResolvers > 0) {
                 androidx.compose.foundation.layout.Spacer(modifier = Modifier.height(2.dp))
                 Text(
-                    text = "Active Resolvers: ${scanStatus.activeResolvers}",
+                    text = stringResource(R.string.home_active_resolvers, scanStatus.activeResolvers),
                     style = MaterialTheme.typography.bodySmall.copy(fontWeight = FontWeight.SemiBold),
                     color = MdvColor.OnSurface
                 )
             }
             androidx.compose.foundation.layout.Spacer(modifier = Modifier.height(MdvSpace.S1))
             Text(
-                text = "Download: ${formatSpeed(downBps)}   Upload: ${formatSpeed(upBps)}",
+                text = stringResource(R.string.home_speed_row, formatSpeed(downBps), formatSpeed(upBps)),
                 style = MaterialTheme.typography.bodySmall,
                 color = MdvColor.OnSurfaceVariant
             )
             androidx.compose.foundation.layout.Spacer(modifier = Modifier.height(MdvSpace.S2))
             Text(
-                text = "SOCKS5: $proxyHost:$proxyPort",
+                text = stringResource(R.string.home_socks_address, proxyHost, proxyPort),
                 style = MaterialTheme.typography.bodySmall.copy(fontWeight = FontWeight.SemiBold),
                 color = MdvColor.OnSurface
             )
             if (socksAuthEnabled) {
                 androidx.compose.foundation.layout.Spacer(modifier = Modifier.height(MdvSpace.S1))
                 Text(
-                    text = "SOCKS5 authentication",
+                    text = stringResource(R.string.home_socks_auth_title),
                     style = MaterialTheme.typography.bodySmall.copy(fontWeight = FontWeight.SemiBold),
                     color = MdvColor.OnSurface
                 )
                 if (socksUser.isNotBlank()) {
                     Text(
-                        text = "Username: $socksUser",
+                        text = stringResource(R.string.home_socks_username, socksUser),
                         style = MaterialTheme.typography.bodySmall,
                         color = MdvColor.OnSurfaceVariant
                     )
                 }
                 if (socksPass.isNotBlank()) {
                     Text(
-                        text = "Password: $socksPass",
+                        text = stringResource(R.string.home_socks_password, socksPass),
                         style = MaterialTheme.typography.bodySmall,
                         color = MdvColor.OnSurfaceVariant
                     )
@@ -176,7 +186,7 @@ fun MdvProfileSelectorCard(
         ) {
             Column {
                 Text(
-                    text = "PROFILE",
+                    text = stringResource(R.string.home_profile_title),
                     style = MaterialTheme.typography.labelSmall,
                     color = MdvColor.OnSurfaceVariant
                 )

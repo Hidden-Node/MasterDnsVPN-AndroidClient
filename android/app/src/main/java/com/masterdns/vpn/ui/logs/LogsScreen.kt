@@ -4,7 +4,7 @@ import android.content.Intent
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.AutoMode
@@ -15,19 +15,21 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.masterdns.vpn.R
 import com.masterdns.vpn.ui.components.mdv.controls.MdvBackTopAppBar
 import com.masterdns.vpn.ui.components.mdv.controls.MdvFilterChip
 import com.masterdns.vpn.ui.theme.MdvColor
 import com.masterdns.vpn.ui.theme.MdvSpace
 import com.masterdns.vpn.util.VpnManager
 
-private enum class LogFilter(val label: String) {
-    ALL("All"),
-    CORE("Core"),
-    ANDROID("Android")
+private enum class LogFilter(val labelRes: Int) {
+    ALL(R.string.logs_filter_all),
+    CORE(R.string.logs_filter_core),
+    ANDROID(R.string.logs_filter_android)
 }
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -53,10 +55,10 @@ fun LogsScreen(onBack: () -> Unit) {
             val content = filteredLogs.joinToString("\n") { it.line }
             val intent = Intent(Intent.ACTION_SEND).apply {
                 type = "text/plain"
-                putExtra(Intent.EXTRA_SUBJECT, "MasterDnsVPN Logs")
+                putExtra(Intent.EXTRA_SUBJECT, context.getString(R.string.logs_share_subject))
                 putExtra(Intent.EXTRA_TEXT, content)
             }
-            context.startActivity(Intent.createChooser(intent, "Share Logs"))
+            context.startActivity(Intent.createChooser(intent, context.getString(R.string.logs_share_chooser)))
         }
     }
 
@@ -71,7 +73,8 @@ fun LogsScreen(onBack: () -> Unit) {
     LaunchedEffect(filteredLogs.size, activeFilter) {
         if (filteredLogs.isEmpty()) return@LaunchedEffect
         if (autoScrollEnabled) {
-            listState.animateScrollToItem(filteredLogs.size - 1)
+            // For high-frequency logs, jump scrolling is cheaper than animating each append.
+            listState.scrollToItem(filteredLogs.size - 1)
         } else {
             val safeIndex = lockedIndex.coerceIn(0, (filteredLogs.size - 1).coerceAtLeast(0))
             listState.scrollToItem(safeIndex, lockedOffset)
@@ -81,11 +84,11 @@ fun LogsScreen(onBack: () -> Unit) {
     Scaffold(
         topBar = {
             MdvBackTopAppBar(
-                title = "Logs",
+                title = stringResource(R.string.title_logs),
                 onBack = onBack,
                 actions = {
                     IconButton(onClick = shareLogs) {
-                        Icon(Icons.Filled.Share, contentDescription = "Share Logs")
+                        Icon(Icons.Filled.Share, contentDescription = stringResource(R.string.logs_share))
                     }
                     FilledTonalIconButton(onClick = {
                         if (autoScrollEnabled) {
@@ -94,16 +97,20 @@ fun LogsScreen(onBack: () -> Unit) {
                         }
                         autoScrollEnabled = !autoScrollEnabled
                     }) {
-                        Icon(Icons.Filled.AutoMode, contentDescription = "Auto")
+                        Icon(Icons.Filled.AutoMode, contentDescription = stringResource(R.string.logs_auto))
                     }
                     Text(
-                        text = if (autoScrollEnabled) "Auto ON" else "Auto OFF",
+                        text = if (autoScrollEnabled) {
+                            stringResource(R.string.logs_auto_on)
+                        } else {
+                            stringResource(R.string.logs_auto_off)
+                        },
                         style = MaterialTheme.typography.labelMedium,
                         color = MdvColor.OnSurfaceVariant,
                         modifier = Modifier.padding(end = MdvSpace.S1)
                     )
                     IconButton(onClick = { VpnManager.clearLogs() }) {
-                        Icon(Icons.Filled.DeleteSweep, contentDescription = "Clear Logs")
+                        Icon(Icons.Filled.DeleteSweep, contentDescription = stringResource(R.string.logs_clear))
                     }
                 }
             )
@@ -123,7 +130,7 @@ fun LogsScreen(onBack: () -> Unit) {
                     MdvFilterChip(
                         selected = activeFilter == filter,
                         onClick = { activeFilter = filter },
-                        label = filter.label
+                        label = stringResource(filter.labelRes)
                     )
                 }
             }
@@ -133,7 +140,7 @@ fun LogsScreen(onBack: () -> Unit) {
                 state = listState,
                 contentPadding = PaddingValues(MdvSpace.S2)
             ) {
-                items(filteredLogs) { entry ->
+                itemsIndexed(filteredLogs, key = { index, entry -> "${entry.source}:${entry.line.hashCode()}:$index" }) { _, entry ->
                     val line = entry.line
                     val color = when {
                         line.contains("[ERROR]", ignoreCase = true) -> Color(0xFFE57373)

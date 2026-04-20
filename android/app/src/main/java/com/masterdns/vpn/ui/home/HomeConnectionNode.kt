@@ -16,7 +16,9 @@ import androidx.compose.ui.draw.scale
 import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
+import com.masterdns.vpn.R
 import com.masterdns.vpn.ui.theme.MdvColor
 import com.masterdns.vpn.ui.theme.supportsEnhancedGlow
 
@@ -73,7 +75,11 @@ fun MdvConnectionNodeButton(
             ) {
                 Icon(
                     imageVector = Icons.Filled.PowerSettingsNew,
-                    contentDescription = if (isConnected) "Disconnect" else "Connect",
+                    contentDescription = if (isConnected) {
+                        stringResource(R.string.home_disconnect)
+                    } else {
+                        stringResource(R.string.home_connect)
+                    },
                     modifier = Modifier.size(48.dp),
                     tint = Color(0xFF001F24)
                 )

@@ -3,6 +3,8 @@ package com.masterdns.vpn.ui.settings
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
@@ -14,6 +16,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.weight
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -43,6 +46,7 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -67,6 +71,8 @@ import com.masterdns.vpn.ui.components.mdv.controls.MdvTopAppBar
 import com.masterdns.vpn.ui.theme.MdvColor
 import com.masterdns.vpn.ui.theme.MdvSpace
 import com.masterdns.vpn.util.GlobalSettings
+import androidx.compose.ui.unit.Dp
+import androidx.compose.ui.unit.dp
 import kotlinx.coroutines.launch
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -95,6 +101,9 @@ fun GlobalSettingsScreen(vm: GlobalSettingsViewModel = viewModel()) {
     val httpPortMissing = sharingHttpPortText.isBlank()
     val socksPortRequiresRoot = socksPortValue != null && socksPortValue in 1..1024
     val httpPortRequiresRoot = httpPortValue != null && httpPortValue in 1..1024
+    val splitPackagesCount by remember(draft.splitPackagesCsv) {
+        derivedStateOf { parseCsv(draft.splitPackagesCsv).size }
+    }
     fun saveGlobalSettings() {
         if (socksPortMissing || httpPortMissing) {
             scope.launch {
@@ -137,16 +146,31 @@ fun GlobalSettingsScreen(vm: GlobalSettingsViewModel = viewModel()) {
         },
         snackbarHost = { SnackbarHost(hostState = snackbarHostState) }
     ) { padding ->
-        LazyColumn(
+        BoxWithConstraints(
             modifier = Modifier
                 .fillMaxSize()
-                .padding(padding),
-            contentPadding = PaddingValues(MdvSpace.S4),
-            verticalArrangement = Arrangement.spacedBy(MdvSpace.S3)
+                .padding(padding)
         ) {
-            item {
-                Card(colors = CardDefaults.cardColors(containerColor = MdvColor.SurfaceHigh)) {
-                    Column(modifier = Modifier.padding(MdvSpace.S3), verticalArrangement = Arrangement.spacedBy(MdvSpace.S3)) {
+            val maxContentWidth = when {
+                maxWidth >= 1200.dp -> 980.dp
+                maxWidth >= 840.dp -> 840.dp
+                else -> Dp.Unspecified
+            }
+
+            Box(
+                modifier = Modifier.fillMaxSize(),
+                contentAlignment = Alignment.TopCenter
+            ) {
+                LazyColumn(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .widthIn(max = maxContentWidth),
+                    contentPadding = PaddingValues(MdvSpace.S4),
+                    verticalArrangement = Arrangement.spacedBy(MdvSpace.S3)
+                ) {
+                    item {
+                        Card(colors = CardDefaults.cardColors(containerColor = MdvColor.SurfaceHigh)) {
+                            Column(modifier = Modifier.padding(MdvSpace.S3), verticalArrangement = Arrangement.spacedBy(MdvSpace.S3)) {
                         ExposedDropdownMenuBox(
                             expanded = modeExpanded,
                             onExpandedChange = { modeExpanded = !modeExpanded }
@@ -155,8 +179,8 @@ fun GlobalSettingsScreen(vm: GlobalSettingsViewModel = viewModel()) {
                                 value = draft.connectionMode,
                                 onValueChange = {},
                                 readOnly = true,
-                                label = { Text("Connection Mode") },
-                                supportingText = { Text("VPN mode or Proxy mode (SOCKS only)") },
+                                label = { Text(stringResource(R.string.global_connection_mode)) },
+                                supportingText = { Text(stringResource(R.string.global_connection_mode_help)) },
                                 trailingIcon = {
                                     Icon(
                                         imageVector = Icons.Filled.ArrowDropDown,
@@ -179,7 +203,7 @@ fun GlobalSettingsScreen(vm: GlobalSettingsViewModel = viewModel()) {
                         }
 
                         RowSwitch(
-                            title = "Split Tunneling",
+                            title = stringResource(R.string.global_split_tunneling),
                             checked = draft.splitTunnelingEnabled,
                             onChecked = { draft = draft.copy(splitTunnelingEnabled = it) }
                         )
@@ -198,7 +222,7 @@ fun GlobalSettingsScreen(vm: GlobalSettingsViewModel = viewModel()) {
                                 Column(modifier = Modifier.padding(MdvSpace.S3)) {
                                     Text(stringResource(R.string.split_tunnel_apps_title))
                                     Text(
-                                        stringResource(R.string.split_tunnel_apps_selected_count, parseCsv(draft.splitPackagesCsv).size),
+                                        stringResource(R.string.split_tunnel_apps_selected_count, splitPackagesCount),
                                         style = MaterialTheme.typography.bodySmall,
                                         color = MdvColor.OnSurfaceVariant
                                     )
@@ -206,21 +230,21 @@ fun GlobalSettingsScreen(vm: GlobalSettingsViewModel = viewModel()) {
                             }
                         }
 
+                            }
+                        }
                     }
-                }
-            }
-            item {
-                Card(colors = CardDefaults.cardColors(containerColor = MdvColor.SurfaceHigh)) {
-                    Column(
-                        modifier = Modifier.padding(MdvSpace.S3),
-                        verticalArrangement = Arrangement.spacedBy(MdvSpace.S3)
-                    ) {
+                    item {
+                        Card(colors = CardDefaults.cardColors(containerColor = MdvColor.SurfaceHigh)) {
+                            Column(
+                                modifier = Modifier.padding(MdvSpace.S3),
+                                verticalArrangement = Arrangement.spacedBy(MdvSpace.S3)
+                            ) {
                         Row(
                             modifier = Modifier.fillMaxWidth(),
                             horizontalArrangement = Arrangement.SpaceBetween,
                             verticalAlignment = Alignment.CenterVertically
                         ) {
-                            Text("Sharing Internet", style = MaterialTheme.typography.titleMedium)
+                            Text(stringResource(R.string.global_sharing_internet), style = MaterialTheme.typography.titleMedium)
                             Switch(
                                 checked = draft.internetSharingEnabled,
                                 onCheckedChange = { draft = draft.copy(internetSharingEnabled = it) }
@@ -232,7 +256,7 @@ fun GlobalSettingsScreen(vm: GlobalSettingsViewModel = viewModel()) {
 
                             if (localIp != null) {
                                 Text(
-                                    "Local IP: $localIp",
+                                    stringResource(R.string.global_local_ip, localIp),
                                     style = MaterialTheme.typography.bodyMedium,
                                     fontWeight = FontWeight.Medium,
                                     color = MdvColor.PrimaryContainer
@@ -255,12 +279,12 @@ fun GlobalSettingsScreen(vm: GlobalSettingsViewModel = viewModel()) {
                                             draft = draft.copy(internetSharingSocksPort = port)
                                         }
                                     },
-                                    label = { Text("SOCKS5 Port") },
+                                    label = { Text(stringResource(R.string.global_socks5_port)) },
                                     isError = socksPortMissing || socksPortRequiresRoot,
                                     supportingText = {
                                         when {
-                                            socksPortMissing -> Text("SOCKS5 port is required.")
-                                            socksPortRequiresRoot -> Text("Port must be greater than 1024 (ports <=1024 require root).")
+                                            socksPortMissing -> Text(stringResource(R.string.global_socks5_port_required))
+                                            socksPortRequiresRoot -> Text(stringResource(R.string.global_port_root_warning))
                                         }
                                     },
                                     keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
@@ -278,12 +302,12 @@ fun GlobalSettingsScreen(vm: GlobalSettingsViewModel = viewModel()) {
                                             draft = draft.copy(internetSharingHttpPort = port)
                                         }
                                     },
-                                    label = { Text("HTTP Port") },
+                                    label = { Text(stringResource(R.string.global_http_port)) },
                                     isError = httpPortMissing || httpPortRequiresRoot,
                                     supportingText = {
                                         when {
-                                            httpPortMissing -> Text("HTTP port is required.")
-                                            httpPortRequiresRoot -> Text("Port must be greater than 1024 (ports <=1024 require root).")
+                                            httpPortMissing -> Text(stringResource(R.string.global_http_port_required))
+                                            httpPortRequiresRoot -> Text(stringResource(R.string.global_port_root_warning))
                                         }
                                     },
                                     keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
@@ -294,54 +318,68 @@ fun GlobalSettingsScreen(vm: GlobalSettingsViewModel = viewModel()) {
                             OutlinedTextField(
                                 value = draft.internetSharingUser,
                                 onValueChange = { draft = draft.copy(internetSharingUser = it) },
-                                label = { Text("Username") },
+                                label = { Text(stringResource(R.string.global_username)) },
                                 modifier = Modifier.fillMaxWidth()
                             )
 
                             OutlinedTextField(
                                 value = draft.internetSharingPass,
                                 onValueChange = { draft = draft.copy(internetSharingPass = it) },
-                                label = { Text("Password") },
+                                label = { Text(stringResource(R.string.global_password)) },
                                 visualTransformation = PasswordVisualTransformation(),
                                 modifier = Modifier.fillMaxWidth()
                             )
 
                             Text(
-                                "Use these endpoints to share your VPN connection with other devices or apps on the same network.",
+                                stringResource(R.string.global_sharing_help),
                                 style = MaterialTheme.typography.bodySmall,
                                 color = MdvColor.OnSurfaceVariant
                             )
                         }
+                            }
+                        }
+                    }
+                    item {
+                        MdvPrimaryActionButton(
+                            text = stringResource(R.string.global_settings_save_button),
+                            onClick = ::saveGlobalSettings,
+                            modifier = Modifier.fillMaxWidth()
+                        )
                     }
                 }
-            }
-            item {
-                MdvPrimaryActionButton(
-                    text = stringResource(R.string.global_settings_save_button),
-                    onClick = ::saveGlobalSettings,
-                    modifier = Modifier.fillMaxWidth()
-                )
             }
         }
     }
 
     if (showAppPicker) {
-        val selectedApps = installedApps.filter { draftAppSelection.contains(it.packageName) }
-        val availableApps = installedApps.filterNot { draftAppSelection.contains(it.packageName) }
+        val selectedApps by remember(installedApps, draftAppSelection) {
+            derivedStateOf { installedApps.filter { draftAppSelection.contains(it.packageName) } }
+        }
+        val availableApps by remember(installedApps, draftAppSelection) {
+            derivedStateOf { installedApps.filterNot { draftAppSelection.contains(it.packageName) } }
+        }
 
-        val selectedFiltered = selectedApps.filter {
-            val q = selectedQuery.trim().lowercase()
-            q.isEmpty() ||
-                it.label.lowercase().contains(q) ||
-                it.packageName.lowercase().contains(q)
-        }.sortedWith(compareBy({ it.label.lowercase() }, { it.packageName }))
+        val selectedFiltered by remember(selectedApps, selectedQuery) {
+            derivedStateOf {
+                val q = selectedQuery.trim().lowercase()
+                selectedApps.filter {
+                    q.isEmpty() ||
+                        it.label.lowercase().contains(q) ||
+                        it.packageName.lowercase().contains(q)
+                }.sortedWith(compareBy({ it.label.lowercase() }, { it.packageName }))
+            }
+        }
 
-        val availableFiltered = availableApps.filter {
-            val q = availableQuery.trim().lowercase()
-            q.isEmpty() ||
-                it.label.lowercase().contains(q) ||
-                it.packageName.lowercase().contains(q)
-        }.sortedWith(compareBy({ it.label.lowercase() }, { it.packageName }))
+        val availableFiltered by remember(availableApps, availableQuery) {
+            derivedStateOf {
+                val q = availableQuery.trim().lowercase()
+                availableApps.filter {
+                    q.isEmpty() ||
+                        it.label.lowercase().contains(q) ||
+                        it.packageName.lowercase().contains(q)
+                }.sortedWith(compareBy({ it.label.lowercase() }, { it.packageName }))
+            }
+        }
 
         Dialog(onDismissRequest = { showAppPicker = false }) {
             Surface(
@@ -499,7 +537,7 @@ private fun AppRow(
     val context = LocalContext.current
     val appIconBitmap = remember(app.packageName) {
         runCatching {
-            context.packageManager.getApplicationIcon(app.packageName).toBitmap(48, 48)
+            context.packageManager.getApplicationIcon(app.packageName).toBitmap(32, 32)
         }.getOrNull()
     }
     Row(

@@ -1,11 +1,13 @@
 package com.masterdns.vpn.ui.navigation
 
+import androidx.annotation.StringRes
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.foundation.layout.WindowInsets
@@ -18,6 +20,7 @@ import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
+import com.masterdns.vpn.R
 import com.masterdns.vpn.ui.home.HomeScreen
 import com.masterdns.vpn.ui.info.InfoScreen
 import com.masterdns.vpn.ui.logs.LogsScreen
@@ -26,13 +29,13 @@ import com.masterdns.vpn.ui.settings.GlobalSettingsScreen
 import com.masterdns.vpn.ui.settings.SettingsScreen
 import com.masterdns.vpn.ui.theme.MdvColor
 
-sealed class Screen(val route: String, val title: String) {
-    data object Home : Screen("home", "Home")
-    data object Profiles : Screen("profiles", "Profiles")
-    data object Logs : Screen("logs", "Logs")
-    data object Settings : Screen("settings", "Settings")
-    data object Info : Screen("info", "Info")
-    data object ProfileSettings : Screen("profile_settings/{profileId}", "Profile Settings")
+sealed class Screen(val route: String, @StringRes val titleRes: Int) {
+    data object Home : Screen("home", R.string.title_home)
+    data object Profiles : Screen("profiles", R.string.title_profiles)
+    data object Logs : Screen("logs", R.string.title_logs)
+    data object Settings : Screen("settings", R.string.settings_title)
+    data object Info : Screen("info", R.string.title_info)
+    data object ProfileSettings : Screen("profile_settings/{profileId}", R.string.profile_settings_title)
 }
 
 @Composable
@@ -71,17 +74,18 @@ fun AppNavigation() {
             ) {
                 bottomBarScreens.forEach { screen ->
                     val selected = currentDestination?.hierarchy?.any { it.route == screen.route } == true
+                    val title = stringResource(screen.titleRes)
                     NavigationBarItem(
                         icon = {
                             Icon(
                                 icons[screen.route] ?: Icons.Filled.Home,
-                                contentDescription = screen.title,
+                                contentDescription = title,
                                 tint = if (selected) MdvColor.PrimaryContainer else MdvColor.Secondary.copy(alpha = 0.65f)
                             )
                         },
                         label = {
                             Text(
-                                screen.title.uppercase(),
+                                title.uppercase(),
                                 fontWeight = FontWeight.SemiBold,
                                 color = if (selected) MdvColor.Primary else MdvColor.Secondary.copy(alpha = 0.65f)
                             )

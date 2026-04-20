@@ -11,7 +11,9 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
+import com.masterdns.vpn.R
 import com.masterdns.vpn.ui.theme.MdvColor
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -50,10 +52,9 @@ fun MdvBackTopAppBar(
         title = title,
         navigationIcon = {
             IconButton(onClick = onBack) {
-                Icon(Icons.Filled.ArrowBack, contentDescription = "Back")
+                Icon(Icons.Filled.ArrowBack, contentDescription = stringResource(R.string.action_back))
             }
         },
         actions = actions
     )
 }
-

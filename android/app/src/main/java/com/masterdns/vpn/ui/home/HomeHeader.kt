@@ -8,6 +8,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Info
@@ -21,6 +22,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.masterdns.vpn.R
@@ -39,17 +41,18 @@ fun MdvHomeHeader(onOpenInfo: () -> Unit) {
             modifier = Modifier
                 .clip(RoundedCornerShape(MdvRadius.Md))
                 .clickable { onOpenInfo() }
+                .heightIn(min = 48.dp)
                 .padding(horizontal = MdvSpace.S2, vertical = MdvSpace.S1),
             verticalAlignment = Alignment.CenterVertically
         ) {
             Image(
                 painter = painterResource(id = R.drawable.ic_launcher_foreground_raw),
-                contentDescription = "Open info page",
+                contentDescription = stringResource(R.string.home_open_info),
                 modifier = Modifier.size(32.dp)
             )
             androidx.compose.foundation.layout.Spacer(modifier = Modifier.width(MdvSpace.S2))
             Text(
-                text = "MDV-HN",
+                text = stringResource(R.string.home_brand_short),
                 style = MaterialTheme.typography.titleMedium.copy(
                     fontWeight = FontWeight.Bold,
                     color = MdvColor.Primary
@@ -65,7 +68,7 @@ fun MdvHomeHeader(onOpenInfo: () -> Unit) {
         ) {
             Icon(
                 imageVector = Icons.Filled.Info,
-                contentDescription = "Open info page"
+                contentDescription = stringResource(R.string.home_open_info)
             )
         }
     }

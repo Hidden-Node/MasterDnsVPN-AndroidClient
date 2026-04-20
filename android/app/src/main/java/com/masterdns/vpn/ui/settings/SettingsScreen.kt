@@ -6,6 +6,8 @@ import android.net.Uri
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
@@ -17,6 +19,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.RowScope
 import androidx.compose.foundation.layout.weight
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
@@ -56,6 +59,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import com.google.gson.Gson
@@ -322,143 +326,160 @@ fun SettingsScreen(
         },
         snackbarHost = { SnackbarHost(hostState = snackbarHostState) }
     ) { padding ->
-        val selected = profile
-        if (selected == null) {
-            Column(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .padding(padding)
-                    .padding(MdvSpace.S6),
-                verticalArrangement = Arrangement.Center,
-                horizontalAlignment = Alignment.CenterHorizontally
-            ) {
-                Text(stringResource(R.string.settings_no_profile_title), style = MaterialTheme.typography.titleMedium)
-                Spacer(modifier = Modifier.height(MdvSpace.S2))
-                Text(
-                    stringResource(R.string.settings_no_profile_desc),
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = MdvColor.OnSurfaceVariant
-                )
-            }
-            return@Scaffold
-        }
-
-        LazyColumn(
+        BoxWithConstraints(
             modifier = Modifier
                 .fillMaxSize()
-                .padding(padding),
-            contentPadding = PaddingValues(MdvSpace.S4),
-            verticalArrangement = Arrangement.spacedBy(MdvSpace.S3),
-            state = listState
+                .padding(padding)
         ) {
-            item {
-                Text(
-                    text = stringResource(R.string.settings_editing_profile, selected.name),
-                    style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.SemiBold),
-                    color = MdvColor.OnSurface
-                )
-                Spacer(modifier = Modifier.height(MdvSpace.S1))
-                Row(horizontalArrangement = Arrangement.spacedBy(MdvSpace.S2)) {
-                    MdvPrimaryActionButton(
-                        text = stringResource(R.string.action_import_toml),
-                        onClick = {
-                            importTomlLauncher.launch(
-                                arrayOf(
-                                    "application/toml",
-                                    "text/x-toml",
-                                    "text/plain",
-                                    "application/octet-stream",
-                                    "*/*"
-                                )
-                            )
-                        },
-                        icon = Icons.Filled.UploadFile
-                    )
-                    MdvPrimaryActionButton(
-                        text = stringResource(R.string.action_export_toml),
-                        onClick = {
-                            pendingExportContent = viewModel.exportConfigToml(selected, fieldsState.toMap())
-                            exportLauncher.launch("${selected.name}_client_config.toml")
-                        },
-                        icon = Icons.Filled.Download
-                    )
-                }
-                Spacer(modifier = Modifier.height(MdvSpace.S1))
-                MdvPrimaryActionButton(
-                    text = stringResource(R.string.action_import_resolvers),
-                    onClick = { importResolversLauncher.launch(arrayOf("text/*")) },
-                    icon = Icons.Filled.UploadFile
-                )
-                Spacer(modifier = Modifier.height(MdvSpace.S1))
-                MdvPrimaryActionButton(
-                    text = stringResource(R.string.action_pick_mtu_destination),
-                    onClick = {
-                        val selectedName = selected.name.trim().ifBlank { "profile" }
-                        pickMtuExportLauncher.launch("${selectedName}_mtu_results.log")
-                    },
-                    icon = Icons.Filled.Download
-                )
+            val maxContentWidth = when {
+                maxWidth >= 1200.dp -> 980.dp
+                maxWidth >= 840.dp -> 840.dp
+                else -> Dp.Unspecified
             }
 
-            val socksAuthEnabled = fieldsState["SOCKS5_AUTH"].equals("true", ignoreCase = true)
-            items(sections.keys.toList(), key = { "section_$it" }) { section ->
-                val expanded = sectionExpanded[section] ?: false
-                MdvSectionCard(
-                    title = section,
-                    expanded = expanded,
-                    onToggle = { sectionExpanded[section] = !expanded }
-                )
-                if (!expanded) return@items
+            Box(
+                modifier = Modifier.fillMaxSize(),
+                contentAlignment = Alignment.TopCenter
+            ) {
+                val selected = profile
+                if (selected == null) {
+                    Column(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .widthIn(max = maxContentWidth)
+                            .padding(MdvSpace.S6),
+                        verticalArrangement = Arrangement.Center,
+                        horizontalAlignment = Alignment.CenterHorizontally
+                    ) {
+                        Text(stringResource(R.string.settings_no_profile_title), style = MaterialTheme.typography.titleMedium)
+                        Spacer(modifier = Modifier.height(MdvSpace.S2))
+                        Text(
+                            stringResource(R.string.settings_no_profile_desc),
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = MdvColor.OnSurfaceVariant
+                        )
+                    }
+                    return@Box
+                }
 
-                Spacer(modifier = Modifier.height(MdvSpace.S1))
-                if (section == "DNS") {
-                    val dnsEnabled = fieldsState["LOCAL_DNS_ENABLED"].equals("true", ignoreCase = true)
-                    val dnsPort = fieldsState["LOCAL_DNS_PORT"]?.toIntOrNull() ?: 53
-                    if (dnsEnabled && dnsPort <= 1024) {
-                        Card(
-                            colors = CardDefaults.cardColors(
-                                containerColor = MdvColor.ErrorContainer
-                            ),
-                            modifier = Modifier.fillMaxWidth()
-                        ) {
-                            Row(
-                                modifier = Modifier.padding(12.dp),
-                                verticalAlignment = Alignment.CenterVertically
-                            ) {
-                                Text(
-                                    text = stringResource(R.string.settings_dns_root_warning, dnsPort),
-                                    style = MaterialTheme.typography.bodySmall,
-                                    color = MdvColor.Error
-                                )
+                LazyColumn(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .widthIn(max = maxContentWidth),
+                    contentPadding = PaddingValues(MdvSpace.S4),
+                    verticalArrangement = Arrangement.spacedBy(MdvSpace.S3),
+                    state = listState
+                ) {
+                    item {
+                        Text(
+                            text = stringResource(R.string.settings_editing_profile, selected.name),
+                            style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.SemiBold),
+                            color = MdvColor.OnSurface
+                        )
+                        Spacer(modifier = Modifier.height(MdvSpace.S1))
+                        Row(horizontalArrangement = Arrangement.spacedBy(MdvSpace.S2)) {
+                            MdvPrimaryActionButton(
+                                text = stringResource(R.string.action_import_toml),
+                                onClick = {
+                                    importTomlLauncher.launch(
+                                        arrayOf(
+                                            "application/toml",
+                                            "text/x-toml",
+                                            "text/plain",
+                                            "application/octet-stream",
+                                            "*/*"
+                                        )
+                                    )
+                                },
+                                icon = Icons.Filled.UploadFile
+                            )
+                            MdvPrimaryActionButton(
+                                text = stringResource(R.string.action_export_toml),
+                                onClick = {
+                                    pendingExportContent = viewModel.exportConfigToml(selected, fieldsState.toMap())
+                                    exportLauncher.launch("${selected.name}_client_config.toml")
+                                },
+                                icon = Icons.Filled.Download
+                            )
+                        }
+                        Spacer(modifier = Modifier.height(MdvSpace.S1))
+                        MdvPrimaryActionButton(
+                            text = stringResource(R.string.action_import_resolvers),
+                            onClick = { importResolversLauncher.launch(arrayOf("text/*")) },
+                            icon = Icons.Filled.UploadFile
+                        )
+                        Spacer(modifier = Modifier.height(MdvSpace.S1))
+                        MdvPrimaryActionButton(
+                            text = stringResource(R.string.action_pick_mtu_destination),
+                            onClick = {
+                                val selectedName = selected.name.trim().ifBlank { "profile" }
+                                pickMtuExportLauncher.launch("${selectedName}_mtu_results.log")
+                            },
+                            icon = Icons.Filled.Download
+                        )
+                    }
+
+                    val socksAuthEnabled = fieldsState["SOCKS5_AUTH"].equals("true", ignoreCase = true)
+                    items(sections.keys.toList(), key = { "section_$it" }) { section ->
+                        val expanded = sectionExpanded[section] ?: false
+                        MdvSectionCard(
+                            title = section,
+                            expanded = expanded,
+                            onToggle = { sectionExpanded[section] = !expanded }
+                        )
+                        if (!expanded) return@items
+
+                        Spacer(modifier = Modifier.height(MdvSpace.S1))
+                        if (section == "DNS") {
+                            val dnsEnabled = fieldsState["LOCAL_DNS_ENABLED"].equals("true", ignoreCase = true)
+                            val dnsPort = fieldsState["LOCAL_DNS_PORT"]?.toIntOrNull() ?: 53
+                            if (dnsEnabled && dnsPort <= 1024) {
+                                Card(
+                                    colors = CardDefaults.cardColors(
+                                        containerColor = MdvColor.ErrorContainer
+                                    ),
+                                    modifier = Modifier.fillMaxWidth()
+                                ) {
+                                    Row(
+                                        modifier = Modifier.padding(12.dp),
+                                        verticalAlignment = Alignment.CenterVertically
+                                    ) {
+                                        Text(
+                                            text = stringResource(R.string.settings_dns_root_warning, dnsPort),
+                                            style = MaterialTheme.typography.bodySmall,
+                                            color = MdvColor.Error
+                                        )
+                                    }
+                                }
+                                Spacer(modifier = Modifier.height(MdvSpace.S2))
                             }
                         }
-                        Spacer(modifier = Modifier.height(MdvSpace.S2))
+                        sections[section].orEmpty().forEach { field ->
+                            if ((field.key == "SOCKS5_USER" || field.key == "SOCKS5_PASS") && !socksAuthEnabled) {
+                                return@forEach
+                            }
+                            ConfigFieldCard(
+                                field = field,
+                                value = fieldsState[field.key].orEmpty(),
+                                onChange = { fieldsState[field.key] = it }
+                            )
+                            Spacer(modifier = Modifier.height(MdvSpace.S2))
+                        }
                     }
-                }
-                sections[section].orEmpty().forEach { field ->
-                    if ((field.key == "SOCKS5_USER" || field.key == "SOCKS5_PASS") && !socksAuthEnabled) {
-                        return@forEach
-                    }
-                    ConfigFieldCard(
-                        field = field,
-                        value = fieldsState[field.key].orEmpty(),
-                        onChange = { fieldsState[field.key] = it }
-                    )
-                    Spacer(modifier = Modifier.height(MdvSpace.S2))
-                }
-            }
 
-            item {
-                Spacer(modifier = Modifier.height(MdvSpace.S2))
-                MdvPrimaryActionButton(
-                    text = stringResource(R.string.action_save_settings),
-                    onClick = {
-                        viewModel.saveSettings(selected, fieldsState.toMap())
-                        scope.launch { snackbarHostState.showSnackbar(context.getString(R.string.settings_saved_msg)) }
-                    },
-                    modifier = Modifier.fillMaxWidth(),
-                    icon = Icons.Filled.Save
-                )
+                    item {
+                        Spacer(modifier = Modifier.height(MdvSpace.S2))
+                        MdvPrimaryActionButton(
+                            text = stringResource(R.string.action_save_settings),
+                            onClick = {
+                                viewModel.saveSettings(selected, fieldsState.toMap())
+                                scope.launch { snackbarHostState.showSnackbar(context.getString(R.string.settings_saved_msg)) }
+                            },
+                            modifier = Modifier.fillMaxWidth(),
+                            icon = Icons.Filled.Save
+                        )
+                    }
+                }
             }
         }
     }
