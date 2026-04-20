@@ -275,7 +275,6 @@ private fun ProfileEditorDialog(
     var name by remember { mutableStateOf(profile?.name.orEmpty()) }
     var domains by remember { mutableStateOf(profile?.domains?.removeSurrounding("[\"", "\"]").orEmpty()) }
     var encryptionKey by remember { mutableStateOf(profile?.encryptionKey.orEmpty()) }
-    var encryptionMethod by remember { mutableIntStateOf(profile?.encryptionMethod ?: 1) }
     var resolvers by remember { mutableStateOf(profile?.resolvers ?: "8.8.8.8") }
     var showKey by remember { mutableStateOf(false) }
     var showResolversEditor by remember { mutableStateOf(false) }
@@ -286,7 +285,6 @@ private fun ProfileEditorDialog(
             name = profile.name
             domains = profile.domains.removeSurrounding("[\"", "\"]")
             encryptionKey = profile.encryptionKey
-            encryptionMethod = profile.encryptionMethod
             resolvers = profile.resolvers
             showResolversEditor = false
         }
@@ -301,7 +299,6 @@ private fun ProfileEditorDialog(
             }
             domains = importedDraft.domainInput
             encryptionKey = importedProfile.encryptionKey
-            encryptionMethod = importedProfile.encryptionMethod
             resolvers = importedProfile.resolvers
         }
         if (!importedResolvers.isNullOrBlank()) {
@@ -385,34 +382,6 @@ private fun ProfileEditorDialog(
                     }
                 )
 
-                // Encryption method dropdown
-                var expanded by remember { mutableStateOf(false) }
-                val methods = listOf("None", "XOR", "ChaCha20", "AES-128-GCM", "AES-192-GCM", "AES-256-GCM")
-                ExposedDropdownMenuBox(
-                    expanded = expanded,
-                    onExpandedChange = { expanded = !expanded }
-                ) {
-                    OutlinedTextField(
-                        value = methods.getOrElse(encryptionMethod) { "XOR" },
-                        onValueChange = {},
-                        readOnly = true,
-                        label = { Text(stringResource(R.string.profiles_encryption_method)) },
-                        trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded) },
-                        modifier = Modifier.menuAnchor().fillMaxWidth()
-                    )
-                    ExposedDropdownMenu(expanded = expanded, onDismissRequest = { expanded = false }) {
-                        methods.forEachIndexed { index, methodName ->
-                            DropdownMenuItem(
-                                text = { Text(methodName) },
-                                onClick = {
-                                    encryptionMethod = index
-                                    expanded = false
-                                }
-                            )
-                        }
-                    }
-                }
-
                 if (!showResolversEditor && largeResolversText) {
                     Card(
                         modifier = Modifier.fillMaxWidth(),
@@ -454,7 +423,6 @@ private fun ProfileEditorDialog(
                             name = name.trim().ifEmpty { "Profile" },
                             domains = if (domainJson == "[]") gson.toJson(listOf(domains.trim())) else domainJson,
                             encryptionKey = encryptionKey,
-                            encryptionMethod = encryptionMethod,
                             resolvers = resolvers.trim()
                         )
                     )

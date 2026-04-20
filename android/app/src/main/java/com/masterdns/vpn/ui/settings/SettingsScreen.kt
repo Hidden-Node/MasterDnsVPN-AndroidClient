@@ -88,15 +88,22 @@ private data class SettingField(
 
 private val configFields = listOf(
     SettingField("Identity", "DOMAINS", "DOMAINS", "Comma-separated domains"),
+    SettingField("Identity", "ENCRYPTION_KEY", "ENCRYPTION_KEY", "Shared key with server"),
     SettingField(
-        "Identity",
+        "Security",
         "DATA_ENCRYPTION_METHOD",
         "DATA_ENCRYPTION_METHOD",
         "0=None, 1=XOR, 2=ChaCha20, 3-5=AES-GCM",
         type = FieldType.OPTION,
-        options = listOf("0", "1", "2", "3", "4", "5")
+        options = listOf(
+            "0 - None",
+            "1 - XOR",
+            "2 - ChaCha20",
+            "3 - AES-128-GCM",
+            "4 - AES-192-GCM",
+            "5 - AES-256-GCM"
+        )
     ),
-    SettingField("Identity", "ENCRYPTION_KEY", "ENCRYPTION_KEY", "Shared key with server"),
     SettingField(
         "Proxy",
         "PROTOCOL_TYPE",
@@ -227,9 +234,10 @@ fun SettingsScreen(
     val listState = rememberLazyListState()
     val scope = rememberCoroutineScope()
     val sections = remember { configFields.groupBy { it.section } }
+    val sectionOrder = remember { configFields.map { it.section }.distinct() }
     val sectionExpanded = remember {
         mutableStateMapOf<String, Boolean>().apply {
-            sections.keys.forEach { put(it, it == "Identity" || it == "Proxy") }
+            sectionOrder.forEach { put(it, it == "Identity") }
         }
     }
 
@@ -419,7 +427,7 @@ fun SettingsScreen(
                     }
 
                     val socksAuthEnabled = fieldsState["SOCKS5_AUTH"].equals("true", ignoreCase = true)
-                    items(sections.keys.toList(), key = { "section_$it" }) { section ->
+                    items(sectionOrder, key = { "section_$it" }) { section ->
                         val expanded = sectionExpanded[section] ?: false
                         MdvSectionCard(
                             title = section,
@@ -546,7 +554,7 @@ private fun ConfigFieldCard(
                                 DropdownMenuItem(
                                     text = { Text(option) },
                                     onClick = {
-                                        onChange(option)
+                                        onChange(option.substringBefore(" - ").trim())
                                         expanded = false
                                     }
                                 )
