@@ -41,17 +41,32 @@ class MasterDnsVpnService : VpnService() {
         private const val SOCKS_STARTUP_TIMEOUT_MS = 30 * 60 * 1000L
         private const val SOCKS_POLL_INTERVAL_MS = 500L
 
-        // Companion packages that browsers and apps rely on for network access.
-        // These must be included alongside any user-selected app to ensure traffic
-        // actually flows through the tunnel (e.g. Chrome uses WebView & GMS).
+        // Browser packages that may need Android networking companion processes.
+        private val BROWSER_PACKAGES = setOf(
+            "com.android.chrome",
+            "com.chrome.beta",
+            "com.chrome.dev",
+            "com.chrome.canary",
+            "org.mozilla.firefox",
+            "org.mozilla.firefox_beta",
+            "org.mozilla.fenix",
+            "com.microsoft.emmx",
+            "com.opera.browser",
+            "com.opera.mini.native",
+            "com.brave.browser",
+            "com.sec.android.app.sbrowser",
+            "com.duckduckgo.mobile.android"
+        )
+
+        // Add these only when at least one browser is explicitly selected by user.
         private val BROWSER_COMPANION_PACKAGES = setOf(
             "com.google.android.webview",
             "com.android.webview",
             "com.google.android.gms",
             "com.google.android.gsf",
-            "com.android.chrome",          // system Chrome on some OEMs
             "com.google.android.captiveportallogin"
         )
+
     }
 
     private val serviceScope = CoroutineScope(Dispatchers.IO + SupervisorJob())
@@ -262,32 +277,29 @@ class MasterDnsVpnService : VpnService() {
                     val splitEnabled = globalSettings.splitTunnelingEnabled &&
                         globalSettings.splitPackagesCsv.isNotBlank()
                     if (splitEnabled) {
-                        // Build the final allowed-app set:
-                        // 1. User-selected packages
-                        // 2. Browser companion packages (WebView, GMS, etc.) so browsers
-                        //    actually route through the tunnel
                         val userSelected = globalSettings.splitPackagesCsv
                             .split(",")
                             .map { it.trim() }
                             .filter { it.isNotEmpty() }
                             .toSet()
 
-                        // Determine which companion packages are actually installed
-                        val pm = packageManager
-                        val installedCompanions = BROWSER_COMPANION_PACKAGES.filter { pkg ->
-                            runCatching { pm.getApplicationInfo(pkg, 0) }.isSuccess
-                        }.toSet()
-
-                        // Do NOT include our own packageName here.
-                        // tun2socks reads from the TUN fd directly (not via the route table),
-                        // and Go core's outbound UDP sockets must bypass the TUN to reach
-                        // resolver servers directly — exactly like the non-split path which
-                        // uses addDisallowedApplication(packageName).
-                        val finalAllowed = userSelected + installedCompanions
+                        // Keep split tunnel strict by default, but when user explicitly
+                        // selects a browser, include required companion processes so
+                        // browser traffic can still traverse the tunnel reliably.
+                        val browserSelected = userSelected.any { it in BROWSER_PACKAGES }
+                        val finalAllowed = if (browserSelected) {
+                            val pm = packageManager
+                            val installedCompanions = BROWSER_COMPANION_PACKAGES.filter { pkg ->
+                                runCatching { pm.getApplicationInfo(pkg, 0) }.isSuccess
+                            }.toSet()
+                            userSelected + installedCompanions
+                        } else {
+                            userSelected
+                        }
 
                         VpnManager.appendLog(
-                            "Split tunnel: ${userSelected.size} user apps, " +
-                            "${installedCompanions.size} companion packages added"
+                            "Split tunnel enabled for ${userSelected.size} selected app(s)" +
+                                if (browserSelected) " + browser companions" else ""
                         )
 
                         finalAllowed.forEach { pkg ->
