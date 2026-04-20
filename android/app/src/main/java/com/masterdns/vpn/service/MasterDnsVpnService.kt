@@ -52,6 +52,27 @@ class MasterDnsVpnService : VpnService() {
             "com.android.chrome",          // system Chrome on some OEMs
             "com.google.android.captiveportallogin"
         )
+
+        // If at least one browser is selected for split tunneling, companion packages
+        // are also allowed so selected browsers can fully function through VPN.
+        private val KNOWN_BROWSER_PACKAGES = setOf(
+            "com.android.chrome",
+            "com.chrome.beta",
+            "com.chrome.dev",
+            "com.chrome.canary",
+            "org.mozilla.firefox",
+            "org.mozilla.firefox_beta",
+            "org.mozilla.fenix",
+            "com.microsoft.emmx",
+            "com.brave.browser",
+            "com.opera.browser",
+            "com.opera.mini.native",
+            "com.sec.android.app.sbrowser",
+            "com.duckduckgo.mobile.android",
+            "com.vivaldi.browser",
+            "com.UCMobile.intl",
+            "com.kiwibrowser.browser"
+        )
     }
 
     private val serviceScope = CoroutineScope(Dispatchers.IO + SupervisorJob())
@@ -262,21 +283,21 @@ class MasterDnsVpnService : VpnService() {
                     val splitEnabled = globalSettings.splitTunnelingEnabled &&
                         globalSettings.splitPackagesCsv.isNotBlank()
                     if (splitEnabled) {
-                        // Build the final allowed-app set:
-                        // 1. User-selected packages
-                        // 2. Browser companion packages (WebView, GMS, etc.) so browsers
-                        //    actually route through the tunnel
                         val userSelected = globalSettings.splitPackagesCsv
                             .split(",")
                             .map { it.trim() }
                             .filter { it.isNotEmpty() }
                             .toSet()
 
-                        // Determine which companion packages are actually installed
-                        val pm = packageManager
-                        val installedCompanions = BROWSER_COMPANION_PACKAGES.filter { pkg ->
-                            runCatching { pm.getApplicationInfo(pkg, 0) }.isSuccess
-                        }.toSet()
+                        val browserSelected = userSelected.any { it in KNOWN_BROWSER_PACKAGES }
+                        val installedCompanions = if (browserSelected) {
+                            val pm = packageManager
+                            BROWSER_COMPANION_PACKAGES.filter { pkg ->
+                                runCatching { pm.getApplicationInfo(pkg, 0) }.isSuccess
+                            }.toSet()
+                        } else {
+                            emptySet()
+                        }
 
                         // Do NOT include our own packageName here.
                         // tun2socks reads from the TUN fd directly (not via the route table),
@@ -286,8 +307,9 @@ class MasterDnsVpnService : VpnService() {
                         val finalAllowed = userSelected + installedCompanions
 
                         VpnManager.appendLog(
-                            "Split tunnel: ${userSelected.size} user apps, " +
-                            "${installedCompanions.size} companion packages added"
+                            "Split tunnel: ${userSelected.size} selected apps, " +
+                            "${installedCompanions.size} companion packages added " +
+                            "(browser selected: $browserSelected)"
                         )
 
                         finalAllowed.forEach { pkg ->
