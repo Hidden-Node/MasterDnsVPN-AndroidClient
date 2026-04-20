@@ -19,7 +19,6 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.ArrowBack
 import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.OpenInNew
 import androidx.compose.material3.AssistChip
@@ -28,17 +27,14 @@ import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
-import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalUriHandler
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
@@ -48,6 +44,9 @@ import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.unit.dp
 import com.masterdns.vpn.BuildConfig
 import com.masterdns.vpn.R
+import com.masterdns.vpn.ui.components.mdv.controls.MdvBackTopAppBar
+import com.masterdns.vpn.ui.theme.MdvColor
+import com.masterdns.vpn.ui.theme.MdvSpace
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -59,14 +58,11 @@ fun InfoScreen(onBack: () -> Unit) {
     val engineVersion = stringResource(R.string.engine_version)
 
     Scaffold(
+        containerColor = MdvColor.Background,
         topBar = {
-            TopAppBar(
-                title = { Text("Info") },
-                navigationIcon = {
-                    IconButton(onClick = onBack) {
-                        Icon(Icons.Filled.ArrowBack, contentDescription = "Back")
-                    }
-                }
+            MdvBackTopAppBar(
+                title = "Info",
+                onBack = onBack
             )
         }
     ) { padding ->
@@ -74,13 +70,13 @@ fun InfoScreen(onBack: () -> Unit) {
             modifier = Modifier
                 .fillMaxSize()
                 .padding(padding),
-            contentPadding = PaddingValues(16.dp),
-            verticalArrangement = Arrangement.spacedBy(12.dp)
+            contentPadding = PaddingValues(MdvSpace.S4),
+            verticalArrangement = Arrangement.spacedBy(MdvSpace.S3)
         ) {
             item {
                 Card(
                     shape = RoundedCornerShape(20.dp),
-                    colors = CardDefaults.cardColors(containerColor = Color.Transparent),
+                    colors = CardDefaults.cardColors(containerColor = MdvColor.SurfaceLow),
                     modifier = Modifier.fillMaxWidth()
                 ) {
                     Box(
@@ -88,8 +84,8 @@ fun InfoScreen(onBack: () -> Unit) {
                             .background(
                                 brush = Brush.linearGradient(
                                     colors = listOf(
-                                        MaterialTheme.colorScheme.primaryContainer,
-                                        MaterialTheme.colorScheme.secondaryContainer
+                                        MdvColor.PrimaryContainer,
+                                        MdvColor.Primary
                                     )
                                 )
                             )
@@ -113,7 +109,7 @@ fun InfoScreen(onBack: () -> Unit) {
                                 Text(
                                     text = "Project overview and build details",
                                     style = MaterialTheme.typography.bodyMedium,
-                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                    color = MdvColor.OnSurfaceVariant
                                 )
                                 Spacer(modifier = Modifier.height(8.dp))
                                 AssistChip(
@@ -128,9 +124,9 @@ fun InfoScreen(onBack: () -> Unit) {
                                         )
                                     },
                                     colors = AssistChipDefaults.assistChipColors(
-                                        disabledContainerColor = MaterialTheme.colorScheme.surface.copy(alpha = 0.6f),
-                                        disabledLabelColor = MaterialTheme.colorScheme.onSurface,
-                                        disabledLeadingIconContentColor = MaterialTheme.colorScheme.primary
+                                        disabledContainerColor = MdvColor.SurfaceHigh,
+                                        disabledLabelColor = MdvColor.OnSurface,
+                                        disabledLeadingIconContentColor = MdvColor.PrimaryContainer
                                     )
                                 )
                             }
@@ -139,7 +135,7 @@ fun InfoScreen(onBack: () -> Unit) {
                 }
             }
             item {
-                Card {
+                Card(colors = CardDefaults.cardColors(containerColor = MdvColor.SurfaceHigh)) {
                     Column(
                         modifier = Modifier.padding(14.dp),
                         verticalArrangement = Arrangement.spacedBy(6.dp)
@@ -164,7 +160,7 @@ fun InfoScreen(onBack: () -> Unit) {
                 }
             }
             item {
-                Card {
+                Card(colors = CardDefaults.cardColors(containerColor = MdvColor.SurfaceHigh)) {
                     Column(
                         modifier = Modifier.padding(14.dp),
                         verticalArrangement = Arrangement.spacedBy(8.dp)
@@ -196,7 +192,7 @@ private fun InfoLinkRow(title: String, link: String, onOpen: () -> Unit) {
             Text(
                 text = link,
                 style = MaterialTheme.typography.bodyMedium.copy(textDecoration = TextDecoration.Underline),
-                color = MaterialTheme.colorScheme.primary,
+                color = MdvColor.PrimaryContainer,
                 maxLines = 2,
                 overflow = TextOverflow.Ellipsis
             )
@@ -205,7 +201,7 @@ private fun InfoLinkRow(title: String, link: String, onOpen: () -> Unit) {
         Icon(
             imageVector = Icons.Filled.OpenInNew,
             contentDescription = "Open link",
-            tint = MaterialTheme.colorScheme.primary
+            tint = MdvColor.PrimaryContainer
         )
     }
 }
@@ -216,13 +212,13 @@ private fun InfoValueRow(label: String, value: String) {
         modifier = Modifier
             .fillMaxWidth()
             .clip(RoundedCornerShape(12.dp))
-            .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.45f))
+            .background(MdvColor.Surface.copy(alpha = 0.75f))
             .padding(horizontal = 12.dp, vertical = 10.dp)
     ) {
         Text(
             text = label,
             style = MaterialTheme.typography.labelMedium,
-            color = MaterialTheme.colorScheme.onSurfaceVariant
+            color = MdvColor.OnSurfaceVariant
         )
         Spacer(modifier = Modifier.height(6.dp))
         Text(

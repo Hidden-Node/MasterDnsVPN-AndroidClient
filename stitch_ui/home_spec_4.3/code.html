@@ -1,0 +1,242 @@
+<!DOCTYPE html>
+
+<html class="dark" lang="en"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@300;400;500;600;700&amp;family=Manrope:wght@300;400;500;600;700&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<script id="tailwind-config">
+      tailwind.config = {
+        darkMode: "class",
+        theme: {
+          extend: {
+            "colors": {
+                    "surface-dim": "#10141a",
+                    "on-secondary-fixed-variant": "#3a4859",
+                    "on-surface-variant": "#bac9cc",
+                    "tertiary-fixed": "#d1e4ff",
+                    "surface-container": "#1c2026",
+                    "on-primary-fixed": "#001f24",
+                    "primary-container": "#00e5ff",
+                    "on-primary": "#00363d",
+                    "secondary-fixed-dim": "#bac8dc",
+                    "on-tertiary-container": "#425b78",
+                    "on-tertiary-fixed": "#001d36",
+                    "on-error-container": "#ffdad6",
+                    "on-error": "#690005",
+                    "surface-container-highest": "#31353c",
+                    "on-surface": "#dfe2eb",
+                    "on-tertiary-fixed-variant": "#2f4865",
+                    "error": "#ffb4ab",
+                    "secondary-container": "#3a4859",
+                    "surface-bright": "#353940",
+                    "on-primary-fixed-variant": "#004f58",
+                    "surface": "#10141a",
+                    "on-tertiary": "#17324d",
+                    "inverse-surface": "#dfe2eb",
+                    "secondary": "#bac8dc",
+                    "tertiary-container": "#b9d3f5",
+                    "surface-container-lowest": "#0a0e14",
+                    "secondary-fixed": "#d6e4f9",
+                    "inverse-primary": "#006875",
+                    "background": "#10141a",
+                    "surface-container-low": "#181c22",
+                    "primary-fixed": "#9cf0ff",
+                    "surface-container-high": "#262a31",
+                    "primary-fixed-dim": "#00daf3",
+                    "on-secondary-fixed": "#0f1c2c",
+                    "error-container": "#93000a",
+                    "outline": "#849396",
+                    "tertiary-fixed-dim": "#afc9ea",
+                    "surface-tint": "#00daf3",
+                    "inverse-on-surface": "#2d3137",
+                    "primary": "#c3f5ff",
+                    "on-primary-container": "#00626e",
+                    "outline-variant": "#3b494c",
+                    "on-secondary-container": "#a8b6ca",
+                    "tertiary": "#e3eeff",
+                    "surface-variant": "#31353c",
+                    "on-secondary": "#243141",
+                    "on-background": "#dfe2eb"
+            },
+            "borderRadius": {
+                    "DEFAULT": "0.125rem",
+                    "lg": "0.25rem",
+                    "xl": "0.5rem",
+                    "full": "0.75rem"
+            },
+            "fontFamily": {
+                    "headline": ["Space Grotesk"],
+                    "body": ["Manrope"],
+                    "label": ["Space Grotesk"]
+            }
+          }
+        }
+      }
+    </script>
+<style>
+        .material-symbols-outlined {
+            font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24;
+        }
+        .glow-pulse {
+            box-shadow: 0 0 20px 2px rgba(0, 229, 255, 0.3);
+        }
+        .glass-panel {
+            background: rgba(49, 53, 60, 0.4);
+            backdrop-filter: blur(20px);
+            -webkit-backdrop-filter: blur(20px);
+        }
+    </style>
+<style>
+    body {
+      min-height: max(884px, 100dvh);
+    }
+  </style>
+  </head>
+<body class="bg-surface text-on-surface font-body min-h-screen pb-24">
+<!-- TopAppBar -->
+<header class="sticky top-0 w-full z-50 flex items-center justify-between px-6 h-16 bg-[#10141a]/80 backdrop-blur-md">
+<div class="flex items-center gap-3 cursor-pointer group">
+<div class="w-8 h-8 rounded-lg bg-gradient-to-br from-primary to-primary-container flex items-center justify-center">
+<span class="material-symbols-outlined text-on-primary text-sm" style="font-variation-settings: 'FILL' 1;">security</span>
+</div>
+<span class="text-[#c3f5ff] font-black italic font-headline tracking-widest text-lg uppercase">Sovereign Node</span>
+<span class="ml-2 px-2 py-0.5 rounded text-[10px] font-headline bg-surface-container-highest text-primary-fixed tracking-tighter">MDV-HN</span>
+</div>
+<button class="text-[#bac8dc] hover:opacity-80 transition-all">
+<span class="material-symbols-outlined">info</span>
+</button>
+</header>
+<main class="px-6 pt-8 max-w-2xl mx-auto space-y-8">
+<!-- Connection Status & Power -->
+<section class="flex flex-col items-center justify-center space-y-8 relative py-4">
+<!-- Background Glow -->
+<div class="absolute inset-0 bg-primary/5 blur-[100px] rounded-full pointer-events-none"></div>
+<div class="text-center space-y-2 relative z-10">
+<p class="font-label text-[10px] tracking-[0.2em] text-on-surface-variant uppercase">Network Status</p>
+<div class="flex items-center justify-center gap-2">
+<span class="w-2 h-2 rounded-full bg-primary-container shadow-[0_0_8px_#00e5ff]"></span>
+<h1 class="font-headline font-bold text-3xl tracking-widest text-primary-container">CONNECTED</h1>
+</div>
+</div>
+<!-- Central Power Button -->
+<div class="relative group">
+<!-- Outer Rings -->
+<div class="absolute -inset-8 rounded-full border border-primary/5 scale-110"></div>
+<div class="absolute -inset-4 rounded-full border border-primary/10"></div>
+<!-- Main Toggle -->
+<button class="relative w-48 h-48 rounded-full bg-surface-container-high glass-panel flex items-center justify-center shadow-2xl transition-transform active:scale-95 duration-200">
+<div class="absolute inset-0 rounded-full border-2 border-primary/20 glow-pulse"></div>
+<div class="w-32 h-32 rounded-full bg-gradient-to-tr from-primary-container to-primary flex items-center justify-center shadow-[0_0_40px_rgba(0,229,255,0.4)]">
+<span class="material-symbols-outlined text-on-primary text-6xl" style="font-variation-settings: 'FILL' 1;">power_settings_new</span>
+</div>
+</button>
+</div>
+<div class="flex items-center gap-6 text-sm">
+<div class="flex flex-col items-center">
+<span class="text-on-surface-variant text-[10px] uppercase tracking-tighter">IP Address</span>
+<span class="font-headline font-medium text-on-surface">192.168.1.104</span>
+</div>
+<div class="h-8 w-px bg-outline-variant/30"></div>
+<div class="flex flex-col items-center">
+<span class="text-on-surface-variant text-[10px] uppercase tracking-tighter">Encryption</span>
+<span class="font-headline font-medium text-on-surface">AES-256-GCM</span>
+</div>
+</div>
+</section>
+<!-- Profile Selector Card -->
+<section class="bg-surface-container-low rounded-xl p-4 flex items-center justify-between border border-white/5">
+<div class="flex items-center gap-4">
+<div class="w-10 h-10 rounded-full bg-surface-container-highest flex items-center justify-center overflow-hidden border border-primary/20">
+<img class="w-full h-full object-cover" data-alt="Futuristic cyber-security profile avatar with neon accents and high-tech digital elements" src="https://lh3.googleusercontent.com/aida-public/AB6AXuCXtIos_DRoKoaCULUT7yc2phg3Trl28pllMQtoPNp_8r18mDCBZ1L9VLmk5R-P9QjfycLOE820OKJHjg8lfCO9vLUiZaTQcgDCVIdIf8qmUAcRw6B0eOQ4YsI2W9jKRKFZv-uCgS592BBQI-3P1t8sq1yrJvIryHrp3UwRBHKXKdxA8Q8ZkY6auvhJA_u0CmC6cllq1-Zldc4TFZOec_mVAt-iBOxflUcoyFIn6nrXapSmf8K2dt90ogiwJm3kVINHzC0ZzznurK8"/>
+</div>
+<div>
+<p class="text-[10px] uppercase tracking-widest text-on-surface-variant font-label">Active Node</p>
+<p class="font-headline font-bold text-on-surface">Stealth_Protocol_01</p>
+</div>
+</div>
+<button class="bg-surface-container-highest p-2 rounded-xl text-primary transition-colors hover:bg-surface-container-high">
+<span class="material-symbols-outlined">expand_more</span>
+</button>
+</section>
+<!-- Telemetry Bento Grid -->
+<div class="grid grid-cols-2 gap-4">
+<!-- Speed Card -->
+<div class="col-span-2 bg-surface-container-low rounded-xl p-5 border border-white/5 relative overflow-hidden">
+<div class="flex justify-between items-start mb-6">
+<div>
+<h3 class="font-label text-xs tracking-widest text-on-surface-variant uppercase mb-1">Transfer Speeds</h3>
+<p class="font-headline text-3xl font-bold text-on-surface">42.8 <span class="text-sm font-normal text-on-surface-variant">MB/s</span></p>
+</div>
+<span class="material-symbols-outlined text-primary-container/40">equalizer</span>
+</div>
+<div class="flex items-end gap-1 h-12">
+<div class="flex-1 bg-primary/20 h-[30%] rounded-t-sm"></div>
+<div class="flex-1 bg-primary/30 h-[45%] rounded-t-sm"></div>
+<div class="flex-1 bg-primary/40 h-[60%] rounded-t-sm"></div>
+<div class="flex-1 bg-primary/30 h-[40%] rounded-t-sm"></div>
+<div class="flex-1 bg-primary/50 h-[80%] rounded-t-sm"></div>
+<div class="flex-1 bg-primary/70 h-[95%] rounded-t-sm"></div>
+<div class="flex-1 bg-primary-container h-[70%] rounded-t-sm shadow-[0_0_10px_#00e5ff]"></div>
+<div class="flex-1 bg-primary/50 h-[50%] rounded-t-sm"></div>
+<div class="flex-1 bg-primary/30 h-[35%] rounded-t-sm"></div>
+</div>
+</div>
+<!-- Resolver Scan -->
+<div class="bg-surface-container-low rounded-xl p-4 border border-white/5 space-y-3">
+<div class="flex justify-between items-center">
+<span class="text-[10px] font-label tracking-widest text-on-surface-variant uppercase">Resolver Scan</span>
+<span class="text-[10px] font-label text-primary-container">ACTIVE</span>
+</div>
+<div class="h-1 w-full bg-surface-container-highest rounded-full overflow-hidden">
+<div class="h-full bg-primary-container w-3/4 rounded-full"></div>
+</div>
+<p class="text-[10px] text-on-surface-variant font-mono">Scanning sub-nodes...</p>
+</div>
+<!-- MTU -->
+<div class="bg-surface-container-low rounded-xl p-4 border border-white/5 flex flex-col justify-between">
+<span class="text-[10px] font-label tracking-widest text-on-surface-variant uppercase">Tunnel MTU</span>
+<div class="flex items-baseline gap-1 mt-2">
+<span class="text-2xl font-headline font-bold text-on-surface">1420</span>
+<span class="text-[10px] text-on-surface-variant uppercase">Bytes</span>
+</div>
+</div>
+<!-- SOCKS5 Card -->
+<div class="col-span-2 bg-surface-container-low rounded-xl p-4 border border-white/5 flex items-center justify-between">
+<div class="flex items-center gap-3">
+<div class="w-8 h-8 rounded bg-surface-container-highest flex items-center justify-center">
+<span class="material-symbols-outlined text-primary text-lg">terminal</span>
+</div>
+<div>
+<p class="text-[10px] font-label tracking-widest text-on-surface-variant uppercase">SOCKS5 Proxy</p>
+<p class="text-sm font-medium text-on-surface">localhost:1080</p>
+</div>
+</div>
+<div class="px-3 py-1 rounded-full bg-primary-container/10 border border-primary-container/20">
+<span class="text-[10px] font-bold text-primary-container uppercase tracking-widest">Running</span>
+</div>
+</div>
+</div>
+</main>
+<!-- BottomNavBar -->
+<nav class="fixed bottom-0 left-0 w-full z-50 flex justify-around items-center px-4 py-3 pb-safe bg-[#10141a]/95 backdrop-blur-xl rounded-t-3xl border-t border-white/5 shadow-[0_-4px_20px_rgba(0,229,255,0.05)]">
+<button class="flex flex-col items-center justify-center text-[#00e5ff] bg-[#00e5ff]/10 rounded-xl px-4 py-1 scale-95 active:scale-90 duration-200 transition-colors">
+<span class="material-symbols-outlined" style="font-variation-settings: 'FILL' 1;">home</span>
+<span class="font-['Space_Grotesk'] tracking-wider text-[10px] uppercase mt-1">Home</span>
+</button>
+<button class="flex flex-col items-center justify-center text-[#bac8dc] opacity-60 hover:bg-white/5 transition-colors scale-95 active:scale-90 duration-200">
+<span class="material-symbols-outlined">person</span>
+<span class="font-['Space_Grotesk'] tracking-wider text-[10px] uppercase mt-1">Profiles</span>
+</button>
+<button class="flex flex-col items-center justify-center text-[#bac8dc] opacity-60 hover:bg-white/5 transition-colors scale-95 active:scale-90 duration-200">
+<span class="material-symbols-outlined">terminal</span>
+<span class="font-['Space_Grotesk'] tracking-wider text-[10px] uppercase mt-1">Logs</span>
+</button>
+<button class="flex flex-col items-center justify-center text-[#bac8dc] opacity-60 hover:bg-white/5 transition-colors scale-95 active:scale-90 duration-200">
+<span class="material-symbols-outlined">settings</span>
+<span class="font-['Space_Grotesk'] tracking-wider text-[10px] uppercase mt-1">Settings</span>
+</button>
+</nav>
+</body></html>

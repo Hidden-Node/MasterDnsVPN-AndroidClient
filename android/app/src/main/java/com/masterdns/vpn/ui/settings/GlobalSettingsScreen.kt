@@ -12,6 +12,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.weight
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
@@ -27,7 +28,6 @@ import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.ExposedDropdownMenuBox
-import androidx.compose.material3.FilterChip
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
@@ -41,7 +41,6 @@ import androidx.compose.material3.Surface
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
-import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
@@ -53,6 +52,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.PasswordVisualTransformation
@@ -60,6 +60,12 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Dialog
 import androidx.core.graphics.drawable.toBitmap
 import androidx.lifecycle.viewmodel.compose.viewModel
+import com.masterdns.vpn.R
+import com.masterdns.vpn.ui.components.mdv.controls.MdvFilterChip
+import com.masterdns.vpn.ui.components.mdv.controls.MdvPrimaryActionButton
+import com.masterdns.vpn.ui.components.mdv.controls.MdvTopAppBar
+import com.masterdns.vpn.ui.theme.MdvColor
+import com.masterdns.vpn.ui.theme.MdvSpace
 import com.masterdns.vpn.util.GlobalSettings
 import kotlinx.coroutines.launch
 
@@ -92,13 +98,13 @@ fun GlobalSettingsScreen(vm: GlobalSettingsViewModel = viewModel()) {
     fun saveGlobalSettings() {
         if (socksPortMissing || httpPortMissing) {
             scope.launch {
-                snackbarHostState.showSnackbar("Please enter both SOCKS5 and HTTP ports.")
+                snackbarHostState.showSnackbar(context.getString(R.string.global_settings_ports_required_msg))
             }
             return
         }
         if (socksPortValue !in 1025..65535 || httpPortValue !in 1025..65535) {
             scope.launch {
-                snackbarHostState.showSnackbar("Ports must be between 1025 and 65535.")
+                snackbarHostState.showSnackbar(context.getString(R.string.global_settings_ports_range_msg))
             }
             return
         }
@@ -109,20 +115,21 @@ fun GlobalSettingsScreen(vm: GlobalSettingsViewModel = viewModel()) {
             internetSharingHttpPort = safeHttpPort
         )
         vm.save(normalize(draft))
-        scope.launch { snackbarHostState.showSnackbar("Global settings saved and applied") }
+        scope.launch { snackbarHostState.showSnackbar(context.getString(R.string.global_settings_saved_msg)) }
     }
 
     Scaffold(
+        containerColor = MdvColor.Background,
         topBar = {
-            TopAppBar(
-                title = { Text("Settings") },
+            MdvTopAppBar(
+                title = stringResource(R.string.settings_title),
                 actions = {
                     IconButton(
                         onClick = ::saveGlobalSettings
                     ) {
                         Icon(
                             imageVector = Icons.Filled.Save,
-                            contentDescription = "Save"
+                            contentDescription = stringResource(R.string.action_save)
                         )
                     }
                 }
@@ -134,12 +141,12 @@ fun GlobalSettingsScreen(vm: GlobalSettingsViewModel = viewModel()) {
             modifier = Modifier
                 .fillMaxSize()
                 .padding(padding),
-            contentPadding = PaddingValues(16.dp),
-            verticalArrangement = Arrangement.spacedBy(12.dp)
+            contentPadding = PaddingValues(MdvSpace.S4),
+            verticalArrangement = Arrangement.spacedBy(MdvSpace.S3)
         ) {
             item {
-                Card(colors = CardDefaults.cardColors()) {
-                    Column(modifier = Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                Card(colors = CardDefaults.cardColors(containerColor = MdvColor.SurfaceHigh)) {
+                    Column(modifier = Modifier.padding(MdvSpace.S3), verticalArrangement = Arrangement.spacedBy(MdvSpace.S3)) {
                         ExposedDropdownMenuBox(
                             expanded = modeExpanded,
                             onExpandedChange = { modeExpanded = !modeExpanded }
@@ -188,11 +195,12 @@ fun GlobalSettingsScreen(vm: GlobalSettingsViewModel = viewModel()) {
                                 },
                                 modifier = Modifier.fillMaxWidth()
                             ) {
-                                Column(modifier = Modifier.padding(12.dp)) {
-                                    Text("Split Tunnel Apps")
+                                Column(modifier = Modifier.padding(MdvSpace.S3)) {
+                                    Text(stringResource(R.string.split_tunnel_apps_title))
                                     Text(
-                                        "${parseCsv(draft.splitPackagesCsv).size} selected apps - tap to choose",
-                                        style = MaterialTheme.typography.bodySmall
+                                        stringResource(R.string.split_tunnel_apps_selected_count, parseCsv(draft.splitPackagesCsv).size),
+                                        style = MaterialTheme.typography.bodySmall,
+                                        color = MdvColor.OnSurfaceVariant
                                     )
                                 }
                             }
@@ -202,10 +210,10 @@ fun GlobalSettingsScreen(vm: GlobalSettingsViewModel = viewModel()) {
                 }
             }
             item {
-                Card(colors = CardDefaults.cardColors()) {
+                Card(colors = CardDefaults.cardColors(containerColor = MdvColor.SurfaceHigh)) {
                     Column(
-                        modifier = Modifier.padding(12.dp),
-                        verticalArrangement = Arrangement.spacedBy(10.dp)
+                        modifier = Modifier.padding(MdvSpace.S3),
+                        verticalArrangement = Arrangement.spacedBy(MdvSpace.S3)
                     ) {
                         Row(
                             modifier = Modifier.fillMaxWidth(),
@@ -227,7 +235,7 @@ fun GlobalSettingsScreen(vm: GlobalSettingsViewModel = viewModel()) {
                                     "Local IP: $localIp",
                                     style = MaterialTheme.typography.bodyMedium,
                                     fontWeight = FontWeight.Medium,
-                                    color = MaterialTheme.colorScheme.primary
+                                    color = MdvColor.PrimaryContainer
                                 )
                             }
 
@@ -301,19 +309,18 @@ fun GlobalSettingsScreen(vm: GlobalSettingsViewModel = viewModel()) {
                             Text(
                                 "Use these endpoints to share your VPN connection with other devices or apps on the same network.",
                                 style = MaterialTheme.typography.bodySmall,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                                color = MdvColor.OnSurfaceVariant
                             )
                         }
                     }
                 }
             }
             item {
-                Button(
+                MdvPrimaryActionButton(
+                    text = stringResource(R.string.global_settings_save_button),
                     onClick = ::saveGlobalSettings,
                     modifier = Modifier.fillMaxWidth()
-                ) {
-                    Text("Save Global Settings")
-                }
+                )
             }
         }
     }
@@ -342,31 +349,31 @@ fun GlobalSettingsScreen(vm: GlobalSettingsViewModel = viewModel()) {
                     .fillMaxWidth()
                     .heightIn(max = 560.dp),
                 shape = RoundedCornerShape(16.dp),
-                color = MaterialTheme.colorScheme.surface
+                color = MdvColor.Surface
             ) {
                 Column(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .padding(12.dp),
-                    verticalArrangement = Arrangement.spacedBy(10.dp)
+                        .padding(MdvSpace.S3),
+                    verticalArrangement = Arrangement.spacedBy(MdvSpace.S3)
                 ) {
-                    Text("Select Split-Tunnel Apps", style = MaterialTheme.typography.titleMedium)
+                    Text(stringResource(R.string.split_tunnel_dialog_title), style = MaterialTheme.typography.titleMedium)
                     Text(
-                        "Choose apps that should use VPN tunnel",
+                        stringResource(R.string.split_tunnel_dialog_desc),
                         style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f)
+                        color = MdvColor.OnSurfaceVariant
                     )
 
-                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                        FilterChip(
+                    Row(horizontalArrangement = Arrangement.spacedBy(MdvSpace.S2)) {
+                        MdvFilterChip(
                             selected = activeTab == "SELECTED",
                             onClick = { activeTab = "SELECTED" },
-                            label = { Text("Selected ${selectedApps.size}") }
+                            label = stringResource(R.string.split_tunnel_selected_count, selectedApps.size)
                         )
-                        FilterChip(
+                        MdvFilterChip(
                             selected = activeTab == "AVAILABLE",
                             onClick = { activeTab = "AVAILABLE" },
-                            label = { Text("Available ${availableApps.size}") }
+                            label = stringResource(R.string.split_tunnel_available_count, availableApps.size)
                         )
                     }
 
@@ -374,19 +381,19 @@ fun GlobalSettingsScreen(vm: GlobalSettingsViewModel = viewModel()) {
                         OutlinedTextField(
                             value = selectedQuery,
                             onValueChange = { selectedQuery = it },
-                            label = { Text("Search selected apps") },
+                            label = { Text(stringResource(R.string.split_tunnel_search_selected)) },
                             modifier = Modifier.fillMaxWidth()
                         )
                     } else {
                         OutlinedTextField(
                             value = availableQuery,
                             onValueChange = { availableQuery = it },
-                            label = { Text("Search available apps") },
+                            label = { Text(stringResource(R.string.split_tunnel_search_available)) },
                             modifier = Modifier.fillMaxWidth()
                         )
                     }
 
-                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Row(horizontalArrangement = Arrangement.spacedBy(MdvSpace.S2)) {
                         OutlinedButton(
                             onClick = {
                                 draftAppSelection = draftAppSelection.toMutableSet().apply {
@@ -395,20 +402,20 @@ fun GlobalSettingsScreen(vm: GlobalSettingsViewModel = viewModel()) {
                             },
                             modifier = Modifier.weight(1f)
                         ) {
-                            Text("Select Visible")
+                            Text(stringResource(R.string.split_tunnel_select_visible))
                         }
                         OutlinedButton(
                             onClick = { draftAppSelection = mutableSetOf() },
                             modifier = Modifier.weight(1f)
                         ) {
-                            Text("Select None")
+                            Text(stringResource(R.string.split_tunnel_select_none))
                         }
                     }
 
                     Surface(
                         modifier = Modifier.fillMaxWidth(),
                         shape = RoundedCornerShape(12.dp),
-                        color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f)
+                        color = MdvColor.SurfaceHigh
                     ) {
                         Column(
                             modifier = Modifier
@@ -417,22 +424,26 @@ fun GlobalSettingsScreen(vm: GlobalSettingsViewModel = viewModel()) {
                         ) {
                             val appsToShow = if (activeTab == "SELECTED") selectedFiltered else availableFiltered
                             val emptyText = if (activeTab == "SELECTED") {
-                                "No selected app matches your search"
+                                stringResource(R.string.split_tunnel_empty_selected)
                             } else {
-                                "No available app matches your search"
+                                stringResource(R.string.split_tunnel_empty_available)
                             }
 
                             Text(
-                                if (activeTab == "SELECTED") "Selected Apps" else "Available Apps",
+                                if (activeTab == "SELECTED") {
+                                    stringResource(R.string.split_tunnel_selected_apps)
+                                } else {
+                                    stringResource(R.string.split_tunnel_available_apps)
+                                },
                                 style = MaterialTheme.typography.labelLarge,
-                                color = MaterialTheme.colorScheme.primary
+                                color = MdvColor.PrimaryContainer
                             )
 
                             if (appsToShow.isEmpty()) {
                                 Text(
                                     emptyText,
                                     style = MaterialTheme.typography.bodySmall,
-                                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f),
+                                    color = MdvColor.OnSurfaceVariant,
                                     modifier = Modifier.padding(top = 8.dp)
                                 )
                             } else {
@@ -462,7 +473,7 @@ fun GlobalSettingsScreen(vm: GlobalSettingsViewModel = viewModel()) {
                         horizontalArrangement = Arrangement.End
                     ) {
                         TextButton(onClick = { showAppPicker = false }) {
-                            Text("Cancel")
+                            Text(stringResource(R.string.action_cancel))
                         }
                         Button(
                             onClick = {
@@ -470,7 +481,7 @@ fun GlobalSettingsScreen(vm: GlobalSettingsViewModel = viewModel()) {
                                 showAppPicker = false
                             }
                         ) {
-                            Text("Apply")
+                            Text(stringResource(R.string.action_apply))
                         }
                     }
                 }

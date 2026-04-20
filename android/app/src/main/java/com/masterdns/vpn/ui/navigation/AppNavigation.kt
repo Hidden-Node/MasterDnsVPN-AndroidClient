@@ -7,6 +7,7 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.unit.dp
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.only
 import androidx.compose.foundation.layout.safeDrawing
@@ -23,6 +24,7 @@ import com.masterdns.vpn.ui.logs.LogsScreen
 import com.masterdns.vpn.ui.profiles.ProfilesScreen
 import com.masterdns.vpn.ui.settings.GlobalSettingsScreen
 import com.masterdns.vpn.ui.settings.SettingsScreen
+import com.masterdns.vpn.ui.theme.MdvColor
 
 sealed class Screen(val route: String, val title: String) {
     data object Home : Screen("home", "Home")
@@ -63,22 +65,39 @@ fun AppNavigation() {
     Scaffold(
         contentWindowInsets = WindowInsets.safeDrawing.only(WindowInsetsSides.Bottom),
         bottomBar = {
-            NavigationBar {
+            NavigationBar(
+                containerColor = MdvColor.Background.copy(alpha = 0.95f),
+                tonalElevation = 0.dp
+            ) {
                 bottomBarScreens.forEach { screen ->
+                    val selected = currentDestination?.hierarchy?.any { it.route == screen.route } == true
                     NavigationBarItem(
                         icon = {
                             Icon(
                                 icons[screen.route] ?: Icons.Filled.Home,
-                                contentDescription = screen.title
+                                contentDescription = screen.title,
+                                tint = if (selected) MdvColor.PrimaryContainer else MdvColor.Secondary.copy(alpha = 0.65f)
                             )
                         },
                         label = {
-                            Text(screen.title, fontWeight = FontWeight.Medium)
+                            Text(
+                                screen.title.uppercase(),
+                                fontWeight = FontWeight.SemiBold,
+                                color = if (selected) MdvColor.Primary else MdvColor.Secondary.copy(alpha = 0.65f)
+                            )
                         },
-                        selected = currentDestination?.hierarchy?.any { it.route == screen.route } == true,
+                        selected = selected,
+                        colors = NavigationBarItemDefaults.colors(
+                            selectedIconColor = MdvColor.PrimaryContainer,
+                            selectedTextColor = MdvColor.Primary,
+                            unselectedIconColor = MdvColor.Secondary.copy(alpha = 0.65f),
+                            unselectedTextColor = MdvColor.Secondary.copy(alpha = 0.65f),
+                            indicatorColor = MdvColor.PrimaryContainer.copy(alpha = 0.12f)
+                        ),
                         onClick = {
                             navigateToRoot(screen)
-                        }
+                        },
+                        alwaysShowLabel = true
                     )
                 }
             }

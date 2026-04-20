@@ -24,7 +24,10 @@ import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import com.google.gson.Gson
 import com.masterdns.vpn.data.local.ProfileEntity
+import com.masterdns.vpn.ui.components.mdv.controls.MdvBackTopAppBar
 import com.masterdns.vpn.ui.theme.ConnectedGreen
+import com.masterdns.vpn.ui.theme.MdvColor
+import com.masterdns.vpn.ui.theme.MdvSpace
 import kotlinx.coroutines.launch
 
 private data class ImportedProfileDraft(
@@ -81,15 +84,12 @@ fun ProfilesScreen(
     }
 
     Scaffold(
+        containerColor = MdvColor.Background,
         snackbarHost = { SnackbarHost(hostState = snackbarHostState) },
         topBar = {
-            TopAppBar(
-                title = { Text("Profiles", fontWeight = FontWeight.Bold) },
-                navigationIcon = {
-                    IconButton(onClick = onBack) {
-                        Icon(Icons.Filled.ArrowBack, contentDescription = "Back")
-                    }
-                },
+            MdvBackTopAppBar(
+                title = "Profiles",
+                onBack = onBack,
                 actions = {
                     IconButton(onClick = {
                         editingProfile = null
@@ -158,13 +158,13 @@ fun ProfilesScreen(
                         Icons.Filled.PersonAdd,
                         contentDescription = null,
                         modifier = Modifier.size(64.dp),
-                        tint = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.4f)
+                        tint = MdvColor.OnSurfaceVariant.copy(alpha = 0.7f)
                     )
                     Spacer(modifier = Modifier.height(16.dp))
                     Text(
                         "No profiles yet",
                         style = MaterialTheme.typography.titleMedium,
-                        color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f)
+                        color = MdvColor.OnSurfaceVariant
                     )
                     Spacer(modifier = Modifier.height(8.dp))
                     FilledTonalButton(onClick = {
@@ -180,8 +180,8 @@ fun ProfilesScreen(
         } else {
             LazyColumn(
                 modifier = Modifier.fillMaxSize().padding(padding),
-                contentPadding = PaddingValues(16.dp),
-                verticalArrangement = Arrangement.spacedBy(8.dp)
+                contentPadding = PaddingValues(MdvSpace.S4),
+                verticalArrangement = Arrangement.spacedBy(MdvSpace.S2)
             ) {
                 items(profiles) { profile ->
                     ProfileCard(
@@ -214,9 +214,9 @@ fun ProfileCard(
         shape = RoundedCornerShape(16.dp),
         colors = CardDefaults.cardColors(
             containerColor = if (profile.isSelected)
-                MaterialTheme.colorScheme.primaryContainer
+                MdvColor.PrimaryContainer.copy(alpha = 0.16f)
             else
-                MaterialTheme.colorScheme.surfaceVariant
+                MdvColor.SurfaceHigh
         )
     ) {
         Row(
@@ -242,7 +242,7 @@ fun ProfileCard(
                 Text(
                     text = profile.domains.replace("[\"", "").replace("\"]", ""),
                     style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f)
+                    color = MdvColor.OnSurfaceVariant
                 )
             }
 
@@ -402,14 +402,14 @@ private fun ProfileEditorDialog(
                 if (!showResolversEditor && largeResolversText) {
                     Card(
                         modifier = Modifier.fillMaxWidth(),
-                        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)
+                        colors = CardDefaults.cardColors(containerColor = MdvColor.SurfaceHigh)
                     ) {
                         Column(modifier = Modifier.padding(10.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
                             Text("Resolvers list is large (${resolvers.lines().size} lines)")
                             Text(
                                 "To avoid UI lag, tap Edit to open the text box.",
                                 style = MaterialTheme.typography.bodySmall,
-                                color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f)
+                                color = MdvColor.OnSurfaceVariant
                             )
                             OutlinedButton(onClick = { showResolversEditor = true }) {
                                 Text("Edit Resolvers")

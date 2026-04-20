@@ -14,25 +14,24 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.RowScope
+import androidx.compose.foundation.layout.weight
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.ArrowBack
 import androidx.compose.material.icons.filled.ArrowDropDown
 import androidx.compose.material.icons.filled.Download
 import androidx.compose.material.icons.filled.Save
 import androidx.compose.material.icons.filled.UploadFile
-import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.ExposedDropdownMenuBox
-import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -42,7 +41,6 @@ import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
-import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
@@ -55,13 +53,22 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import com.google.gson.Gson
 import com.google.gson.reflect.TypeToken
+import com.masterdns.vpn.R
 import com.masterdns.vpn.data.local.ProfileEntity
+import com.masterdns.vpn.ui.components.mdv.cards.MdvSectionCard
+import com.masterdns.vpn.ui.components.mdv.cards.MdvSettingFieldCard
+import com.masterdns.vpn.ui.components.mdv.controls.MdvPrimaryActionButton
+import com.masterdns.vpn.ui.components.mdv.controls.MdvBackTopAppBar
+import com.masterdns.vpn.ui.components.mdv.controls.MdvTopAppBar
+import com.masterdns.vpn.ui.theme.MdvColor
+import com.masterdns.vpn.ui.theme.MdvSpace
 import kotlinx.coroutines.launch
 
 private enum class FieldType { TEXT, BOOL, OPTION }
@@ -230,7 +237,7 @@ fun SettingsScreen(
         val content = pendingExportContent ?: return@rememberLauncherForActivityResult
         if (uri != null) {
             writeTextToUri(context, uri, content)
-            scope.launch { snackbarHostState.showSnackbar("TOML exported") }
+            scope.launch { snackbarHostState.showSnackbar(context.getString(R.string.settings_toml_exported_msg)) }
         }
         pendingExportContent = null
     }
@@ -243,7 +250,7 @@ fun SettingsScreen(
             val updated = viewModel.importTomlValues(text, fieldsState.toMap())
             fieldsState.clear()
             fieldsState.putAll(updated)
-            scope.launch { snackbarHostState.showSnackbar("TOML imported to form") }
+            scope.launch { snackbarHostState.showSnackbar(context.getString(R.string.settings_toml_imported_msg)) }
         }
     }
 
@@ -254,7 +261,7 @@ fun SettingsScreen(
         if (uri != null && selected != null) {
             val text = readTextFromUri(context, uri)
             viewModel.importResolvers(selected, text)
-            scope.launch { snackbarHostState.showSnackbar("Resolvers imported into profile") }
+            scope.launch { snackbarHostState.showSnackbar(context.getString(R.string.settings_resolvers_imported_msg)) }
         }
     }
     val pickMtuExportLauncher = rememberLauncherForActivityResult(
@@ -275,7 +282,7 @@ fun SettingsScreen(
                 )
             }
             fieldsState["MTU_EXPORT_URI"] = uri.toString()
-            scope.launch { snackbarHostState.showSnackbar("MTU export destination selected") }
+            scope.launch { snackbarHostState.showSnackbar(context.getString(R.string.settings_mtu_destination_msg)) }
         }
     }
 
@@ -285,33 +292,33 @@ fun SettingsScreen(
     }
 
     Scaffold(
+        containerColor = MdvColor.Background,
         topBar = {
-            TopAppBar(
-                title = { Text("Profile Settings", fontWeight = FontWeight.Bold) },
-                navigationIcon = {
-                    if (onBack != null) {
-                        IconButton(onClick = onBack) {
-                            Icon(
-                                imageVector = Icons.Filled.ArrowBack,
-                                contentDescription = "Back"
-                            )
+            val topActions: @Composable RowScope.() -> Unit = {
+                val selected = profile
+                if (selected != null) {
+                    IconButton(
+                        onClick = {
+                            viewModel.saveSettings(selected, fieldsState.toMap())
+                            scope.launch { snackbarHostState.showSnackbar(context.getString(R.string.settings_saved_msg)) }
                         }
-                    }
-                },
-                actions = {
-                    val selected = profile
-                    if (selected != null) {
-                        IconButton(
-                            onClick = {
-                                viewModel.saveSettings(selected, fieldsState.toMap())
-                                scope.launch { snackbarHostState.showSnackbar("Profile settings saved and applied") }
-                            }
-                        ) {
-                            Icon(Icons.Filled.Save, contentDescription = "Save")
-                        }
+                    ) {
+                        Icon(Icons.Filled.Save, contentDescription = stringResource(R.string.action_save))
                     }
                 }
-            )
+            }
+            if (onBack != null) {
+                MdvBackTopAppBar(
+                    title = stringResource(R.string.profile_settings_title),
+                    onBack = onBack,
+                    actions = topActions
+                )
+            } else {
+                MdvTopAppBar(
+                    title = stringResource(R.string.profile_settings_title),
+                    actions = topActions
+                )
+            }
         },
         snackbarHost = { SnackbarHost(hostState = snackbarHostState) }
     ) { padding ->
@@ -321,16 +328,16 @@ fun SettingsScreen(
                 modifier = Modifier
                     .fillMaxSize()
                     .padding(padding)
-                    .padding(24.dp),
+                    .padding(MdvSpace.S6),
                 verticalArrangement = Arrangement.Center,
                 horizontalAlignment = Alignment.CenterHorizontally
             ) {
-                Text("No selected profile", style = MaterialTheme.typography.titleMedium)
-                Spacer(modifier = Modifier.height(8.dp))
+                Text(stringResource(R.string.settings_no_profile_title), style = MaterialTheme.typography.titleMedium)
+                Spacer(modifier = Modifier.height(MdvSpace.S2))
                 Text(
-                    "Create/select a profile in Profiles tab, then configure client_config values here.",
+                    stringResource(R.string.settings_no_profile_desc),
                     style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f)
+                    color = MdvColor.OnSurfaceVariant
                 )
             }
             return@Scaffold
@@ -340,18 +347,20 @@ fun SettingsScreen(
             modifier = Modifier
                 .fillMaxSize()
                 .padding(padding),
-            contentPadding = PaddingValues(16.dp),
-            verticalArrangement = Arrangement.spacedBy(10.dp),
+            contentPadding = PaddingValues(MdvSpace.S4),
+            verticalArrangement = Arrangement.spacedBy(MdvSpace.S3),
             state = listState
         ) {
             item {
                 Text(
-                    text = "Editing profile: ${selected.name}",
-                    style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.SemiBold)
+                    text = stringResource(R.string.settings_editing_profile, selected.name),
+                    style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.SemiBold),
+                    color = MdvColor.OnSurface
                 )
-                Spacer(modifier = Modifier.height(6.dp))
-                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    Button(
+                Spacer(modifier = Modifier.height(MdvSpace.S1))
+                Row(horizontalArrangement = Arrangement.spacedBy(MdvSpace.S2)) {
+                    MdvPrimaryActionButton(
+                        text = stringResource(R.string.action_import_toml),
                         onClick = {
                             importTomlLauncher.launch(
                                 arrayOf(
@@ -362,75 +371,53 @@ fun SettingsScreen(
                                     "*/*"
                                 )
                             )
-                        }
-                    ) {
-                        Icon(Icons.Filled.UploadFile, contentDescription = null)
-                        Spacer(modifier = Modifier.width(6.dp))
-                        Text("Import TOML")
-                    }
-                    Button(
+                        },
+                        icon = Icons.Filled.UploadFile
+                    )
+                    MdvPrimaryActionButton(
+                        text = stringResource(R.string.action_export_toml),
                         onClick = {
                             pendingExportContent = viewModel.exportConfigToml(selected, fieldsState.toMap())
                             exportLauncher.launch("${selected.name}_client_config.toml")
-                        }
-                    ) {
-                        Icon(Icons.Filled.Download, contentDescription = null)
-                        Spacer(modifier = Modifier.width(6.dp))
-                        Text("Export TOML")
-                    }
+                        },
+                        icon = Icons.Filled.Download
+                    )
                 }
-                Spacer(modifier = Modifier.height(6.dp))
-                Button(onClick = { importResolversLauncher.launch(arrayOf("text/*")) }) {
-                    Icon(Icons.Filled.UploadFile, contentDescription = null)
-                    Spacer(modifier = Modifier.width(6.dp))
-                    Text("Import client_resolvers.txt")
-                }
-                Spacer(modifier = Modifier.height(6.dp))
-                Button(
+                Spacer(modifier = Modifier.height(MdvSpace.S1))
+                MdvPrimaryActionButton(
+                    text = stringResource(R.string.action_import_resolvers),
+                    onClick = { importResolversLauncher.launch(arrayOf("text/*")) },
+                    icon = Icons.Filled.UploadFile
+                )
+                Spacer(modifier = Modifier.height(MdvSpace.S1))
+                MdvPrimaryActionButton(
+                    text = stringResource(R.string.action_pick_mtu_destination),
                     onClick = {
                         val selectedName = selected.name.trim().ifBlank { "profile" }
                         pickMtuExportLauncher.launch("${selectedName}_mtu_results.log")
-                    }
-                ) {
-                    Icon(Icons.Filled.Download, contentDescription = null)
-                    Spacer(modifier = Modifier.width(6.dp))
-                    Text("Pick MTU export destination")
-                }
+                    },
+                    icon = Icons.Filled.Download
+                )
             }
 
             val socksAuthEnabled = fieldsState["SOCKS5_AUTH"].equals("true", ignoreCase = true)
             items(sections.keys.toList(), key = { "section_$it" }) { section ->
                 val expanded = sectionExpanded[section] ?: false
-                Card(
-                    onClick = { sectionExpanded[section] = !expanded },
-                    modifier = Modifier.fillMaxWidth(),
-                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.45f))
-                ) {
-                    Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(horizontal = 12.dp, vertical = 10.dp),
-                        horizontalArrangement = Arrangement.SpaceBetween,
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Text(
-                            text = section,
-                            style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.Bold),
-                            color = MaterialTheme.colorScheme.primary
-                        )
-                        Text(if (expanded) "Hide" else "Show", color = MaterialTheme.colorScheme.primary)
-                    }
-                }
+                MdvSectionCard(
+                    title = section,
+                    expanded = expanded,
+                    onToggle = { sectionExpanded[section] = !expanded }
+                )
                 if (!expanded) return@items
 
-                Spacer(modifier = Modifier.height(6.dp))
+                Spacer(modifier = Modifier.height(MdvSpace.S1))
                 if (section == "DNS") {
                     val dnsEnabled = fieldsState["LOCAL_DNS_ENABLED"].equals("true", ignoreCase = true)
                     val dnsPort = fieldsState["LOCAL_DNS_PORT"]?.toIntOrNull() ?: 53
                     if (dnsEnabled && dnsPort <= 1024) {
                         Card(
                             colors = CardDefaults.cardColors(
-                                containerColor = MaterialTheme.colorScheme.errorContainer
+                                containerColor = MdvColor.ErrorContainer
                             ),
                             modifier = Modifier.fillMaxWidth()
                         ) {
@@ -439,14 +426,13 @@ fun SettingsScreen(
                                 verticalAlignment = Alignment.CenterVertically
                             ) {
                                 Text(
-                                    text = "⚠ Port $dnsPort requires root access on Android. " +
-                                        "The app will automatically use port 5353 instead.",
+                                    text = stringResource(R.string.settings_dns_root_warning, dnsPort),
                                     style = MaterialTheme.typography.bodySmall,
-                                    color = MaterialTheme.colorScheme.onErrorContainer
+                                    color = MdvColor.Error
                                 )
                             }
                         }
-                        Spacer(modifier = Modifier.height(8.dp))
+                        Spacer(modifier = Modifier.height(MdvSpace.S2))
                     }
                 }
                 sections[section].orEmpty().forEach { field ->
@@ -458,23 +444,21 @@ fun SettingsScreen(
                         value = fieldsState[field.key].orEmpty(),
                         onChange = { fieldsState[field.key] = it }
                     )
-                    Spacer(modifier = Modifier.height(8.dp))
+                    Spacer(modifier = Modifier.height(MdvSpace.S2))
                 }
             }
 
             item {
-                Spacer(modifier = Modifier.height(8.dp))
-                Button(
+                Spacer(modifier = Modifier.height(MdvSpace.S2))
+                MdvPrimaryActionButton(
+                    text = stringResource(R.string.action_save_settings),
                     onClick = {
                         viewModel.saveSettings(selected, fieldsState.toMap())
-                        scope.launch { snackbarHostState.showSnackbar("Profile settings saved and applied") }
+                        scope.launch { snackbarHostState.showSnackbar(context.getString(R.string.settings_saved_msg)) }
                     },
-                    modifier = Modifier.fillMaxWidth()
-                ) {
-                    Icon(imageVector = Icons.Filled.Save, contentDescription = null)
-                    Spacer(modifier = Modifier.width(8.dp))
-                    Text("Save Settings")
-                }
+                    modifier = Modifier.fillMaxWidth(),
+                    icon = Icons.Filled.Save
+                )
             }
         }
     }
@@ -487,11 +471,8 @@ private fun ConfigFieldCard(
     value: String,
     onChange: (String) -> Unit
 ) {
-    Card(
-        modifier = Modifier.fillMaxWidth(),
-        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)
-    ) {
-        Column(modifier = Modifier.padding(12.dp)) {
+    MdvSettingFieldCard {
+        Column {
             when (field.type) {
                 FieldType.BOOL -> {
                     val checked = value.equals("true", ignoreCase = true)
@@ -505,7 +486,7 @@ private fun ConfigFieldCard(
                             Text(
                                 field.helper,
                                 style = MaterialTheme.typography.bodySmall,
-                                color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f)
+                                color = MdvColor.OnSurfaceVariant
                             )
                         }
                         Switch(
@@ -565,9 +546,6 @@ private fun ConfigFieldCard(
                     )
                 }
             }
-
-            Spacer(modifier = Modifier.height(6.dp))
-            HorizontalDivider()
         }
     }
 }

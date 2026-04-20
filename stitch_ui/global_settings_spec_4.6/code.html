@@ -1,0 +1,229 @@
+<!DOCTYPE html>
+
+<html class="dark" lang="en"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>Sovereign Node - Global Settings</title>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@300;400;500;600;700&amp;family=Manrope:wght@300;400;500;600;700;800&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<script id="tailwind-config">
+        tailwind.config = {
+            darkMode: "class",
+            theme: {
+                extend: {
+                    "colors": {
+                        "surface-dim": "#10141a",
+                        "on-secondary-fixed-variant": "#3a4859",
+                        "on-surface-variant": "#bac9cc",
+                        "tertiary-fixed": "#d1e4ff",
+                        "surface-container": "#1c2026",
+                        "on-primary-fixed": "#001f24",
+                        "primary-container": "#00e5ff",
+                        "on-primary": "#00363d",
+                        "secondary-fixed-dim": "#bac8dc",
+                        "on-tertiary-container": "#425b78",
+                        "on-tertiary-fixed": "#001d36",
+                        "on-error-container": "#ffdad6",
+                        "on-error": "#690005",
+                        "surface-container-highest": "#31353c",
+                        "on-surface": "#dfe2eb",
+                        "on-tertiary-fixed-variant": "#2f4865",
+                        "error": "#ffb4ab",
+                        "secondary-container": "#3a4859",
+                        "surface-bright": "#353940",
+                        "on-primary-fixed-variant": "#004f58",
+                        "surface": "#10141a",
+                        "on-tertiary": "#17324d",
+                        "inverse-surface": "#dfe2eb",
+                        "secondary": "#bac8dc",
+                        "tertiary-container": "#b9d3f5",
+                        "surface-container-lowest": "#0a0e14",
+                        "secondary-fixed": "#d6e4f9",
+                        "inverse-primary": "#006875",
+                        "background": "#10141a",
+                        "surface-container-low": "#181c22",
+                        "primary-fixed": "#9cf0ff",
+                        "surface-container-high": "#262a31",
+                        "primary-fixed-dim": "#00daf3",
+                        "on-secondary-fixed": "#0f1c2c",
+                        "error-container": "#93000a",
+                        "outline": "#849396",
+                        "tertiary-fixed-dim": "#afc9ea",
+                        "surface-tint": "#00daf3",
+                        "inverse-on-surface": "#2d3137",
+                        "primary": "#c3f5ff",
+                        "on-primary-container": "#00626e",
+                        "outline-variant": "#3b494c",
+                        "on-secondary-container": "#a8b6ca",
+                        "tertiary": "#e3eeff",
+                        "surface-variant": "#31353c",
+                        "on-secondary": "#243141",
+                        "on-background": "#dfe2eb"
+                    },
+                    "borderRadius": {
+                        "DEFAULT": "0.125rem",
+                        "lg": "0.25rem",
+                        "xl": "0.5rem",
+                        "full": "0.75rem"
+                    },
+                    "spacing": {},
+                    "fontFamily": {
+                        "headline": ["Space Grotesk"],
+                        "body": ["Manrope"],
+                        "label": ["Space Grotesk"]
+                    }
+                },
+            },
+        }
+    </script>
+<style>
+        .material-symbols-outlined {
+            font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24;
+        }
+        .tonal-shift { background-color: #181c22; }
+        .glass-panel {
+            background: rgba(49, 53, 60, 0.4);
+            backdrop-filter: blur(20px);
+            border: 1px solid rgba(132, 147, 150, 0.15);
+        }
+    </style>
+<style>
+    body {
+      min-height: max(884px, 100dvh);
+    }
+  </style>
+  </head>
+<body class="bg-surface font-body text-on-surface min-h-screen pb-40">
+<!-- TopAppBar -->
+<header class="sticky top-0 w-full z-50 flex items-center justify-between px-6 h-16 bg-[#10141a]/80 backdrop-blur-md">
+<div class="flex items-center gap-4">
+<span class="material-symbols-outlined text-[#00e5ff] cursor-pointer">arrow_back</span>
+<h1 class="font-headline font-bold text-lg uppercase tracking-widest text-[#00e5ff]">Settings</h1>
+</div>
+<div class="flex items-center gap-2 px-3 py-1.5 rounded-full bg-[#00e5ff]/10 border border-[#00e5ff]/20 cursor-pointer hover:opacity-80 transition-all">
+<span class="material-symbols-outlined text-[#00e5ff] text-xl" data-weight="fill" style="font-variation-settings: 'FILL' 1;">save</span>
+<span class="font-label text-xs font-bold uppercase tracking-tighter text-[#c3f5ff]">Save</span>
+</div>
+</header>
+<main class="px-6 py-8 max-w-2xl mx-auto space-y-8">
+<!-- Header Visual Accent -->
+<div class="relative overflow-hidden rounded-full p-8 glass-panel mb-4">
+<div class="absolute top-0 right-0 w-32 h-32 bg-[#00e5ff]/10 blur-3xl rounded-full"></div>
+<div class="relative z-10 flex flex-col gap-1">
+<span class="font-label text-[10px] uppercase tracking-[0.2em] text-[#00e5ff]">System Configuration</span>
+<h2 class="font-headline text-2xl font-bold tracking-tight">Global Parameters</h2>
+</div>
+</div>
+<!-- Connection Mode Card -->
+<section class="space-y-4">
+<h3 class="font-label text-[10px] uppercase tracking-widest text-on-surface-variant ml-2">Protocol Architecture</h3>
+<div class="bg-surface-container-low rounded-full p-6 space-y-4 shadow-sm border border-white/5">
+<div class="flex items-center justify-between">
+<div class="flex items-center gap-4">
+<div class="p-3 bg-surface-container-highest rounded-xl text-[#00e5ff]">
+<span class="material-symbols-outlined">hub</span>
+</div>
+<div>
+<p class="font-headline font-semibold text-sm">Connection Mode</p>
+<p class="text-xs text-on-surface-variant">Define how traffic is encapsulated</p>
+</div>
+</div>
+<div class="relative">
+<select class="appearance-none bg-surface-container-highest text-on-surface border-none rounded-xl px-4 py-2 pr-10 font-label text-xs font-bold uppercase tracking-wider focus:ring-1 focus:ring-[#00e5ff] cursor-pointer">
+<option>VPN</option>
+<option>PROXY</option>
+</select>
+<span class="material-symbols-outlined absolute right-3 top-1/2 -translate-y-1/2 text-on-surface-variant pointer-events-none text-sm">expand_more</span>
+</div>
+</div>
+</div>
+</section>
+<!-- Split Tunneling Section -->
+<section class="space-y-4">
+<div class="flex items-center justify-between ml-2">
+<h3 class="font-label text-[10px] uppercase tracking-widest text-on-surface-variant">Selective Routing</h3>
+<label class="relative inline-flex items-center cursor-pointer">
+<input checked="" class="sr-only peer" type="checkbox"/>
+<div class="w-11 h-6 bg-surface-container-highest rounded-full peer peer-checked:after:translate-x-full after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-[#00e5ff]"></div>
+</label>
+</div>
+<div class="bg-surface-container-low rounded-full p-1 space-y-1">
+<!-- App Selector Entry -->
+<div class="flex items-center justify-between bg-surface-container-high rounded-full p-5 cursor-pointer hover:bg-surface-container-highest transition-colors">
+<div class="flex items-center gap-4">
+<div class="p-3 bg-surface-container-highest rounded-xl text-[#00daf3]">
+<span class="material-symbols-outlined">apps</span>
+</div>
+<div>
+<p class="font-headline font-semibold text-sm">Split Tunneling</p>
+<div class="flex items-center gap-2 mt-1">
+<span class="flex h-1.5 w-1.5 rounded-full bg-[#00e5ff]"></span>
+<p class="text-xs font-label text-[#00e5ff] font-medium tracking-wide">4 apps secured individually</p>
+</div>
+</div>
+</div>
+<span class="material-symbols-outlined text-on-surface-variant">chevron_right</span>
+</div>
+</div>
+</section>
+<!-- Sharing Internet Section -->
+<section class="space-y-4">
+<h3 class="font-label text-[10px] uppercase tracking-widest text-on-surface-variant ml-2">Network Broadcast</h3>
+<div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+<!-- SOCKS5 Port -->
+<div class="bg-surface-container-low rounded-full p-6 border border-white/5">
+<div class="flex items-center gap-3 mb-4">
+<span class="material-symbols-outlined text-sm text-[#bac8dc]">dns</span>
+<p class="font-label text-xs uppercase font-bold tracking-tighter text-on-surface">SOCKS5 Port</p>
+</div>
+<input class="w-full bg-surface-container-highest border-none rounded-xl px-4 py-3 font-headline text-lg font-bold text-[#00e5ff] focus:ring-1 focus:ring-[#00e5ff]" type="text" value="1080"/>
+<p class="text-[10px] text-on-surface-variant mt-3 leading-relaxed">Default proxy port for distributed local routing</p>
+</div>
+<!-- HTTP Port -->
+<div class="bg-surface-container-low rounded-full p-6 border border-white/5">
+<div class="flex items-center gap-3 mb-4">
+<span class="material-symbols-outlined text-sm text-[#bac8dc]">lan</span>
+<p class="font-label text-xs uppercase font-bold tracking-tighter text-on-surface">HTTP Port</p>
+</div>
+<input class="w-full bg-surface-container-highest border-none rounded-xl px-4 py-3 font-headline text-lg font-bold text-[#00e5ff] focus:ring-1 focus:ring-[#00e5ff]" type="text" value="8080"/>
+<p class="text-[10px] text-on-surface-variant mt-3 leading-relaxed">Standard port for local web traffic sharing</p>
+</div>
+</div>
+</section>
+<!-- Decorative Node Grid -->
+<div class="grid grid-cols-4 gap-2 opacity-20 py-4">
+<div class="h-1 bg-[#00e5ff] rounded-full"></div>
+<div class="h-1 bg-surface-container-highest rounded-full"></div>
+<div class="h-1 bg-surface-container-highest rounded-full"></div>
+<div class="h-1 bg-surface-container-highest rounded-full"></div>
+</div>
+</main>
+<!-- Bottom Sticky Action -->
+<div class="fixed bottom-24 left-0 w-full px-6 z-40">
+<button class="w-full max-w-2xl mx-auto flex items-center justify-center gap-3 py-5 bg-gradient-to-r from-[#c3f5ff] to-[#00e5ff] text-[#001f24] rounded-full font-headline font-extrabold text-sm uppercase tracking-[0.15em] shadow-[0_8px_30px_rgb(0,229,255,0.2)] active:scale-[0.98] transition-transform">
+<span class="material-symbols-outlined" data-weight="fill" style="font-variation-settings: 'FILL' 1;">security</span>
+            Save Global Settings
+        </button>
+</div>
+<!-- BottomNavBar -->
+<nav class="fixed bottom-0 left-0 w-full z-50 flex justify-around items-center px-4 py-3 pb-safe bg-[#10141a]/95 backdrop-blur-xl rounded-t-3xl border-t border-white/5 shadow-[0_-4px_20px_rgba(0,229,255,0.05)]">
+<a class="flex flex-col items-center justify-center text-[#bac8dc] opacity-60 hover:bg-white/5 transition-colors duration-200" href="#">
+<span class="material-symbols-outlined">home</span>
+<span class="font-['Space_Grotesk'] tracking-wider text-[10px] uppercase">Home</span>
+</a>
+<a class="flex flex-col items-center justify-center text-[#bac8dc] opacity-60 hover:bg-white/5 transition-colors duration-200" href="#">
+<span class="material-symbols-outlined">person</span>
+<span class="font-['Space_Grotesk'] tracking-wider text-[10px] uppercase">Profiles</span>
+</a>
+<a class="flex flex-col items-center justify-center text-[#bac8dc] opacity-60 hover:bg-white/5 transition-colors duration-200" href="#">
+<span class="material-symbols-outlined">terminal</span>
+<span class="font-['Space_Grotesk'] tracking-wider text-[10px] uppercase">Logs</span>
+</a>
+<a class="flex flex-col items-center justify-center text-[#00e5ff] bg-[#00e5ff]/10 rounded-xl px-4 py-1 scale-95 active:scale-90 duration-200" href="#">
+<span class="material-symbols-outlined" data-weight="fill" style="font-variation-settings: 'FILL' 1;">settings</span>
+<span class="font-['Space_Grotesk'] tracking-wider text-[10px] uppercase">Settings</span>
+</a>
+</nav>
+</body></html>

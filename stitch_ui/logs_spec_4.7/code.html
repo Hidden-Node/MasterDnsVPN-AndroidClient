@@ -1,0 +1,267 @@
+<!DOCTYPE html>
+
+<html class="dark" lang="en"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@300;400;500;600;700&amp;family=Manrope:wght@300;400;500;600;700;800&amp;family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<script id="tailwind-config">
+      tailwind.config = {
+        darkMode: "class",
+        theme: {
+          extend: {
+            "colors": {
+                    "surface-dim": "#10141a",
+                    "on-secondary-fixed-variant": "#3a4859",
+                    "on-surface-variant": "#bac9cc",
+                    "tertiary-fixed": "#d1e4ff",
+                    "surface-container": "#1c2026",
+                    "on-primary-fixed": "#001f24",
+                    "primary-container": "#00e5ff",
+                    "on-primary": "#00363d",
+                    "secondary-fixed-dim": "#bac8dc",
+                    "on-tertiary-container": "#425b78",
+                    "on-tertiary-fixed": "#001d36",
+                    "on-error-container": "#ffdad6",
+                    "on-error": "#690005",
+                    "surface-container-highest": "#31353c",
+                    "on-surface": "#dfe2eb",
+                    "on-tertiary-fixed-variant": "#2f4865",
+                    "error": "#ffb4ab",
+                    "secondary-container": "#3a4859",
+                    "surface-bright": "#353940",
+                    "on-primary-fixed-variant": "#004f58",
+                    "surface": "#10141a",
+                    "on-tertiary": "#17324d",
+                    "inverse-surface": "#dfe2eb",
+                    "secondary": "#bac8dc",
+                    "tertiary-container": "#b9d3f5",
+                    "surface-container-lowest": "#0a0e14",
+                    "secondary-fixed": "#d6e4f9",
+                    "inverse-primary": "#006875",
+                    "background": "#10141a",
+                    "surface-container-low": "#181c22",
+                    "primary-fixed": "#9cf0ff",
+                    "surface-container-high": "#262a31",
+                    "primary-fixed-dim": "#00daf3",
+                    "on-secondary-fixed": "#0f1c2c",
+                    "error-container": "#93000a",
+                    "outline": "#849396",
+                    "tertiary-fixed-dim": "#afc9ea",
+                    "surface-tint": "#00daf3",
+                    "inverse-on-surface": "#2d3137",
+                    "primary": "#c3f5ff",
+                    "on-primary-container": "#00626e",
+                    "outline-variant": "#3b494c",
+                    "on-secondary-container": "#a8b6ca",
+                    "tertiary": "#e3eeff",
+                    "surface-variant": "#31353c",
+                    "on-secondary": "#243141",
+                    "on-background": "#dfe2eb"
+            },
+            "borderRadius": {
+                    "DEFAULT": "0.125rem",
+                    "lg": "0.25rem",
+                    "xl": "0.5rem",
+                    "full": "0.75rem"
+            },
+            "fontFamily": {
+                    "headline": ["Space Grotesk"],
+                    "body": ["Manrope"],
+                    "label": ["Space Grotesk"]
+            }
+          }
+        }
+      }
+    </script>
+<style>
+        .material-symbols-outlined {
+            font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24;
+        }
+        .log-line:nth-child(even) {
+            background-color: rgba(255, 255, 255, 0.02);
+        }
+        .monospace {
+            font-family: 'ui-monospace', 'SFMono-Regular', 'Menlo', 'Monaco', 'Consolas', 'Liberation Mono', 'Courier New', monospace;
+        }
+    </style>
+<style>
+    body {
+      min-height: max(884px, 100dvh);
+    }
+  </style>
+  </head>
+<body class="bg-surface text-on-surface font-body selection:bg-primary/30 min-h-screen pb-24">
+<!-- TopAppBar per JSON Spec -->
+<header class="sticky top-0 w-full z-50 flex items-center justify-between px-6 h-16 bg-[#10141a]/80 backdrop-blur-md bg-[#181c22]">
+<div class="flex items-center gap-4">
+<button class="flex items-center justify-center w-10 h-10 rounded-full hover:bg-white/5 transition-all text-[#00e5ff]">
+<span class="material-symbols-outlined" data-icon="arrow_back">arrow_back</span>
+</button>
+<h1 class="font-['Space_Grotesk'] font-bold text-lg uppercase tracking-widest text-[#00e5ff]">Logs</h1>
+</div>
+<div class="flex items-center gap-3">
+<button class="flex items-center justify-center p-2 rounded-xl hover:bg-white/5 transition-all text-on-surface-variant">
+<span class="material-symbols-outlined" data-icon="share">share</span>
+</button>
+<button class="flex items-center justify-center p-2 rounded-xl hover:bg-white/5 transition-all text-on-surface-variant">
+<span class="material-symbols-outlined" data-icon="delete_sweep">delete_sweep</span>
+</button>
+<div class="h-6 w-[1px] bg-outline-variant/30 mx-1"></div>
+<div class="flex items-center gap-2 px-3 py-1.5 rounded-full bg-surface-container-high">
+<span class="text-[10px] font-label font-bold uppercase tracking-tighter text-on-surface-variant">Auto</span>
+<div class="w-8 h-4 bg-primary-container/20 rounded-full relative flex items-center px-0.5">
+<div class="w-3 h-3 bg-primary rounded-full shadow-[0_0_8px_#00daf3]"></div>
+</div>
+</div>
+</div>
+</header>
+<main class="max-w-screen-xl mx-auto px-4 md:px-6 pt-4">
+<!-- Filter Chips Section -->
+<div class="flex items-center gap-2 overflow-x-auto pb-4 no-scrollbar">
+<button class="px-5 py-2 rounded-full bg-primary text-on-primary-fixed font-label text-sm font-bold transition-all shadow-[0_0_15px_rgba(195,245,255,0.2)]">All</button>
+<button class="px-5 py-2 rounded-full bg-surface-container-high text-on-surface-variant font-label text-sm font-medium hover:bg-surface-variant transition-all">Core</button>
+<button class="px-5 py-2 rounded-full bg-surface-container-high text-on-surface-variant font-label text-sm font-medium hover:bg-surface-variant transition-all">Android</button>
+<button class="px-5 py-2 rounded-full bg-surface-container-high text-on-surface-variant font-label text-sm font-medium hover:bg-surface-variant transition-all">Network</button>
+<button class="px-5 py-2 rounded-full bg-surface-container-high text-on-surface-variant font-label text-sm font-medium hover:bg-surface-variant transition-all">Security</button>
+</div>
+<!-- System Status Summary (Bento/Card Pattern) -->
+<div class="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
+<div class="p-4 rounded-xl bg-surface-container-low border border-white/5 flex items-center gap-4">
+<div class="w-10 h-10 rounded-full bg-primary/10 flex items-center justify-center">
+<span class="material-symbols-outlined text-primary text-xl" data-icon="terminal">terminal</span>
+</div>
+<div>
+<div class="text-[10px] font-label text-on-surface-variant uppercase tracking-widest">Active Runtime</div>
+<div class="text-on-surface font-headline font-bold">14h 22m 04s</div>
+</div>
+</div>
+<div class="p-4 rounded-xl bg-surface-container-low border border-white/5 flex items-center gap-4">
+<div class="w-10 h-10 rounded-full bg-error/10 flex items-center justify-center">
+<span class="material-symbols-outlined text-error text-xl" data-icon="bug_report">bug_report</span>
+</div>
+<div>
+<div class="text-[10px] font-label text-on-surface-variant uppercase tracking-widest">Total Errors</div>
+<div class="text-on-surface font-headline font-bold">02</div>
+</div>
+</div>
+<div class="p-4 rounded-xl bg-surface-container-low border border-white/5 flex items-center gap-4">
+<div class="w-10 h-10 rounded-full bg-secondary-container/30 flex items-center justify-center">
+<span class="material-symbols-outlined text-secondary text-xl" data-icon="database">database</span>
+</div>
+<div>
+<div class="text-[10px] font-label text-on-surface-variant uppercase tracking-widest">Log Payload</div>
+<div class="text-on-surface font-headline font-bold">1.4 MB</div>
+</div>
+</div>
+</div>
+<!-- Log List Container -->
+<section class="bg-surface-container-lowest rounded-2xl border border-white/[0.03] overflow-hidden shadow-2xl">
+<!-- Header for Terminal Area -->
+<div class="flex items-center justify-between px-4 py-3 bg-surface-container-high/50 border-b border-white/[0.03]">
+<div class="flex items-center gap-2">
+<div class="flex gap-1.5">
+<div class="w-2.5 h-2.5 rounded-full bg-red-500/30"></div>
+<div class="w-2.5 h-2.5 rounded-full bg-amber-500/30"></div>
+<div class="w-2.5 h-2.5 rounded-full bg-green-500/30"></div>
+</div>
+<span class="text-xs font-label text-on-surface-variant ml-2 opacity-60">SOVEREIGN_NODE_STDOUT</span>
+</div>
+<div class="text-[10px] font-label text-on-surface-variant uppercase">Live Stream</div>
+</div>
+<!-- Terminal Area -->
+<div class="p-4 h-[530px] overflow-y-auto monospace text-xs md:text-sm leading-relaxed no-scrollbar select-all">
+<!-- Log Entry: INFO -->
+<div class="log-line py-1.5 flex gap-4 border-l-2 border-primary/20 pl-3">
+<span class="text-on-surface-variant/40 shrink-0">14:02:11</span>
+<span class="text-on-surface font-semibold shrink-0">[INFO]</span>
+<span class="text-on-surface-variant">Initializing kernel protection module...</span>
+</div>
+<!-- Log Entry: WARN -->
+<div class="log-line py-1.5 flex gap-4 border-l-2 border-amber-400/40 pl-3">
+<span class="text-on-surface-variant/40 shrink-0">14:02:15</span>
+<span class="text-amber-400 font-semibold shrink-0">[WARN]</span>
+<span class="text-on-surface-variant">Encrypted handshake latency higher than 40ms. Checking local peer nodes.</span>
+</div>
+<!-- Log Entry: INFO -->
+<div class="log-line py-1.5 flex gap-4 border-l-2 border-primary/20 pl-3">
+<span class="text-on-surface-variant/40 shrink-0">14:02:18</span>
+<span class="text-on-surface font-semibold shrink-0">[INFO]</span>
+<span class="text-on-surface-variant">Core interface 'wg0' established at 10.0.0.1/32</span>
+</div>
+<!-- Log Entry: ERROR -->
+<div class="log-line py-1.5 flex gap-4 border-l-2 border-error/50 pl-3 bg-error/5">
+<span class="text-on-surface-variant/40 shrink-0">14:05:44</span>
+<span class="text-error font-semibold shrink-0">[ERROR]</span>
+<span class="text-error/80">AUTHENTICATION_FAILURE: Token expired for node-v4.private.core</span>
+</div>
+<!-- Log Entry: INFO -->
+<div class="log-line py-1.5 flex gap-4 border-l-2 border-primary/20 pl-3">
+<span class="text-on-surface-variant/40 shrink-0">14:05:46</span>
+<span class="text-on-surface font-semibold shrink-0">[INFO]</span>
+<span class="text-on-surface-variant">Regenerating ephemeral keys for session 0x7FA2</span>
+</div>
+<!-- Log Entry: INFO -->
+<div class="log-line py-1.5 flex gap-4 border-l-2 border-primary/20 pl-3">
+<span class="text-on-surface-variant/40 shrink-0">14:06:12</span>
+<span class="text-on-surface font-semibold shrink-0">[INFO]</span>
+<span class="text-on-surface-variant">Connection re-established. Secure tunnel active on 4 concurrent paths.</span>
+</div>
+<!-- Log Entry: ERROR -->
+<div class="log-line py-1.5 flex gap-4 border-l-2 border-error/50 pl-3 bg-error/5">
+<span class="text-on-surface-variant/40 shrink-0">14:10:02</span>
+<span class="text-error font-semibold shrink-0">[ERROR]</span>
+<span class="text-error/80">RETRY_EXCEEDED: DNS resolution timed out on upstream 1.1.1.1</span>
+</div>
+<!-- Log Entry: WARN -->
+<div class="log-line py-1.5 flex gap-4 border-l-2 border-amber-400/40 pl-3">
+<span class="text-on-surface-variant/40 shrink-0">14:12:30</span>
+<span class="text-amber-400 font-semibold shrink-0">[WARN]</span>
+<span class="text-on-surface-variant">Background activity restricted by OS power management. Heartbeat interval adjusted.</span>
+</div>
+<!-- Log Entry: INFO -->
+<div class="log-line py-1.5 flex gap-4 border-l-2 border-primary/20 pl-3">
+<span class="text-on-surface-variant/40 shrink-0">14:22:04</span>
+<span class="text-on-surface font-semibold shrink-0">[INFO]</span>
+<span class="text-on-surface-variant">Heartbeat response received from 8 nodes. Integrity check: 100%.</span>
+</div>
+<!-- Live Cursor/Anchor -->
+<div class="flex items-center gap-2 py-4 animate-pulse">
+<div class="w-1.5 h-4 bg-primary"></div>
+<span class="text-on-surface-variant/50 text-[10px] uppercase font-label">Listening for incoming data streams...</span>
+</div>
+</div>
+</section>
+<!-- Floating Quick Filter -->
+<div class="mt-4 p-4 rounded-2xl bg-surface-container-high/40 backdrop-blur-lg flex items-center justify-between border border-white/5">
+<div class="flex items-center gap-3">
+<div class="w-8 h-8 rounded-lg bg-surface-container-highest flex items-center justify-center">
+<span class="material-symbols-outlined text-sm text-on-surface-variant" data-icon="search">search</span>
+</div>
+<input class="bg-transparent border-none focus:ring-0 text-sm text-on-surface w-full placeholder:text-on-surface-variant/40" placeholder="Search string in logs..." type="text"/>
+</div>
+<button class="text-primary text-sm font-label font-bold px-3 py-1 hover:bg-primary/10 rounded-lg transition-all">GOTO END</button>
+</div>
+</main>
+<!-- BottomNavBar per JSON Spec -->
+<nav class="fixed bottom-0 left-0 w-full z-50 flex justify-around items-center px-4 py-3 pb-safe bg-[#10141a]/95 backdrop-blur-xl rounded-t-3xl border-t border-white/5 shadow-[0_-4px_20px_rgba(0,229,255,0.05)]">
+<div class="flex flex-col items-center justify-center text-[#bac8dc] opacity-60 hover:bg-white/5 transition-colors scale-95 active:scale-90 duration-200 cursor-pointer">
+<span class="material-symbols-outlined" data-icon="home">home</span>
+<span class="font-['Space_Grotesk'] tracking-wider text-[10px] uppercase">Home</span>
+</div>
+<div class="flex flex-col items-center justify-center text-[#bac8dc] opacity-60 hover:bg-white/5 transition-colors scale-95 active:scale-90 duration-200 cursor-pointer">
+<span class="material-symbols-outlined" data-icon="person">person</span>
+<span class="font-['Space_Grotesk'] tracking-wider text-[10px] uppercase">Profiles</span>
+</div>
+<!-- ACTIVE TAB -->
+<div class="flex flex-col items-center justify-center text-[#00e5ff] bg-[#00e5ff]/10 rounded-xl px-4 py-1 scale-95 active:scale-90 duration-200 cursor-pointer">
+<span class="material-symbols-outlined" data-icon="terminal">terminal</span>
+<span class="font-['Space_Grotesk'] tracking-wider text-[10px] uppercase">Logs</span>
+</div>
+<div class="flex flex-col items-center justify-center text-[#bac8dc] opacity-60 hover:bg-white/5 transition-colors scale-95 active:scale-90 duration-200 cursor-pointer">
+<span class="material-symbols-outlined" data-icon="settings">settings</span>
+<span class="font-['Space_Grotesk'] tracking-wider text-[10px] uppercase">Settings</span>
+</div>
+</nav>
+</body></html>
