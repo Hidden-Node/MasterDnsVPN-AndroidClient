@@ -95,7 +95,7 @@ jobs:
       - name: Prepare release files
         run: |
           mkdir -p release-artifacts
-          APP_NAME="masterdnsvpn"
+          APP_NAME="masterdnsvpn-HN"
           VERSION_NAME="${ANDROID_VERSION_NAME}"
 
           cp android/app/libs/masterdnsvpn.aar release-artifacts/${APP_NAME}-${VERSION_NAME}-release.aar
