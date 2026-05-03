@@ -612,7 +612,10 @@ class MasterDnsVpnService : VpnService() {
                 if (length > pointer) {
                     raf.seek(pointer)
                     while (true) {
-                        val line = raf.readLine() ?: break
+                        val rawLine = raf.readLine() ?: break
+                        // RandomAccessFile.readLine() decodes as ISO-8859-1; convert back to UTF-8
+                        // so emojis/symbols from Go core logs are preserved in the UI logs tab.
+                        val line = String(rawLine.toByteArray(Charsets.ISO_8859_1), Charsets.UTF_8)
                         if (line.isNotBlank()) {
                             VpnManager.appendCoreLog(line)
                             maybeReportSocksAuthIssue(line)
