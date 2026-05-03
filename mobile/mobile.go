@@ -35,6 +35,12 @@ var (
 	tunRunning bool
 )
 
+// Bandwidth holds upload and download counters for gomobile bindings.
+type Bandwidth struct {
+	Up   int64
+	Down int64
+}
+
 // SetLogCallback sets a callback that receives Go core log messages.
 func SetLogCallback(cb LogCallback) {
 	mu.Lock()
@@ -158,8 +164,12 @@ func IsTunBridgeRunning() bool {
 }
 
 // GetTunBandwidth returns upload/download counters from the TUN bridge.
-func GetTunBandwidth() (up int64, down int64) {
-	return tun.GetTunBandwidth()
+func GetTunBandwidth() *Bandwidth {
+	up, down := tun.GetTunBandwidth()
+	return &Bandwidth{
+		Up:   up,
+		Down: down,
+	}
 }
 
 // GetDNSMapping resolves a fake IP to hostname when available.
