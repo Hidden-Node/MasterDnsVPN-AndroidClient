@@ -388,15 +388,23 @@ fun SettingsScreen(
                             MdvPrimaryActionButton(
                                 text = stringResource(R.string.action_import_toml),
                                 onClick = {
-                                    importTomlLauncher.launch(
-                                        arrayOf(
-                                            "application/toml",
-                                            "text/x-toml",
-                                            "text/plain",
-                                            "application/octet-stream",
-                                            "*/*"
+                                    runCatching {
+                                        importTomlLauncher.launch(
+                                            arrayOf(
+                                                "application/toml",
+                                                "text/x-toml",
+                                                "text/plain",
+                                                "application/octet-stream",
+                                                "*/*"
+                                            )
                                         )
-                                    )
+                                    }.onFailure { err ->
+                                        scope.launch {
+                                            snackbarHostState.showSnackbar(
+                                                "Cannot open file picker: ${err.message ?: "unknown error"}"
+                                            )
+                                        }
+                                    }
                                 },
                                 icon = Icons.Filled.UploadFile
                             )
