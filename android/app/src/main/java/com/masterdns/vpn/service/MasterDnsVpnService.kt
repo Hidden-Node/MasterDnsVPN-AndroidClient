@@ -87,6 +87,8 @@ class MasterDnsVpnService : VpnService() {
     private var mtuExportTargetUri: String? = null
     private var mtuConfigDir: File? = null
     @Volatile
+    private var tunBridgeActive = false
+    @Volatile
     private var isStopping = false
     @Volatile
     private var socksAuthWarningShown = false
@@ -264,21 +266,36 @@ class MasterDnsVpnService : VpnService() {
                     return@launch
                 }
 
-                // Establish VPN TUN interface
-                // Determine the DNS server to advertise to Android:
-                // - When LOCAL_DNS is enabled, Go core runs its own DNS listener on 127.0.0.1.
-                //   We advertise the VPN interface address (10.0.0.2) so DNS queries come
-                //   through the TUN and get forwarded by tun2socks → Go core local DNS.
-                // - Otherwise fall back to 8.8.8.8 / 8.8.4.4 which travel through the
-                //   tunnel via tun2socks → SOCKS5 → Go core → resolver servers.
-                val vpnDnsServer = if (localDnsEnabled && !proxyMode) "10.0.0.2" else "8.8.8.8"
+                val vpnDnsServers = if (globalSettings.customDnsServers.isNotBlank()) {
+                    globalSettings.customDnsServers
+                        .split(",")
+                        .map { it.trim() }
+                        .filter { it.isNotEmpty() }
+                        .also { servers ->
+                            VpnManager.appendLog("Using custom DNS servers: ${servers.joinToString()}")
+                        }
+                } else if (globalSettings.fakeDnsEnabled) {
+                    listOf("172.19.0.2").also {
+                        VpnManager.appendLog("Using TUN bridge DNS: 172.19.0.2")
+                    }
+                } else if (localDnsEnabled && !proxyMode) {
+                    listOf("10.0.0.2").also {
+                        VpnManager.appendLog("Using local DNS via TUN address: 10.0.0.2")
+                    }
+                } else {
+                    listOf("8.8.8.8")
+                }
 
                 val builder = Builder()
                     .setSession(getString(R.string.app_name))
                     .setMtu(1500)
-                    .addAddress("10.0.0.2", 32)
+                    .addAddress(if (globalSettings.fakeDnsEnabled) "172.19.0.1" else "10.0.0.2", if (globalSettings.fakeDnsEnabled) 30 else 32)
                     .addRoute("0.0.0.0", 0)
-                    .addDnsServer(vpnDnsServer)
+                vpnDnsServers.forEach { builder.addDnsServer(it) }
+                if (globalSettings.fakeDnsEnabled) {
+                    builder.addRoute("198.18.0.0", 16)
+                    VpnManager.appendLog("Added fake DNS route: 198.18.0.0/16")
+                }
 
                 if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) {
                     val splitEnabled = globalSettings.splitTunnelingEnabled &&
@@ -331,9 +348,15 @@ class MasterDnsVpnService : VpnService() {
 
                 VpnManager.appendLog("TUN interface established (fd=${vpnInterface!!.fd})")
 
-                // Start Go-based tun2socks bridge
-                VpnManager.appendLog("Starting tun2socks bridge: TUN fd -> socks5://127.0.0.1:$socksPort")
-                mobile.Mobile.startTun(vpnInterface!!.fd.toLong(), "127.0.0.1:$socksPort")
+                if (globalSettings.fakeDnsEnabled) {
+                    VpnManager.appendLog("Starting DNS-aware TUN bridge...")
+                    mobile.Mobile.startTunBridge(vpnInterface!!.fd.toLong(), 1500L, "127.0.0.1:$socksPort")
+                    tunBridgeActive = true
+                    VpnManager.appendLog("DNS-aware TUN bridge started")
+                } else {
+                    VpnManager.appendLog("Starting tun2socks bridge: TUN fd -> socks5://127.0.0.1:$socksPort")
+                    mobile.Mobile.startTun(vpnInterface!!.fd.toLong(), "127.0.0.1:$socksPort")
+                }
 
                 // Update state
                 VpnManager.updateState(VpnManager.VpnState.CONNECTED)
@@ -364,6 +387,11 @@ class MasterDnsVpnService : VpnService() {
             try {
                 connectJob?.cancel()
                 VpnManager.appendLog("Stopping VPN...")
+
+                if (tunBridgeActive) {
+                    runCatching { mobile.Mobile.stopTunBridge() }
+                    tunBridgeActive = false
+                }
 
                 // Stop Go client and Tun bridge
                 runCatching {
