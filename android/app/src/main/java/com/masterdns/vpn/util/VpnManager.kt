@@ -58,6 +58,7 @@ object VpnManager {
         val lastDecision: String = "",
         val validCount: Int = 0,
         val rejectedCount: Int = 0,
+        val scanTotalFromCore: Int = 0,
         val activeResolvers: Int = 0,
         val syncedUploadMtu: Int = 0,
         val syncedDownloadMtu: Int = 0
@@ -191,6 +192,28 @@ object VpnManager {
     }
 
     private fun parseScanLine(line: String) {
+        val indexedProgressMatch = Regex(
+            "(?:scan|scanning|resolver|resolvers|mtu).{0,40}?(\\d+)\\s*/\\s*(\\d+)",
+            setOf(RegexOption.IGNORE_CASE, RegexOption.DOT_MATCHES_ALL)
+        ).find(line)
+        if (indexedProgressMatch != null) {
+            val total = indexedProgressMatch.groupValues[2].toIntOrNull()
+            if (total != null && total > 0) {
+                _scanStatus.value = _scanStatus.value.copy(scanTotalFromCore = total)
+            }
+        }
+
+        val totalCandidatesMatch = Regex(
+            "(?:valid\\s+resolvers|resolvers\\s+for\\s+scan|scan\\s+pool|resolver\\s+pool|total\\s+resolvers).{0,20}?(\\d+)",
+            RegexOption.IGNORE_CASE
+        ).find(line)
+        if (totalCandidatesMatch != null) {
+            val total = totalCandidatesMatch.groupValues[1].toIntOrNull()
+            if (total != null && total > 0) {
+                _scanStatus.value = _scanStatus.value.copy(scanTotalFromCore = total)
+            }
+        }
+
         val scanMatch = Regex(
             "via\\s+([^\\s|]+)\\s*\\|.*totals:\\s*valid=(\\d+),\\s*rejected=(\\d+)",
             RegexOption.IGNORE_CASE

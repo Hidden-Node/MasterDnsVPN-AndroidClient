@@ -92,12 +92,13 @@ fun HomeScreen(
     val isConnected = vpnState == VpnManager.VpnState.CONNECTED
     val isConnecting = vpnState == VpnManager.VpnState.CONNECTING
     val isDisconnecting = vpnState == VpnManager.VpnState.DISCONNECTING
-    val totalResolvers = selectedProfile?.resolvers
+    val profileResolversCount = selectedProfile?.resolvers
         ?.lineSequence()
         ?.map { it.trim() }
         ?.count { it.isNotEmpty() }
         ?.coerceAtLeast(1)
         ?: 1
+    val totalResolvers = scanStatus.scanTotalFromCore.takeIf { it > 0 } ?: profileResolversCount
     val scannedCount = (scanStatus.validCount + scanStatus.rejectedCount).coerceAtMost(totalResolvers)
     val scanProgress = (scannedCount.toFloat() / totalResolvers.toFloat()).coerceIn(0f, 1f)
 
