@@ -391,119 +391,128 @@ fun GlobalSettingsScreen(vm: GlobalSettingsViewModel = viewModel()) {
                 Column(
                     modifier = Modifier
                         .fillMaxWidth()
+                        .heightIn(max = 560.dp)
                         .padding(MdvSpace.S3),
                     verticalArrangement = Arrangement.spacedBy(MdvSpace.S3)
                 ) {
-                    Text(stringResource(R.string.split_tunnel_dialog_title), style = MaterialTheme.typography.titleMedium)
-                    Text(
-                        stringResource(R.string.split_tunnel_dialog_desc),
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MdvColor.OnSurfaceVariant
-                    )
-
-                    Row(horizontalArrangement = Arrangement.spacedBy(MdvSpace.S2)) {
-                        MdvFilterChip(
-                            selected = activeTab == "SELECTED",
-                            onClick = { activeTab = "SELECTED" },
-                            label = stringResource(R.string.split_tunnel_selected_count, selectedApps.size)
-                        )
-                        MdvFilterChip(
-                            selected = activeTab == "AVAILABLE",
-                            onClick = { activeTab = "AVAILABLE" },
-                            label = stringResource(R.string.split_tunnel_available_count, availableApps.size)
-                        )
-                    }
-
-                    if (activeTab == "SELECTED") {
-                        OutlinedTextField(
-                            value = selectedQuery,
-                            onValueChange = { selectedQuery = it },
-                            label = { Text(stringResource(R.string.split_tunnel_search_selected)) },
-                            modifier = Modifier.fillMaxWidth()
-                        )
-                    } else {
-                        OutlinedTextField(
-                            value = availableQuery,
-                            onValueChange = { availableQuery = it },
-                            label = { Text(stringResource(R.string.split_tunnel_search_available)) },
-                            modifier = Modifier.fillMaxWidth()
-                        )
-                    }
-
-                    Row(horizontalArrangement = Arrangement.spacedBy(MdvSpace.S2)) {
-                        OutlinedButton(
-                            onClick = {
-                                draftAppSelection = draftAppSelection.toMutableSet().apply {
-                                    addAll(availableFiltered.map { it.packageName })
-                                }
-                            },
-                            modifier = Modifier.weight(1f)
-                        ) {
-                            Text(stringResource(R.string.split_tunnel_select_visible))
-                        }
-                        OutlinedButton(
-                            onClick = { draftAppSelection = mutableSetOf() },
-                            modifier = Modifier.weight(1f)
-                        ) {
-                            Text(stringResource(R.string.split_tunnel_select_none))
-                        }
-                    }
-
-                    Surface(
-                        modifier = Modifier.fillMaxWidth(),
-                        shape = RoundedCornerShape(12.dp),
-                        color = MdvColor.SurfaceHigh
+                    Column(
+                        modifier = Modifier
+                            .weight(1f, fill = false)
+                            .verticalScroll(rememberScrollState()),
+                        verticalArrangement = Arrangement.spacedBy(MdvSpace.S3)
                     ) {
-                        Column(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .padding(10.dp)
-                        ) {
-                            val appsToShow = if (activeTab == "SELECTED") selectedFiltered else availableFiltered
-                            val emptyText = if (activeTab == "SELECTED") {
-                                stringResource(R.string.split_tunnel_empty_selected)
-                            } else {
-                                stringResource(R.string.split_tunnel_empty_available)
-                            }
+                        Text(stringResource(R.string.split_tunnel_dialog_title), style = MaterialTheme.typography.titleMedium)
+                        Text(
+                            stringResource(R.string.split_tunnel_dialog_desc),
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MdvColor.OnSurfaceVariant
+                        )
 
-                            Text(
-                                if (activeTab == "SELECTED") {
-                                    stringResource(R.string.split_tunnel_selected_apps)
-                                } else {
-                                    stringResource(R.string.split_tunnel_available_apps)
-                                },
-                                style = MaterialTheme.typography.labelLarge,
-                                color = MdvColor.PrimaryContainer
+                        Row(horizontalArrangement = Arrangement.spacedBy(MdvSpace.S2)) {
+                            MdvFilterChip(
+                                selected = activeTab == "SELECTED",
+                                onClick = { activeTab = "SELECTED" },
+                                label = stringResource(R.string.split_tunnel_selected_count, selectedApps.size)
                             )
+                            MdvFilterChip(
+                                selected = activeTab == "AVAILABLE",
+                                onClick = { activeTab = "AVAILABLE" },
+                                label = stringResource(R.string.split_tunnel_available_count, availableApps.size)
+                            )
+                        }
 
-                            if (appsToShow.isEmpty()) {
+                        if (activeTab == "SELECTED") {
+                            OutlinedTextField(
+                                value = selectedQuery,
+                                onValueChange = { selectedQuery = it },
+                                label = { Text(stringResource(R.string.split_tunnel_search_selected)) },
+                                modifier = Modifier.fillMaxWidth()
+                            )
+                        } else {
+                            OutlinedTextField(
+                                value = availableQuery,
+                                onValueChange = { availableQuery = it },
+                                label = { Text(stringResource(R.string.split_tunnel_search_available)) },
+                                modifier = Modifier.fillMaxWidth()
+                            )
+                        }
+
+                        Row(horizontalArrangement = Arrangement.spacedBy(MdvSpace.S2)) {
+                            OutlinedButton(
+                                onClick = {
+                                    draftAppSelection = draftAppSelection.toMutableSet().apply {
+                                        addAll(availableFiltered.map { it.packageName })
+                                    }
+                                },
+                                modifier = Modifier.weight(1f)
+                            ) {
+                                Text(stringResource(R.string.split_tunnel_select_visible))
+                            }
+                            OutlinedButton(
+                                onClick = { draftAppSelection = mutableSetOf() },
+                                modifier = Modifier.weight(1f)
+                            ) {
+                                Text(stringResource(R.string.split_tunnel_select_none))
+                            }
+                        }
+
+                        Surface(
+                            modifier = Modifier.fillMaxWidth(),
+                            shape = RoundedCornerShape(12.dp),
+                            color = MdvColor.SurfaceHigh
+                        ) {
+                            Column(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(10.dp)
+                            ) {
+                                val appsToShow = if (activeTab == "SELECTED") selectedFiltered else availableFiltered
+                                val emptyText = if (activeTab == "SELECTED") {
+                                    stringResource(R.string.split_tunnel_empty_selected)
+                                } else {
+                                    stringResource(R.string.split_tunnel_empty_available)
+                                }
+
                                 Text(
-                                    emptyText,
-                                    style = MaterialTheme.typography.bodySmall,
-                                    color = MdvColor.OnSurfaceVariant,
-                                    modifier = Modifier.padding(top = 8.dp)
+                                    if (activeTab == "SELECTED") {
+                                        stringResource(R.string.split_tunnel_selected_apps)
+                                    } else {
+                                        stringResource(R.string.split_tunnel_available_apps)
+                                    },
+                                    style = MaterialTheme.typography.labelLarge,
+                                    color = MdvColor.PrimaryContainer
                                 )
-                            } else {
-                                LazyColumn(
-                                    modifier = Modifier
-                                        .fillMaxWidth()
-                                        .heightIn(min = 180.dp, max = 260.dp)
-                                ) {
-                                    items(appsToShow, key = { it.packageName }) { app ->
-                                        AppRow(
-                                            app = app,
-                                            checked = draftAppSelection.contains(app.packageName),
-                                            onToggle = {
-                                                draftAppSelection = draftAppSelection.toMutableSet().apply {
-                                                    if (!add(app.packageName)) remove(app.packageName)
+
+                                if (appsToShow.isEmpty()) {
+                                    Text(
+                                        emptyText,
+                                        style = MaterialTheme.typography.bodySmall,
+                                        color = MdvColor.OnSurfaceVariant,
+                                        modifier = Modifier.padding(top = 8.dp)
+                                    )
+                                } else {
+                                    LazyColumn(
+                                        modifier = Modifier
+                                            .fillMaxWidth()
+                                            .heightIn(min = 180.dp, max = 260.dp)
+                                    ) {
+                                        items(appsToShow, key = { it.packageName }) { app ->
+                                            AppRow(
+                                                app = app,
+                                                checked = draftAppSelection.contains(app.packageName),
+                                                onToggle = {
+                                                    draftAppSelection = draftAppSelection.toMutableSet().apply {
+                                                        if (!add(app.packageName)) remove(app.packageName)
+                                                    }
                                                 }
-                                            }
-                                        )
+                                            )
+                                        }
                                     }
                                 }
                             }
                         }
                     }
+                    Spacer(modifier = Modifier.height(2.dp))
 
                     Row(
                         modifier = Modifier.fillMaxWidth(),
