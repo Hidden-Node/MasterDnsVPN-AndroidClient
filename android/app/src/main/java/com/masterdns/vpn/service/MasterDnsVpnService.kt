@@ -81,6 +81,7 @@ class MasterDnsVpnService : VpnService() {
     private var goClientJob: Job? = null
     private var httpProxyJob: Job? = null
     private var sharingSocksJob: Job? = null
+    private var sharingSocksServer: java.net.ServerSocket? = null
     private var logTailJob: Job? = null
     private var wakeLock: PowerManager.WakeLock? = null
     private var mtuExportTargetUri: String? = null
@@ -384,6 +385,8 @@ class MasterDnsVpnService : VpnService() {
                 httpProxyJob?.cancel()
                 sharingSocksJob?.cancel()
                 logTailJob?.cancel()
+                runCatching { sharingSocksServer?.close() }
+                sharingSocksServer = null
 
                 VpnManager.updateState(VpnManager.VpnState.DISCONNECTED)
                 VpnManager.stopTrafficMonitor()
@@ -640,12 +643,24 @@ class MasterDnsVpnService : VpnService() {
         wakeLock = null
     }
 
-    private fun startInternetSharing(socksPort: Int, httpPort: Int, username: String, password: String) {
+    private suspend fun startInternetSharing(socksPort: Int, httpPort: Int, username: String, password: String) {
+        // Match GooseRelayVPN behavior: free stale listeners and retry when sharing ports are busy.
+        if (isLocalPortInUse(socksPort) || isLocalPortInUse(httpPort)) {
+            VpnManager.appendLog("Sharing ports in use, attempting to free...")
+            if (mobile.Mobile.isRunning()) {
+                runCatching { mobile.Mobile.stopClient() }
+            }
+            delay(500L)
+        }
+
         sharingSocksJob?.cancel()
+        sharingSocksServer?.close()
+        sharingSocksServer = null
         sharingSocksJob = serviceScope.launch {
             try {
                 val server = java.net.ServerSocket(socksPort, 50, InetAddress.getByName("0.0.0.0"))
                 server.reuseAddress = true
+                sharingSocksServer = server
                 VpnManager.appendLog("Sharing SOCKS5 proxy ready on 0.0.0.0:$socksPort")
                 while (isActive) {
                     val client = server.accept() ?: continue
