@@ -44,14 +44,11 @@ jobs:
         working-directory: android
         run: chmod +x gradlew && ./gradlew :app:assembleDebug --stacktrace
 
-      - name: List APK outputs
-        run: ls -la android/app/build/outputs/apk/debug/
-
       - name: Upload APK artifact
         uses: actions/upload-artifact@v4
         with:
-          name: app-debug-apk-splits
-          path: android/app/build/outputs/apk/debug/*.apk
+          name: masterdns-android-debug-universal-apk
+          path: android/app/build/outputs/apk/debug/app-universal-debug.apk
 
       - name: Upload Go AAR artifact
         uses: actions/upload-artifact@v4
