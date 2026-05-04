@@ -42,38 +42,138 @@ class MasterDnsVpnService : VpnService() {
         private const val SOCKS_STARTUP_TIMEOUT_MS = 30 * 60 * 1000L
         private const val SOCKS_POLL_INTERVAL_MS = 500L
 
-        // Companion packages that browsers and apps rely on for network access.
-        // These must be included alongside any user-selected app to ensure traffic
-        // actually flows through the tunnel (e.g. Chrome uses WebView & GMS).
-        private val BROWSER_COMPANION_PACKAGES = setOf(
+        // Base companions many apps need for network functionality.
+        private val BASE_COMPANION_PACKAGES = setOf(
             "com.google.android.webview",
             "com.android.webview",
             "com.google.android.gms",
             "com.google.android.gsf",
-            "com.android.chrome",          // system Chrome on some OEMs
             "com.google.android.captiveportallogin"
         )
 
-        // If at least one browser is selected for split tunneling, companion packages
-        // are also allowed so selected browsers can fully function through VPN.
+        // Browser-specific companions.
+        private val BROWSER_COMPANION_PACKAGES = setOf(
+            "com.android.chrome" // system Chrome on some OEMs
+        )
+
         private val KNOWN_BROWSER_PACKAGES = setOf(
+            // Chrome
             "com.android.chrome",
             "com.chrome.beta",
             "com.chrome.dev",
             "com.chrome.canary",
+            // Firefox
             "org.mozilla.firefox",
             "org.mozilla.firefox_beta",
             "org.mozilla.fenix",
+            "org.mozilla.reference.browser",
+            // Microsoft
             "com.microsoft.emmx",
+            "com.microsoft.emmx.lite",
+            // Brave
             "com.brave.browser",
+            "com.brave.browser_beta",
+            // Opera
             "com.opera.browser",
+            "com.opera.browser_beta",
             "com.opera.mini.native",
+            // Samsung
             "com.sec.android.app.sbrowser",
+            "com.sec.android.app.sbrowser.edge",
+            // Others
             "com.duckduckgo.mobile.android",
             "com.vivaldi.browser",
             "com.UCMobile.intl",
-            "com.kiwibrowser.browser"
+            "com.kiwibrowser.browser",
+            "com.aurora.store",
+            "com.jio.security.jio secure",
+            "com.miui.securitycenter",
+            "com.symantec.mobilesecurity",
+            "com.lookout.enterprise.dte",
+            "com.wsandroid.suite",
+            "com.mcafee.android.msecure",
+            "com.google.android.apps.chromedev"
         )
+
+        // Apps that should also get base companions when selected.
+        private val APPS_NEEDING_COMPANIONS = setOf(
+            // Twitter/X
+            "com.twitter.android",
+            "com.twitter.android.lite",
+            "com.twitter.cat",
+            "com.x.android",
+            // TikTok
+            "com.zhiliaoapp.musically",
+            "com.ss.android.ugc.trem",
+            // Facebook family
+            "com.facebook.katana",
+            "com.facebook.lite",
+            "com.facebook.messenger",
+            "com.facebook.orca",
+            "com.facebook.pages.app",
+            // Instagram
+            "com.instagram.android",
+            "com.instagram.barcode",
+            // WhatsApp & Meta
+            "com.whatsapp",
+            "com.whatsapp.w4b",
+            "com.whatsapp.work",
+            "com.meta.whatsapp",
+            // Snapchat
+            "com.snapchat.android",
+            "com.snapchat.lite",
+            // Google apps
+            "com.google.android.apps.maps",
+            "com.google.android.apps.photos",
+            "com.google.android.apps.docs",
+            "com.google.android.apps.tachplus",
+            "com.google.android.apps.youtube",
+            "com.google.android.apps.messaging",
+            "com.google.android.apps.talk",
+            // Microsoft
+            "com.microsoft.teams",
+            "com.microsoft.teams2",
+            "com.microsoft.Office.Outlook",
+            // Other popular apps
+            "com.dropbox.android",
+            "com.slack",
+            "com.discord",
+            "tv.twitch",
+            "com.reddit.frontpage",
+            "com.linkedin.android",
+            "com.pinterest",
+            "com.netflix.mediaclient",
+            "com.spotify.music",
+            "com.amazon.mShop.android.shopping",
+            "in.amazon.mShop.android.app",
+            "com.ebay.mobile",
+            "com.alibaba.aliexpresshd",
+            "com.shein.android",
+            "com.shopee.ph",
+            "com.grabtaxi.driver",
+            "com.zoom.videoshare",
+            "us.zoom.videomeeting",
+            "com.google.android.googlequicksearchbox",
+            "com.android.providers.extensions"
+        )
+
+        private fun getCompanionsForApp(appPackage: String, pm: android.content.pm.PackageManager): Set<String> {
+            val companions = mutableSetOf<String>()
+
+            if (appPackage in APPS_NEEDING_COMPANIONS) {
+                BASE_COMPANION_PACKAGES.filterTo(companions) { pkg ->
+                    runCatching { pm.getApplicationInfo(pkg, 0) }.isSuccess
+                }
+            }
+
+            if (appPackage in KNOWN_BROWSER_PACKAGES) {
+                (BASE_COMPANION_PACKAGES + BROWSER_COMPANION_PACKAGES).filterTo(companions) { pkg ->
+                    runCatching { pm.getApplicationInfo(pkg, 0) }.isSuccess
+                }
+            }
+
+            return companions
+        }
     }
 
     private val serviceScope = CoroutineScope(Dispatchers.IO + SupervisorJob())
@@ -314,14 +414,10 @@ class MasterDnsVpnService : VpnService() {
                             .filter { it.isNotEmpty() }
                             .toSet()
 
-                        val browserSelected = userSelected.any { it in KNOWN_BROWSER_PACKAGES }
-                        val installedCompanions = if (browserSelected) {
-                            val pm = packageManager
-                            BROWSER_COMPANION_PACKAGES.filter { pkg ->
-                                runCatching { pm.getApplicationInfo(pkg, 0) }.isSuccess
-                            }.toSet()
-                        } else {
-                            emptySet()
+                        val pm = packageManager
+                        val appCompanions = mutableSetOf<String>()
+                        userSelected.forEach { appPkg ->
+                            appCompanions.addAll(getCompanionsForApp(appPkg, pm))
                         }
 
                         // Do NOT include our own packageName here.
@@ -329,12 +425,11 @@ class MasterDnsVpnService : VpnService() {
                         // and Go core's outbound UDP sockets must bypass the TUN to reach
                         // resolver servers directly — exactly like the non-split path which
                         // uses addDisallowedApplication(packageName).
-                        val finalAllowed = userSelected + installedCompanions
+                        val finalAllowed = userSelected + appCompanions
 
                         VpnManager.appendLog(
                             "Split tunnel: ${userSelected.size} selected apps, " +
-                            "${installedCompanions.size} companion packages added " +
-                            "(browser selected: $browserSelected)"
+                            "${appCompanions.size} companion packages added"
                         )
 
                         finalAllowed.forEach { pkg ->
