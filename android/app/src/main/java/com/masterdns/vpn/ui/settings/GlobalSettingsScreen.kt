@@ -234,6 +234,39 @@ fun GlobalSettingsScreen(vm: GlobalSettingsViewModel = viewModel()) {
                             }
                         }
 
+                        OutlinedTextField(
+                            value = draft.customDnsServers,
+                            onValueChange = { draft = draft.copy(customDnsServers = it) },
+                            label = { Text("Custom DNS Servers") },
+                            placeholder = { Text("e.g., 1.1.1.1, 8.8.8.8") },
+                            supportingText = {
+                                Text(
+                                    "Comma-separated DNS servers for VPN mode. Leave empty for defaults. " +
+                                        "For remote DNS in Iran: use your VPS IP (if running DNS server) or use Proxy mode instead.",
+                                    style = MaterialTheme.typography.bodySmall
+                                )
+                            },
+                            modifier = Modifier.fillMaxWidth(),
+                            minLines = 1,
+                            maxLines = 3,
+                            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Text)
+                        )
+
+                        RowSwitch(
+                            title = "Fake DNS (Remote Resolution)",
+                            checked = draft.fakeDnsEnabled,
+                            onChecked = { draft = draft.copy(fakeDnsEnabled = it) }
+                        )
+
+                        if (draft.fakeDnsEnabled) {
+                            Text(
+                                "Intercepts DNS packets and resolves hostnames at the server. Best for bypassing DNS filtering in Iran. VPN mode only.",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MdvColor.OnSurfaceVariant,
+                                modifier = Modifier.padding(start = MdvSpace.S3)
+                            )
+                        }
+
                             }
                         }
                     }
