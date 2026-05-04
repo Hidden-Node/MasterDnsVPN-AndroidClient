@@ -18,6 +18,7 @@ import com.masterdns.vpn.R
 import com.masterdns.vpn.data.local.AppDatabase
 import com.masterdns.vpn.util.ConfigGenerator
 import com.masterdns.vpn.util.GlobalSettingsStore
+import com.masterdns.vpn.util.ResolverAnalyzer
 import com.masterdns.vpn.util.VpnManager
 import kotlinx.coroutines.*
 import java.io.File
@@ -199,7 +200,25 @@ class MasterDnsVpnService : VpnService() {
                         localDnsPortOverride = if (proxyMode) null else safeDnsPort
                     )
                 )
-                if (runtimeProfile.resolvers.isNotBlank()) {
+                val importedResolverFile = if (
+                    runtimeProfile.resolverSourceType == "FILE" &&
+                    runtimeProfile.resolverCachedPath.isNotBlank()
+                ) {
+                    File(runtimeProfile.resolverCachedPath).takeIf { it.isFile }
+                } else {
+                    null
+                }
+                if (importedResolverFile != null) {
+                    importedResolverFile.copyTo(resolversFile, overwrite = true)
+                    VpnManager.appendLog(
+                        "Using imported resolver file: ${
+                            runtimeProfile.resolverFileName.ifBlank { importedResolverFile.name }
+                        }"
+                    )
+                    ResolverAnalyzer.statsFromJson(runtimeProfile.resolverStatsJson)?.let {
+                        VpnManager.appendLog("Resolver stats: ${it.summary()}")
+                    }
+                } else if (runtimeProfile.resolvers.isNotBlank()) {
                     resolversFile.writeText(ConfigGenerator.generateResolvers(runtimeProfile))
                 } else if (!resolversFile.exists() || resolversFile.readText().isBlank()) {
                     resolversFile.writeText(ConfigGenerator.generateResolvers(runtimeProfile))

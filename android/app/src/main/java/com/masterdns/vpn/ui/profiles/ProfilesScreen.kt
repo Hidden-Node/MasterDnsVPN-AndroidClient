@@ -24,12 +24,16 @@ import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import com.google.gson.Gson
+import com.google.gson.reflect.TypeToken
 import com.masterdns.vpn.R
 import com.masterdns.vpn.data.local.ProfileEntity
 import com.masterdns.vpn.ui.components.mdv.controls.MdvBackTopAppBar
 import com.masterdns.vpn.ui.theme.ConnectedGreen
 import com.masterdns.vpn.ui.theme.MdvColor
 import com.masterdns.vpn.ui.theme.MdvSpace
+import com.masterdns.vpn.util.ImportedResolverFile
+import com.masterdns.vpn.util.ResolverAnalyzer
+import com.masterdns.vpn.util.ResolverStats
 import kotlinx.coroutines.launch
 
 private data class ImportedProfileDraft(
@@ -48,7 +52,7 @@ fun ProfilesScreen(
     var showEditor by remember { mutableStateOf(false) }
     var editingProfile by remember { mutableStateOf<ProfileEntity?>(null) }
     var importedDraft by remember { mutableStateOf<ImportedProfileDraft?>(null) }
-    var importedResolvers by remember { mutableStateOf<String?>(null) }
+    var importedResolvers by remember { mutableStateOf<ImportedResolverFile?>(null) }
     val context = androidx.compose.ui.platform.LocalContext.current
     val snackbarHostState = remember { SnackbarHostState() }
     val scope = rememberCoroutineScope()
@@ -74,15 +78,19 @@ fun ProfilesScreen(
         ActivityResultContracts.OpenDocument()
     ) { uri ->
         if (uri == null) return@rememberLauncherForActivityResult
-        val text = readTextFromUri(context, uri).trim()
-        if (text.isBlank()) {
+        val imported = ResolverAnalyzer.importUriToCache(context, uri, cidrEnabled = true)
+        if (imported == null) {
             scope.launch { snackbarHostState.showSnackbar(context.getString(R.string.profiles_resolvers_empty_msg)) }
             return@rememberLauncherForActivityResult
         }
-        importedResolvers = text
+        importedResolvers = imported
         editingProfile = null
         showEditor = true
-        scope.launch { snackbarHostState.showSnackbar(context.getString(R.string.profiles_resolvers_imported_msg)) }
+        scope.launch {
+            snackbarHostState.showSnackbar(
+                context.getString(R.string.profiles_resolvers_imported_stats_msg, imported.stats.summary())
+            )
+        }
     }
 
     Scaffold(
@@ -266,7 +274,7 @@ fun ProfileCard(
 private fun ProfileEditorDialog(
     profile: ProfileEntity?,
     importedDraft: ImportedProfileDraft?,
-    importedResolvers: String?,
+    importedResolvers: ImportedResolverFile?,
     onImportToml: () -> Unit,
     onImportResolvers: () -> Unit,
     onSave: (ProfileEntity) -> Unit,
@@ -276,9 +284,19 @@ private fun ProfileEditorDialog(
     var domains by remember { mutableStateOf(profile?.domains?.removeSurrounding("[\"", "\"]").orEmpty()) }
     var encryptionKey by remember { mutableStateOf(profile?.encryptionKey.orEmpty()) }
     var resolvers by remember { mutableStateOf(profile?.resolvers ?: "8.8.8.8") }
+    var resolverFile by remember(profile?.id) {
+        mutableStateOf(profile?.toImportedResolverFile())
+    }
+    var cidrEnabled by remember(profile?.id) {
+        mutableStateOf(profile?.advancedValue("RESOLVER_CIDR_ENABLED")?.toBooleanStrictOrNull() ?: true)
+    }
+    var resolverStats by remember(profile?.id) {
+        mutableStateOf(resolverFile?.stats ?: ResolverAnalyzer.analyzeText(resolvers, cidrEnabled = cidrEnabled))
+    }
     var showKey by remember { mutableStateOf(false) }
     var showResolversEditor by remember { mutableStateOf(false) }
-    val largeResolversText = resolvers.length > 6000
+    val usingResolverFile = resolverFile != null
+    val largeResolversText = !usingResolverFile && resolvers.length > 6000
 
     LaunchedEffect(profile?.id) {
         if (profile != null) {
@@ -286,6 +304,9 @@ private fun ProfileEditorDialog(
             domains = profile.domains.removeSurrounding("[\"", "\"]")
             encryptionKey = profile.encryptionKey
             resolvers = profile.resolvers
+            resolverFile = profile.toImportedResolverFile()
+            cidrEnabled = profile.advancedValue("RESOLVER_CIDR_ENABLED")?.toBooleanStrictOrNull() ?: true
+            resolverStats = resolverFile?.stats ?: ResolverAnalyzer.analyzeText(profile.resolvers, cidrEnabled = cidrEnabled)
             showResolversEditor = false
         }
     }
@@ -301,8 +322,24 @@ private fun ProfileEditorDialog(
             encryptionKey = importedProfile.encryptionKey
             resolvers = importedProfile.resolvers
         }
-        if (!importedResolvers.isNullOrBlank()) {
-            resolvers = importedResolvers
+        if (importedResolvers != null) {
+            resolverFile = importedResolvers
+            resolverStats = importedResolvers.stats
+            resolvers = ""
+        }
+    }
+
+    LaunchedEffect(resolvers, cidrEnabled, resolverFile?.cachedPath) {
+        resolverStats = resolverFile
+            ?.let { ResolverAnalyzer.analyzeCachedFile(it.cachedPath, it.displayName, cidrEnabled) ?: it.stats.copy(cidrEnabled = cidrEnabled) }
+            ?: ResolverAnalyzer.analyzeText(resolvers, cidrEnabled = cidrEnabled)
+    }
+
+    LaunchedEffect(importedDraft?.profile?.advancedJson) {
+        val importedProfile = importedDraft?.profile ?: return@LaunchedEffect
+        cidrEnabled = importedProfile.advancedValue("RESOLVER_CIDR_ENABLED")?.toBooleanStrictOrNull() ?: cidrEnabled
+        if (importedProfile.resolverSourceType == "FILE") {
+            resolverFile = importedProfile.toImportedResolverFile()
         }
     }
 
@@ -330,26 +367,13 @@ private fun ProfileEditorDialog(
                     modifier = Modifier.fillMaxWidth()
                 )
                 if (profile == null) {
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    OutlinedButton(
+                        onClick = onImportToml,
+                        modifier = Modifier.fillMaxWidth()
                     ) {
-                        OutlinedButton(
-                            onClick = onImportToml,
-                            modifier = Modifier.weight(1f)
-                        ) {
-                            Icon(Icons.Filled.UploadFile, contentDescription = null)
-                            Spacer(modifier = Modifier.width(8.dp))
-                            Text(stringResource(R.string.action_import_toml))
-                        }
-                        OutlinedButton(
-                            onClick = onImportResolvers,
-                            modifier = Modifier.weight(1f)
-                        ) {
-                            Icon(Icons.Filled.Description, contentDescription = null)
-                            Spacer(modifier = Modifier.width(8.dp))
-                            Text(stringResource(R.string.profiles_import_resolvers_short))
-                        }
+                        Icon(Icons.Filled.UploadFile, contentDescription = null)
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Text(stringResource(R.string.action_import_toml))
                     }
                 }
 
@@ -382,7 +406,63 @@ private fun ProfileEditorDialog(
                     }
                 )
 
-                if (!showResolversEditor && largeResolversText) {
+                Card(
+                    modifier = Modifier.fillMaxWidth(),
+                    colors = CardDefaults.cardColors(containerColor = MdvColor.SurfaceHigh)
+                ) {
+                    Row(
+                        modifier = Modifier.padding(10.dp),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Column(modifier = Modifier.weight(1f)) {
+                            Text(stringResource(R.string.profiles_parse_cidr_title), fontWeight = FontWeight.SemiBold)
+                            Text(
+                                stringResource(R.string.profiles_parse_cidr_desc),
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MdvColor.OnSurfaceVariant
+                            )
+                        }
+                        Switch(
+                            checked = cidrEnabled,
+                            onCheckedChange = { cidrEnabled = it }
+                        )
+                    }
+                }
+
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    OutlinedButton(
+                        onClick = onImportResolvers,
+                        modifier = Modifier.weight(1f)
+                    ) {
+                        Icon(Icons.Filled.UploadFile, contentDescription = null)
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Text(stringResource(R.string.profiles_import_from_file))
+                    }
+                    if (usingResolverFile) {
+                        OutlinedButton(
+                            onClick = {
+                                resolverFile = null
+                                resolvers = "8.8.8.8"
+                            },
+                            modifier = Modifier.weight(1f)
+                        ) {
+                            Icon(Icons.Filled.Edit, contentDescription = null)
+                            Spacer(modifier = Modifier.width(8.dp))
+                            Text(stringResource(R.string.profiles_use_inline_resolvers))
+                        }
+                    }
+                }
+
+                if (usingResolverFile) {
+                    ResolverStatsCard(
+                        title = stringResource(R.string.profiles_imported_resolver_file, resolverFile?.displayName.orEmpty()),
+                        stats = resolverStats
+                    )
+                } else if (!showResolversEditor && largeResolversText) {
                     Card(
                         modifier = Modifier.fillMaxWidth(),
                         colors = CardDefaults.cardColors(containerColor = MdvColor.SurfaceHigh)
@@ -404,6 +484,8 @@ private fun ProfileEditorDialog(
                         value = resolvers,
                         onValueChange = { resolvers = it },
                         label = { Text(stringResource(R.string.profiles_resolvers_label)) },
+                        placeholder = { Text(stringResource(R.string.profiles_resolvers_placeholder)) },
+                        supportingText = { Text(stringResource(R.string.profiles_resolvers_stats_line, resolverStats.summary())) },
                         modifier = Modifier.fillMaxWidth().height(120.dp),
                         maxLines = 6,
                         keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Uri)
@@ -423,7 +505,12 @@ private fun ProfileEditorDialog(
                             name = name.trim().ifEmpty { "Profile" },
                             domains = if (domainJson == "[]") gson.toJson(listOf(domains.trim())) else domainJson,
                             encryptionKey = encryptionKey,
-                            resolvers = resolvers.trim()
+                            resolvers = if (resolverFile == null) resolvers.trim() else "",
+                            resolverSourceType = if (resolverFile == null) "INLINE" else "FILE",
+                            resolverFileName = resolverFile?.displayName.orEmpty(),
+                            resolverCachedPath = resolverFile?.cachedPath.orEmpty(),
+                            resolverStatsJson = ResolverAnalyzer.statsToJson(resolverStats.copy(cidrEnabled = cidrEnabled)),
+                            advancedJson = advancedWithValue(baseProfile.advancedJson, "RESOLVER_CIDR_ENABLED", cidrEnabled.toString())
                         )
                     )
                 },
@@ -440,7 +527,76 @@ private fun ProfileEditorDialog(
     )
 }
 
+@Composable
+private fun ResolverStatsCard(title: String, stats: ResolverStats?) {
+    Card(
+        modifier = Modifier.fillMaxWidth(),
+        colors = CardDefaults.cardColors(containerColor = MdvColor.SurfaceHigh)
+    ) {
+        Column(
+            modifier = Modifier.padding(10.dp),
+            verticalArrangement = Arrangement.spacedBy(6.dp)
+        ) {
+            Text(title, fontWeight = FontWeight.SemiBold)
+            if (stats == null) {
+                Text(
+                    stringResource(R.string.profiles_resolver_stats_unavailable),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MdvColor.OnSurfaceVariant
+                )
+            } else {
+                Text(
+                    stats.summary(),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MdvColor.OnSurfaceVariant
+                )
+                Text(
+                    stringResource(
+                        R.string.profiles_resolver_stats_detail,
+                        stats.rawLines,
+                        stats.blankLines,
+                        stats.commentLines,
+                        stats.customPorts,
+                        stats.skippedCidrs
+                    ),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MdvColor.OnSurfaceVariant
+                )
+            }
+        }
+    }
+}
+
 private val gson = Gson()
+
+private fun ProfileEntity.toImportedResolverFile(): ImportedResolverFile? {
+    if (resolverSourceType != "FILE" || resolverCachedPath.isBlank()) return null
+    val stats = ResolverAnalyzer.statsFromJson(resolverStatsJson)
+        ?: ResolverAnalyzer.analyzeCachedFile(resolverCachedPath, resolverFileName)
+        ?: ResolverStats(fileName = resolverFileName)
+    return ImportedResolverFile(
+        displayName = resolverFileName.ifBlank { stats.fileName.ifBlank { "client_resolvers.txt" } },
+        cachedPath = resolverCachedPath,
+        stats = stats
+    )
+}
+
+private fun ProfileEntity.advancedValue(key: String): String? = parseAdvancedMap(advancedJson)[key]
+
+private fun advancedWithValue(json: String, key: String, value: String): String {
+    val advanced = parseAdvancedMap(json).toMutableMap()
+    advanced[key] = value
+    return gson.toJson(advanced)
+}
+
+private fun parseAdvancedMap(json: String): Map<String, String> {
+    return try {
+        val type = object : TypeToken<Map<String, String>>() {}.type
+        gson.fromJson<Map<String, String>>(json, type) ?: emptyMap()
+    } catch (_: Exception) {
+        emptyMap()
+    }
+}
 
 private fun readTextFromUri(context: Context, uri: Uri): String {
     return context.contentResolver.openInputStream(uri)?.bufferedReader()?.use { it.readText() }.orEmpty()
