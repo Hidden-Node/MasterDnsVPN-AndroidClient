@@ -422,14 +422,14 @@ fun GlobalSettingsScreen(vm: GlobalSettingsViewModel = viewModel()) {
             Surface(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .heightIn(max = 560.dp),
+                    .heightIn(max = 640.dp),
                 shape = RoundedCornerShape(16.dp),
                 color = MdvColor.Surface
             ) {
                 Column(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .heightIn(max = 560.dp)
+                        .heightIn(max = 640.dp)
                         .padding(MdvSpace.S3),
                     verticalArrangement = Arrangement.spacedBy(MdvSpace.S3)
                 ) {
@@ -532,7 +532,7 @@ fun GlobalSettingsScreen(vm: GlobalSettingsViewModel = viewModel()) {
                                     LazyColumn(
                                         modifier = Modifier
                                             .fillMaxWidth()
-                                            .heightIn(min = 180.dp, max = 260.dp)
+                                            .heightIn(min = 220.dp, max = 340.dp)
                                     ) {
                                         items(appsToShow, key = { it.packageName }) { app ->
                                             AppRow(
