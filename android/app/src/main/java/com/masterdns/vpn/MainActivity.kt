@@ -3,6 +3,7 @@ package com.masterdns.vpn
 import android.content.Intent
 import android.net.Uri
 import android.os.Bundle
+import android.provider.OpenableColumns
 import android.widget.Toast
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
@@ -26,6 +27,8 @@ class MainActivity : ComponentActivity() {
     lateinit var profileRepository: ProfileRepository
 
     private val gson = Gson()
+    @Volatile
+    private var lastHandledImportUri: String? = null
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -47,8 +50,17 @@ class MainActivity : ComponentActivity() {
     }
 
     private fun handleTomlImportIntent(intent: Intent?) {
-        if (intent?.action != Intent.ACTION_VIEW) return
-        val uri = intent.data ?: return
+        val action = intent?.action ?: return
+        if (action != Intent.ACTION_VIEW && action != Intent.ACTION_SEND) return
+
+        val uri = when {
+            intent.data != null -> intent.data
+            intent.clipData != null && intent.clipData!!.itemCount > 0 -> intent.clipData!!.getItemAt(0).uri
+            else -> null
+        } ?: return
+
+        val uriToken = uri.toString()
+        if (lastHandledImportUri == uriToken) return
         val mime = intent.type.orEmpty()
         val isTomlLike = mime.contains("toml", ignoreCase = true) ||
             uri.toString().lowercase().endsWith(".toml")
@@ -63,6 +75,14 @@ class MainActivity : ComponentActivity() {
 
         lifecycleScope.launch {
             val content = readTextFromUri(uri)
+            if (content.isBlank()) {
+                Toast.makeText(
+                    this@MainActivity,
+                    getString(R.string.profiles_invalid_toml_msg),
+                    Toast.LENGTH_LONG
+                ).show()
+                return@launch
+            }
             val imported = parseImportedProfile(uri, content)
             if (imported == null) {
                 Toast.makeText(
@@ -72,6 +92,7 @@ class MainActivity : ComponentActivity() {
                 ).show()
                 return@launch
             }
+            lastHandledImportUri = uriToken
             val id = profileRepository.insertProfile(imported)
             profileRepository.setSelectedProfile(id)
             Toast.makeText(
@@ -83,7 +104,9 @@ class MainActivity : ComponentActivity() {
     }
 
     private fun readTextFromUri(uri: Uri): String {
-        return contentResolver.openInputStream(uri)?.bufferedReader()?.use { it.readText() }.orEmpty()
+        return contentResolver.openInputStream(uri)?.use { stream ->
+            stream.bufferedReader(Charsets.UTF_8).use { it.readText() }
+        }.orEmpty()
     }
 
     private fun parseImportedProfile(uri: Uri, tomlContent: String): ProfileEntity? {
@@ -114,13 +137,25 @@ class MainActivity : ComponentActivity() {
         val encryptionKey = values["ENCRYPTION_KEY"]?.trim().orEmpty()
         if (encryptionKey.isBlank()) return null
 
-        val fileName = uri.lastPathSegment?.substringAfterLast('/')?.substringBeforeLast('.')?.takeIf { it.isNotBlank() }
-            ?: "Imported Profile"
+        val fileName = readDisplayName(uri) ?: "Imported Profile"
 
         return ProfileEntity(
             name = fileName,
             domains = gson.toJson(domainList),
             encryptionKey = encryptionKey
         )
+    }
+
+    private fun readDisplayName(uri: Uri): String? {
+        return runCatching {
+            contentResolver.query(uri, null, null, null, null)?.use { cursor ->
+                val idx = cursor.getColumnIndex(OpenableColumns.DISPLAY_NAME)
+                if (idx < 0 || !cursor.moveToFirst()) return@use null
+                cursor.getString(idx)
+            }
+        }.getOrNull()
+            ?.substringBeforeLast(".")
+            ?.trim()
+            ?.takeIf { it.isNotEmpty() }
     }
 }
