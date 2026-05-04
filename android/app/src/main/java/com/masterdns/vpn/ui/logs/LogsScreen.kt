@@ -86,9 +86,9 @@ private data class UiLogItem(
 )
 
 private data class LogStats(
-    val total: Int,
-    val errors: Int,
-    val warnings: Int
+    val total: Long,
+    val errors: Long,
+    val warnings: Long
 )
 
 private val stampPattern = Regex("^(\\d{4}[-/]\\d{2}[-/]\\d{2}\\s+\\d{2}:\\d{2}:\\d{2}(?:\\.\\d{3})?)\\s*(.*)$")
@@ -97,6 +97,7 @@ private val explicitSeverityPattern = Regex("^\\[([A-Za-z]+)]\\s*(.*)$")
 @Composable
 fun LogsScreen(onBack: () -> Unit) {
     val logEntries by VpnManager.logEntries.collectAsState()
+    val counters by VpnManager.logCounters.collectAsState()
     var activeFilter by remember { mutableStateOf(LogFilter.ALL) }
     val filteredLogs = remember(logEntries, activeFilter) {
         when (activeFilter) {
@@ -106,7 +107,17 @@ fun LogsScreen(onBack: () -> Unit) {
         }
     }
     val uiLogItems = remember(filteredLogs) { buildUiLogItems(filteredLogs) }
-    val stats = remember(uiLogItems) { buildLogStats(uiLogItems) }
+    val stats = remember(uiLogItems, activeFilter, counters) {
+        if (activeFilter == LogFilter.ALL) {
+            LogStats(
+                total = counters.total,
+                errors = counters.errors,
+                warnings = counters.warnings
+            )
+        } else {
+            buildLogStats(uiLogItems)
+        }
+    }
 
     val listState = rememberLazyListState()
     var autoScrollEnabled by remember { mutableStateOf(true) }
@@ -395,9 +406,9 @@ private fun severityUi(severity: LogSeverity): Triple<String, Color, Color> {
 }
 
 private fun buildLogStats(items: List<UiLogItem>): LogStats {
-    val errors = items.count { it.severity == LogSeverity.ERROR }
-    val warnings = items.count { it.severity == LogSeverity.WARN }
-    return LogStats(total = items.size, errors = errors, warnings = warnings)
+    val errors = items.count { it.severity == LogSeverity.ERROR }.toLong()
+    val warnings = items.count { it.severity == LogSeverity.WARN }.toLong()
+    return LogStats(total = items.size.toLong(), errors = errors, warnings = warnings)
 }
 
 private fun buildUiLogItems(entries: List<VpnManager.LogEntry>): List<UiLogItem> {

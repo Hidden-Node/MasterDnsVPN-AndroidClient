@@ -35,6 +35,11 @@ object VpnManager {
         val line: String,
         val source: LogSource
     )
+    data class LogCounters(
+        val total: Long = 0,
+        val errors: Long = 0,
+        val warnings: Long = 0
+    )
 
     private val _state = MutableStateFlow(VpnState.DISCONNECTED)
     val state: StateFlow<VpnState> = _state.asStateFlow()
@@ -43,6 +48,8 @@ object VpnManager {
     val logs: StateFlow<List<String>> = _logs.asStateFlow()
     private val _logEntries = MutableStateFlow<List<LogEntry>>(emptyList())
     val logEntries: StateFlow<List<LogEntry>> = _logEntries.asStateFlow()
+    private val _logCounters = MutableStateFlow(LogCounters())
+    val logCounters: StateFlow<LogCounters> = _logCounters.asStateFlow()
 
     private val _errorMessage = MutableStateFlow<String?>(null)
     val errorMessage: StateFlow<String?> = _errorMessage.asStateFlow()
@@ -102,6 +109,14 @@ object VpnManager {
 
     private fun appendLogInternal(line: String, source: LogSource) {
         val normalizedLine = normalizeLogTimestampToLocal(line)
+        val upper = normalizedLine.uppercase()
+        val isError = upper.contains("[ERROR]") || upper.contains(" ERROR ")
+        val isWarn = upper.contains("[WARN]") || upper.contains(" WARNING ") || upper.contains(" WARN ")
+        _logCounters.value = _logCounters.value.copy(
+            total = _logCounters.value.total + 1,
+            errors = _logCounters.value.errors + if (isError) 1 else 0,
+            warnings = _logCounters.value.warnings + if (isWarn) 1 else 0
+        )
         val current = _logEntries.value.toMutableList()
         current.add(LogEntry(normalizedLine, source))
         if (current.size > MAX_LOG_LINES) {
@@ -115,6 +130,7 @@ object VpnManager {
     fun clearLogs() {
         _logEntries.value = emptyList()
         _logs.value = emptyList()
+        _logCounters.value = LogCounters()
         _scanStatus.value = ScanStatus()
     }
 
