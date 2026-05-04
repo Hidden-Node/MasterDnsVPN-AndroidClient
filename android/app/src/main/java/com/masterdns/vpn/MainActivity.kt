@@ -110,39 +110,34 @@ class MainActivity : ComponentActivity() {
     }
 
     private fun parseImportedProfile(uri: Uri, tomlContent: String): ProfileEntity? {
-        val values = mutableMapOf<String, String>()
-        tomlContent.lineSequence().forEach { raw ->
-            val line = raw.substringBefore("#").trim()
-            if (line.isEmpty() || "=" !in line) return@forEach
-            val key = line.substringBefore("=").trim()
-            val valueRaw = line.substringAfter("=").trim()
-            val parsed = when {
-                valueRaw.startsWith("\"") && valueRaw.endsWith("\"") -> valueRaw.removeSurrounding("\"")
-                else -> valueRaw
-            }
-            values[key] = parsed
-        }
-
-        val domainRaw = values["DOMAIN"] ?: values["DOMAINS"] ?: return null
-        val domainList = if (domainRaw.startsWith("[") && domainRaw.endsWith("]")) {
-            domainRaw.removePrefix("[").removeSuffix("]")
-                .split(",")
-                .map { it.trim().removeSurrounding("\"") }
-                .filter { it.isNotBlank() }
-        } else {
-            listOf(domainRaw.trim().removeSurrounding("\"")).filter { it.isNotBlank() }
-        }
+        val values = parseTomlValues(tomlContent)
+        val parsedDomain = values["DOMAINS"]?.takeIf { it.isNotBlank() } ?: values["DOMAIN"]?.takeIf { it.isNotBlank() } ?: return null
+        val parsedKey = values["ENCRYPTION_KEY"]?.takeIf { it.isNotBlank() } ?: return null
+        val domainList = parsedDomain.split(",").map { it.trim() }.filter { it.isNotEmpty() }
         if (domainList.isEmpty()) return null
 
-        val encryptionKey = values["ENCRYPTION_KEY"]?.trim().orEmpty()
-        if (encryptionKey.isBlank()) return null
+        val advanced = mutableMapOf<String, String>()
+        IMPORT_ADVANCED_KEYS.forEach { key ->
+            values[key]?.let { advanced[key] = it.trim() }
+        }
 
         val fileName = readDisplayName(uri) ?: "Imported Profile"
 
         return ProfileEntity(
             name = fileName,
             domains = gson.toJson(domainList),
-            encryptionKey = encryptionKey
+            encryptionMethod = values["DATA_ENCRYPTION_METHOD"]?.toIntOrNull() ?: 1,
+            encryptionKey = parsedKey,
+            protocolType = normalizeProtocol(values["PROTOCOL_TYPE"]),
+            listenPort = values["LISTEN_PORT"]?.toIntOrNull()?.coerceIn(1, 65535) ?: 18000,
+            resolverBalancingStrategy = values["RESOLVER_BALANCING_STRATEGY"]?.toIntOrNull() ?: 2,
+            packetDuplicationCount = values["PACKET_DUPLICATION_COUNT"]?.toIntOrNull() ?: 2,
+            setupPacketDuplicationCount = values["SETUP_PACKET_DUPLICATION_COUNT"]?.toIntOrNull() ?: 2,
+            uploadCompression = values["UPLOAD_COMPRESSION_TYPE"]?.toIntOrNull() ?: 0,
+            downloadCompression = values["DOWNLOAD_COMPRESSION_TYPE"]?.toIntOrNull() ?: 0,
+            logLevel = values["LOG_LEVEL"]?.trim().takeUnless { it.isNullOrBlank() } ?: "INFO",
+            resolvers = "8.8.8.8",
+            advancedJson = gson.toJson(advanced)
         )
     }
 
@@ -157,5 +152,112 @@ class MainActivity : ComponentActivity() {
             ?.substringBeforeLast(".")
             ?.trim()
             ?.takeIf { it.isNotEmpty() }
+    }
+
+    private fun parseTomlValues(tomlContent: String): Map<String, String> {
+        val values = mutableMapOf<String, String>()
+        tomlContent.lineSequence().forEach { raw ->
+            val line = raw.substringBefore("#").trim()
+            if (line.isEmpty() || "=" !in line) return@forEach
+            val key = line.substringBefore("=").trim()
+            val valueRaw = line.substringAfter("=").trim()
+            val parsed = when {
+                key == "DOMAINS" -> valueRaw
+                    .removePrefix("[")
+                    .removeSuffix("]")
+                    .split(",")
+                    .map { it.trim().removeSurrounding("\"") }
+                    .filter { it.isNotBlank() }
+                    .joinToString(", ")
+                valueRaw.startsWith("\"") && valueRaw.endsWith("\"") ->
+                    valueRaw.removeSurrounding("\"")
+                else -> valueRaw
+            }
+            values[key] = parsed
+        }
+        return values
+    }
+
+    private fun normalizeProtocol(value: String?): String {
+        return when (value?.trim()?.uppercase()) {
+            "TCP" -> "TCP"
+            else -> "SOCKS5"
+        }
+    }
+
+    companion object {
+        private val IMPORT_ADVANCED_KEYS = setOf(
+            "LISTEN_IP",
+            "SOCKS5_AUTH",
+            "SOCKS5_USER",
+            "SOCKS5_PASS",
+            "LOCAL_DNS_ENABLED",
+            "LOCAL_DNS_IP",
+            "LOCAL_DNS_PORT",
+            "LOCAL_DNS_CACHE_MAX_RECORDS",
+            "LOCAL_DNS_CACHE_TTL_SECONDS",
+            "LOCAL_DNS_PENDING_TIMEOUT_SECONDS",
+            "DNS_RESPONSE_FRAGMENT_TIMEOUT_SECONDS",
+            "LOCAL_DNS_CACHE_PERSIST_TO_FILE",
+            "LOCAL_DNS_CACHE_FLUSH_INTERVAL_SECONDS",
+            "STREAM_RESOLVER_FAILOVER_RESEND_THRESHOLD",
+            "STREAM_RESOLVER_FAILOVER_COOLDOWN",
+            "RECHECK_INACTIVE_SERVERS_ENABLED",
+            "AUTO_DISABLE_TIMEOUT_SERVERS",
+            "AUTO_DISABLE_TIMEOUT_WINDOW_SECONDS",
+            "BASE_ENCODE_DATA",
+            "COMPRESSION_MIN_SIZE",
+            "MIN_UPLOAD_MTU",
+            "MIN_DOWNLOAD_MTU",
+            "MAX_UPLOAD_MTU",
+            "MAX_DOWNLOAD_MTU",
+            "MTU_TEST_RETRIES",
+            "MTU_TEST_TIMEOUT",
+            "MTU_TEST_PARALLELISM",
+            "SAVE_MTU_SERVERS_TO_FILE",
+            "MTU_SERVERS_FILE_NAME",
+            "MTU_SERVERS_FILE_FORMAT",
+            "MTU_USING_SECTION_SEPARATOR_TEXT",
+            "MTU_REMOVED_SERVER_LOG_FORMAT",
+            "MTU_ADDED_SERVER_LOG_FORMAT",
+            "MTU_REACTIVE_ADDED_SERVER_LOG_FORMAT",
+            "RX_TX_WORKERS",
+            "TUNNEL_PROCESS_WORKERS",
+            "TUNNEL_PACKET_TIMEOUT_SECONDS",
+            "RX_CHANNEL_SIZE",
+            "DISPATCHER_IDLE_POLL_INTERVAL_SECONDS",
+            "SOCKS_UDP_ASSOCIATE_READ_TIMEOUT_SECONDS",
+            "CLIENT_TERMINAL_STREAM_RETENTION_SECONDS",
+            "CLIENT_CANCELLED_SETUP_RETENTION_SECONDS",
+            "SESSION_INIT_RETRY_BASE_SECONDS",
+            "SESSION_INIT_RETRY_STEP_SECONDS",
+            "SESSION_INIT_RETRY_LINEAR_AFTER",
+            "SESSION_INIT_RETRY_MAX_SECONDS",
+            "SESSION_INIT_BUSY_RETRY_INTERVAL_SECONDS",
+            "SESSION_INIT_RACING_COUNT",
+            "PING_AGGRESSIVE_INTERVAL_SECONDS",
+            "PING_LAZY_INTERVAL_SECONDS",
+            "PING_COOLDOWN_INTERVAL_SECONDS",
+            "PING_COLD_INTERVAL_SECONDS",
+            "PING_WARM_THRESHOLD_SECONDS",
+            "PING_COOL_THRESHOLD_SECONDS",
+            "PING_COLD_THRESHOLD_SECONDS",
+            "MAX_PACKETS_PER_BATCH",
+            "ARQ_WINDOW_SIZE",
+            "ARQ_INITIAL_RTO_SECONDS",
+            "ARQ_MAX_RTO_SECONDS",
+            "ARQ_CONTROL_INITIAL_RTO_SECONDS",
+            "ARQ_CONTROL_MAX_RTO_SECONDS",
+            "ARQ_MAX_CONTROL_RETRIES",
+            "ARQ_MAX_DATA_RETRIES",
+            "ARQ_DATA_PACKET_TTL_SECONDS",
+            "ARQ_CONTROL_PACKET_TTL_SECONDS",
+            "ARQ_DATA_NACK_MAX_GAP",
+            "ARQ_DATA_NACK_INITIAL_DELAY_SECONDS",
+            "ARQ_DATA_NACK_REPEAT_SECONDS",
+            "ARQ_INACTIVITY_TIMEOUT_SECONDS",
+            "ARQ_TERMINAL_DRAIN_TIMEOUT_SECONDS",
+            "ARQ_TERMINAL_ACK_WAIT_TIMEOUT_SECONDS"
+        )
     }
 }
