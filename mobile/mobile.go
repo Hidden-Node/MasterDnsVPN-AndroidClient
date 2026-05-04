@@ -16,6 +16,7 @@ import (
 	"masterdnsvpn-go/internal/client"
 	"masterdnsvpn-go/internal/config"
 	"masterdnsvpn-go/internal/version"
+	"masterdnsvpn-go/mobile/tun"
 
 	"github.com/xjasonlyu/tun2socks/v2/engine"
 )
@@ -33,6 +34,12 @@ var (
 	logCb      LogCallback
 	tunRunning bool
 )
+
+// Bandwidth holds upload and download counters for gomobile bindings.
+type Bandwidth struct {
+	Up   int64
+	Down int64
+}
 
 // SetLogCallback sets a callback that receives Go core log messages.
 func SetLogCallback(cb LogCallback) {
@@ -80,7 +87,7 @@ func StartClient(configPath string, logPath string) error {
 }
 
 // StartTun starts a tun2socks engine to bridge the TUN interface (fd) to a SOCKS5 proxy.
-func StartTun(fd int, proxyAddr string) {
+func StartTun(fd int64, proxyAddr string) {
 	key := &engine.Key{
 		Proxy:  "socks5://" + proxyAddr,
 		Device: fmt.Sprintf("fd://%d", fd),
@@ -108,6 +115,7 @@ func StopTun() {
 // StopClient gracefully stops the running client.
 func StopClient() {
 	StopTun()
+	StopTunBridge()
 	mu.Lock()
 	defer mu.Unlock()
 	if cancelFunc != nil {
@@ -138,4 +146,43 @@ func GetListenAddress() string {
 	// The listen address comes from the config, not directly exposed.
 	// We'll return it via the config the user provides.
 	return ""
+}
+
+// StartTunBridge starts the TUN bridge with DNS interception.
+func StartTunBridge(tunFd int64, mtu int64, socksAddr string) error {
+	return tun.StartTunBridge(int32(tunFd), int32(mtu), socksAddr)
+}
+
+// StopTunBridge stops the DNS-aware TUN bridge.
+func StopTunBridge() {
+	tun.StopTunBridge()
+}
+
+// IsTunBridgeRunning returns true if the DNS-aware TUN bridge is active.
+func IsTunBridgeRunning() bool {
+	return tun.IsTunBridgeRunning()
+}
+
+// GetTunBandwidth returns upload/download counters from the TUN bridge.
+func GetTunBandwidth() *Bandwidth {
+	up, down := tun.GetTunBandwidth()
+	return &Bandwidth{
+		Up:   up,
+		Down: down,
+	}
+}
+
+// GetDNSMapping resolves a fake IP to hostname when available.
+func GetDNSMapping(fakeIP string) string {
+	return tun.GetDNSMapping(fakeIP)
+}
+
+// GetDNSMappingCount returns the number of active fake DNS mappings.
+func GetDNSMappingCount() int {
+	return tun.GetDNSMappingCount()
+}
+
+// GetTunVersion returns the TUN bridge module version.
+func GetTunVersion() string {
+	return tun.GetVersion()
 }

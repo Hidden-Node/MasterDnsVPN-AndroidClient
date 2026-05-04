@@ -1,73 +1,88 @@
 package com.masterdns.vpn.ui.theme
 
-import android.os.Build
-import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
+import androidx.compose.ui.text.TextStyle
+import androidx.compose.ui.text.font.FontFamily
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.unit.sp
 
-// Custom color palette
-val DarkPrimary = Color(0xFF6C63FF)
-val DarkSecondary = Color(0xFF03DAC6)
-val DarkBackground = Color(0xFF121212)
-val DarkSurface = Color(0xFF1E1E2E)
-val DarkSurfaceVariant = Color(0xFF2A2A3E)
-val DarkOnPrimary = Color(0xFFFFFFFF)
-val DarkOnSurface = Color(0xFFE1E1E6)
-val DarkError = Color(0xFFCF6679)
+val ConnectedGreen = MdvColor.PrimaryContainer
+val DisconnectedRed = MdvColor.Error
+val ConnectingAmber = MdvColor.PrimaryDim
 
-val LightPrimary = Color(0xFF6C63FF)
-val LightSecondary = Color(0xFF03DAC6)
-val LightBackground = Color(0xFFF8F9FA)
-val LightSurface = Color(0xFFFFFFFF)
-val LightSurfaceVariant = Color(0xFFF0F0F5)
-val LightOnPrimary = Color(0xFFFFFFFF)
-val LightOnSurface = Color(0xFF1A1A2E)
-
-val ConnectedGreen = Color(0xFF4CAF50)
-val DisconnectedRed = Color(0xFFE53935)
-val ConnectingAmber = Color(0xFFFFB300)
-
-private val DarkColorScheme = darkColorScheme(
-    primary = DarkPrimary,
-    secondary = DarkSecondary,
-    background = DarkBackground,
-    surface = DarkSurface,
-    surfaceVariant = DarkSurfaceVariant,
-    onPrimary = DarkOnPrimary,
-    onSurface = DarkOnSurface,
-    error = DarkError,
+private val StitchColorScheme = darkColorScheme(
+    primary = MdvColor.Primary,
+    onPrimary = Color(0xFF00363D),
+    primaryContainer = MdvColor.PrimaryContainer,
+    onPrimaryContainer = Color(0xFF001F24),
+    secondary = MdvColor.Secondary,
+    onSecondary = Color(0xFF243141),
+    background = MdvColor.Background,
+    onBackground = MdvColor.OnSurface,
+    surface = MdvColor.Surface,
+    onSurface = MdvColor.OnSurface,
+    surfaceVariant = MdvColor.SurfaceHigh,
+    onSurfaceVariant = MdvColor.OnSurfaceVariant,
+    error = MdvColor.Error,
+    onError = MdvColor.OnError,
+    errorContainer = MdvColor.ErrorContainer,
+    onErrorContainer = MdvColor.Error
 )
 
-private val LightColorScheme = lightColorScheme(
-    primary = LightPrimary,
-    secondary = LightSecondary,
-    background = LightBackground,
-    surface = LightSurface,
-    surfaceVariant = LightSurfaceVariant,
-    onPrimary = LightOnPrimary,
-    onSurface = LightOnSurface,
+private val AppTypography = Typography(
+    displayLarge = TextStyle(
+        fontFamily = FontFamily.SansSerif,
+        fontWeight = FontWeight.Bold,
+        fontSize = 34.sp,
+        lineHeight = 40.sp,
+        letterSpacing = 0.5.sp
+    ),
+    headlineMedium = TextStyle(
+        fontFamily = FontFamily.SansSerif,
+        fontWeight = FontWeight.Bold,
+        fontSize = 28.sp,
+        lineHeight = 34.sp,
+        letterSpacing = 0.4.sp
+    ),
+    titleLarge = TextStyle(
+        fontFamily = FontFamily.SansSerif,
+        fontWeight = FontWeight.SemiBold,
+        fontSize = 22.sp,
+        lineHeight = 28.sp,
+        letterSpacing = 0.2.sp
+    ),
+    bodyLarge = TextStyle(
+        fontFamily = FontFamily.Default,
+        fontWeight = FontWeight.Medium,
+        fontSize = 16.sp,
+        lineHeight = 24.sp,
+        letterSpacing = 0.1.sp
+    ),
+    bodyMedium = TextStyle(
+        fontFamily = FontFamily.Default,
+        fontWeight = FontWeight.Normal,
+        fontSize = 14.sp,
+        lineHeight = 20.sp,
+        letterSpacing = 0.1.sp
+    ),
+    labelSmall = TextStyle(
+        fontFamily = FontFamily.SansSerif,
+        fontWeight = FontWeight.SemiBold,
+        fontSize = 10.sp,
+        lineHeight = 14.sp,
+        letterSpacing = 1.5.sp
+    )
 )
 
 @Composable
 fun MasterDnsVPNTheme(
-    darkTheme: Boolean = isSystemInDarkTheme(),
-    dynamicColor: Boolean = true,
     content: @Composable () -> Unit
 ) {
-    val colorScheme = when {
-        dynamicColor && Build.VERSION.SDK_INT >= Build.VERSION_CODES.S -> {
-            val context = LocalContext.current
-            if (darkTheme) dynamicDarkColorScheme(context) else dynamicLightColorScheme(context)
-        }
-        darkTheme -> DarkColorScheme
-        else -> LightColorScheme
-    }
-
     MaterialTheme(
-        colorScheme = colorScheme,
-        typography = Typography(),
+        colorScheme = StitchColorScheme,
+        typography = AppTypography,
         content = content
     )
 }

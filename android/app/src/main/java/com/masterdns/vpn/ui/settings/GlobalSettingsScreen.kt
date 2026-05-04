@@ -2,7 +2,11 @@ package com.masterdns.vpn.ui.settings
 
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
@@ -10,9 +14,12 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -27,7 +34,6 @@ import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.ExposedDropdownMenuBox
-import androidx.compose.material3.FilterChip
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
@@ -41,9 +47,9 @@ import androidx.compose.material3.Surface
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
-import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -51,8 +57,10 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.PasswordVisualTransformation
@@ -60,12 +68,20 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Dialog
 import androidx.core.graphics.drawable.toBitmap
 import androidx.lifecycle.viewmodel.compose.viewModel
+import com.masterdns.vpn.R
+import com.masterdns.vpn.ui.components.mdv.controls.MdvFilterChip
+import com.masterdns.vpn.ui.components.mdv.controls.MdvPrimaryActionButton
+import com.masterdns.vpn.ui.components.mdv.controls.MdvTopAppBar
+import com.masterdns.vpn.ui.theme.MdvColor
+import com.masterdns.vpn.ui.theme.MdvSpace
 import com.masterdns.vpn.util.GlobalSettings
+import androidx.compose.ui.unit.Dp
 import kotlinx.coroutines.launch
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun GlobalSettingsScreen(vm: GlobalSettingsViewModel = viewModel()) {
+    val context = LocalContext.current
     val current by vm.settings.collectAsState()
     val installedApps by vm.installedApps.collectAsState()
     var draft by remember(current) { mutableStateOf(current) }
@@ -89,16 +105,19 @@ fun GlobalSettingsScreen(vm: GlobalSettingsViewModel = viewModel()) {
     val httpPortMissing = sharingHttpPortText.isBlank()
     val socksPortRequiresRoot = socksPortValue != null && socksPortValue in 1..1024
     val httpPortRequiresRoot = httpPortValue != null && httpPortValue in 1..1024
+    val splitPackagesCount by remember(draft.splitPackagesCsv) {
+        derivedStateOf { parseCsv(draft.splitPackagesCsv).size }
+    }
     fun saveGlobalSettings() {
         if (socksPortMissing || httpPortMissing) {
             scope.launch {
-                snackbarHostState.showSnackbar("Please enter both SOCKS5 and HTTP ports.")
+                snackbarHostState.showSnackbar(context.getString(R.string.global_settings_ports_required_msg))
             }
             return
         }
         if (socksPortValue !in 1025..65535 || httpPortValue !in 1025..65535) {
             scope.launch {
-                snackbarHostState.showSnackbar("Ports must be between 1025 and 65535.")
+                snackbarHostState.showSnackbar(context.getString(R.string.global_settings_ports_range_msg))
             }
             return
         }
@@ -109,20 +128,21 @@ fun GlobalSettingsScreen(vm: GlobalSettingsViewModel = viewModel()) {
             internetSharingHttpPort = safeHttpPort
         )
         vm.save(normalize(draft))
-        scope.launch { snackbarHostState.showSnackbar("Global settings saved and applied") }
+        scope.launch { snackbarHostState.showSnackbar(context.getString(R.string.global_settings_saved_msg)) }
     }
 
     Scaffold(
+        containerColor = MdvColor.Background,
         topBar = {
-            TopAppBar(
-                title = { Text("Settings") },
+            MdvTopAppBar(
+                title = stringResource(R.string.settings_title),
                 actions = {
                     IconButton(
                         onClick = ::saveGlobalSettings
                     ) {
                         Icon(
                             imageVector = Icons.Filled.Save,
-                            contentDescription = "Save"
+                            contentDescription = stringResource(R.string.action_save)
                         )
                     }
                 }
@@ -130,16 +150,31 @@ fun GlobalSettingsScreen(vm: GlobalSettingsViewModel = viewModel()) {
         },
         snackbarHost = { SnackbarHost(hostState = snackbarHostState) }
     ) { padding ->
-        LazyColumn(
+        BoxWithConstraints(
             modifier = Modifier
                 .fillMaxSize()
-                .padding(padding),
-            contentPadding = PaddingValues(16.dp),
-            verticalArrangement = Arrangement.spacedBy(12.dp)
+                .padding(padding)
         ) {
-            item {
-                Card(colors = CardDefaults.cardColors()) {
-                    Column(modifier = Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+            val maxContentWidth = when {
+                maxWidth >= 1200.dp -> 980.dp
+                maxWidth >= 840.dp -> 840.dp
+                else -> Dp.Unspecified
+            }
+
+            Box(
+                modifier = Modifier.fillMaxSize(),
+                contentAlignment = Alignment.TopCenter
+            ) {
+                LazyColumn(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .widthIn(max = maxContentWidth),
+                    contentPadding = PaddingValues(MdvSpace.S4),
+                    verticalArrangement = Arrangement.spacedBy(MdvSpace.S3)
+                ) {
+                    item {
+                        Card(colors = CardDefaults.cardColors(containerColor = MdvColor.SurfaceHigh)) {
+                            Column(modifier = Modifier.padding(MdvSpace.S3), verticalArrangement = Arrangement.spacedBy(MdvSpace.S3)) {
                         ExposedDropdownMenuBox(
                             expanded = modeExpanded,
                             onExpandedChange = { modeExpanded = !modeExpanded }
@@ -148,8 +183,8 @@ fun GlobalSettingsScreen(vm: GlobalSettingsViewModel = viewModel()) {
                                 value = draft.connectionMode,
                                 onValueChange = {},
                                 readOnly = true,
-                                label = { Text("Connection Mode") },
-                                supportingText = { Text("VPN mode or Proxy mode (SOCKS only)") },
+                                label = { Text(stringResource(R.string.global_connection_mode)) },
+                                supportingText = { Text(stringResource(R.string.global_connection_mode_help)) },
                                 trailingIcon = {
                                     Icon(
                                         imageVector = Icons.Filled.ArrowDropDown,
@@ -172,7 +207,7 @@ fun GlobalSettingsScreen(vm: GlobalSettingsViewModel = viewModel()) {
                         }
 
                         RowSwitch(
-                            title = "Split Tunneling",
+                            title = stringResource(R.string.global_split_tunneling),
                             checked = draft.splitTunnelingEnabled,
                             onChecked = { draft = draft.copy(splitTunnelingEnabled = it) }
                         )
@@ -188,31 +223,32 @@ fun GlobalSettingsScreen(vm: GlobalSettingsViewModel = viewModel()) {
                                 },
                                 modifier = Modifier.fillMaxWidth()
                             ) {
-                                Column(modifier = Modifier.padding(12.dp)) {
-                                    Text("Split Tunnel Apps")
+                                Column(modifier = Modifier.padding(MdvSpace.S3)) {
+                                    Text(stringResource(R.string.split_tunnel_apps_title))
                                     Text(
-                                        "${parseCsv(draft.splitPackagesCsv).size} selected apps - tap to choose",
-                                        style = MaterialTheme.typography.bodySmall
+                                        stringResource(R.string.split_tunnel_apps_selected_count, splitPackagesCount),
+                                        style = MaterialTheme.typography.bodySmall,
+                                        color = MdvColor.OnSurfaceVariant
                                     )
                                 }
                             }
                         }
 
+                            }
+                        }
                     }
-                }
-            }
-            item {
-                Card(colors = CardDefaults.cardColors()) {
-                    Column(
-                        modifier = Modifier.padding(12.dp),
-                        verticalArrangement = Arrangement.spacedBy(10.dp)
-                    ) {
+                    item {
+                        Card(colors = CardDefaults.cardColors(containerColor = MdvColor.SurfaceHigh)) {
+                            Column(
+                                modifier = Modifier.padding(MdvSpace.S3),
+                                verticalArrangement = Arrangement.spacedBy(MdvSpace.S3)
+                            ) {
                         Row(
                             modifier = Modifier.fillMaxWidth(),
                             horizontalArrangement = Arrangement.SpaceBetween,
                             verticalAlignment = Alignment.CenterVertically
                         ) {
-                            Text("Sharing Internet", style = MaterialTheme.typography.titleMedium)
+                            Text(stringResource(R.string.global_sharing_internet), style = MaterialTheme.typography.titleMedium)
                             Switch(
                                 checked = draft.internetSharingEnabled,
                                 onCheckedChange = { draft = draft.copy(internetSharingEnabled = it) }
@@ -224,10 +260,10 @@ fun GlobalSettingsScreen(vm: GlobalSettingsViewModel = viewModel()) {
 
                             if (localIp != null) {
                                 Text(
-                                    "Local IP: $localIp",
+                                    stringResource(R.string.global_local_ip, localIp),
                                     style = MaterialTheme.typography.bodyMedium,
                                     fontWeight = FontWeight.Medium,
-                                    color = MaterialTheme.colorScheme.primary
+                                    color = MdvColor.PrimaryContainer
                                 )
                             }
 
@@ -247,12 +283,12 @@ fun GlobalSettingsScreen(vm: GlobalSettingsViewModel = viewModel()) {
                                             draft = draft.copy(internetSharingSocksPort = port)
                                         }
                                     },
-                                    label = { Text("SOCKS5 Port") },
+                                    label = { Text(stringResource(R.string.global_socks5_port)) },
                                     isError = socksPortMissing || socksPortRequiresRoot,
                                     supportingText = {
                                         when {
-                                            socksPortMissing -> Text("SOCKS5 port is required.")
-                                            socksPortRequiresRoot -> Text("Port must be greater than 1024 (ports <=1024 require root).")
+                                            socksPortMissing -> Text(stringResource(R.string.global_socks5_port_required))
+                                            socksPortRequiresRoot -> Text(stringResource(R.string.global_port_root_warning))
                                         }
                                     },
                                     keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
@@ -270,12 +306,12 @@ fun GlobalSettingsScreen(vm: GlobalSettingsViewModel = viewModel()) {
                                             draft = draft.copy(internetSharingHttpPort = port)
                                         }
                                     },
-                                    label = { Text("HTTP Port") },
+                                    label = { Text(stringResource(R.string.global_http_port)) },
                                     isError = httpPortMissing || httpPortRequiresRoot,
                                     supportingText = {
                                         when {
-                                            httpPortMissing -> Text("HTTP port is required.")
-                                            httpPortRequiresRoot -> Text("Port must be greater than 1024 (ports <=1024 require root).")
+                                            httpPortMissing -> Text(stringResource(R.string.global_http_port_required))
+                                            httpPortRequiresRoot -> Text(stringResource(R.string.global_port_root_warning))
                                         }
                                     },
                                     keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
@@ -286,55 +322,68 @@ fun GlobalSettingsScreen(vm: GlobalSettingsViewModel = viewModel()) {
                             OutlinedTextField(
                                 value = draft.internetSharingUser,
                                 onValueChange = { draft = draft.copy(internetSharingUser = it) },
-                                label = { Text("Username") },
+                                label = { Text(stringResource(R.string.global_username)) },
                                 modifier = Modifier.fillMaxWidth()
                             )
 
                             OutlinedTextField(
                                 value = draft.internetSharingPass,
                                 onValueChange = { draft = draft.copy(internetSharingPass = it) },
-                                label = { Text("Password") },
+                                label = { Text(stringResource(R.string.global_password)) },
                                 visualTransformation = PasswordVisualTransformation(),
                                 modifier = Modifier.fillMaxWidth()
                             )
 
                             Text(
-                                "Use these endpoints to share your VPN connection with other devices or apps on the same network.",
+                                stringResource(R.string.global_sharing_help),
                                 style = MaterialTheme.typography.bodySmall,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                                color = MdvColor.OnSurfaceVariant
                             )
                         }
+                            }
+                        }
                     }
-                }
-            }
-            item {
-                Button(
-                    onClick = ::saveGlobalSettings,
-                    modifier = Modifier.fillMaxWidth()
-                ) {
-                    Text("Save Global Settings")
+                    item {
+                        MdvPrimaryActionButton(
+                            text = stringResource(R.string.global_settings_save_button),
+                            onClick = ::saveGlobalSettings,
+                            modifier = Modifier.fillMaxWidth()
+                        )
+                    }
                 }
             }
         }
     }
 
     if (showAppPicker) {
-        val selectedApps = installedApps.filter { draftAppSelection.contains(it.packageName) }
-        val availableApps = installedApps.filterNot { draftAppSelection.contains(it.packageName) }
+        val selectedApps by remember(installedApps, draftAppSelection) {
+            derivedStateOf { installedApps.filter { draftAppSelection.contains(it.packageName) } }
+        }
+        val availableApps by remember(installedApps, draftAppSelection) {
+            derivedStateOf { installedApps.filterNot { draftAppSelection.contains(it.packageName) } }
+        }
 
-        val selectedFiltered = selectedApps.filter {
-            val q = selectedQuery.trim().lowercase()
-            q.isEmpty() ||
-                it.label.lowercase().contains(q) ||
-                it.packageName.lowercase().contains(q)
-        }.sortedWith(compareBy({ it.label.lowercase() }, { it.packageName }))
+        val selectedFiltered by remember(selectedApps, selectedQuery) {
+            derivedStateOf {
+                val q = selectedQuery.trim().lowercase()
+                selectedApps.filter {
+                    q.isEmpty() ||
+                        it.label.lowercase().contains(q) ||
+                        it.packageName.lowercase().contains(q)
+                }.sortedWith(compareBy({ it.label.lowercase() }, { it.packageName }))
+            }
+        }
 
-        val availableFiltered = availableApps.filter {
-            val q = availableQuery.trim().lowercase()
-            q.isEmpty() ||
-                it.label.lowercase().contains(q) ||
-                it.packageName.lowercase().contains(q)
-        }.sortedWith(compareBy({ it.label.lowercase() }, { it.packageName }))
+        val availableFiltered by remember(availableApps, availableQuery) {
+            derivedStateOf {
+                val q = availableQuery.trim().lowercase()
+                availableApps.filter {
+                    q.isEmpty() ||
+                        it.label.lowercase().contains(q) ||
+                        it.packageName.lowercase().contains(q)
+                }.sortedWith(compareBy({ it.label.lowercase() }, { it.packageName }))
+            }
+        }
 
         Dialog(onDismissRequest = { showAppPicker = false }) {
             Surface(
@@ -342,135 +391,159 @@ fun GlobalSettingsScreen(vm: GlobalSettingsViewModel = viewModel()) {
                     .fillMaxWidth()
                     .heightIn(max = 560.dp),
                 shape = RoundedCornerShape(16.dp),
-                color = MaterialTheme.colorScheme.surface
+                color = MdvColor.Surface
             ) {
                 Column(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .padding(12.dp),
-                    verticalArrangement = Arrangement.spacedBy(10.dp)
+                        .heightIn(max = 560.dp)
+                        .padding(MdvSpace.S3),
+                    verticalArrangement = Arrangement.spacedBy(MdvSpace.S3)
                 ) {
-                    Text("Select Split-Tunnel Apps", style = MaterialTheme.typography.titleMedium)
-                    Text(
-                        "Choose apps that should use VPN tunnel",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f)
-                    )
-
-                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                        FilterChip(
-                            selected = activeTab == "SELECTED",
-                            onClick = { activeTab = "SELECTED" },
-                            label = { Text("Selected ${selectedApps.size}") }
-                        )
-                        FilterChip(
-                            selected = activeTab == "AVAILABLE",
-                            onClick = { activeTab = "AVAILABLE" },
-                            label = { Text("Available ${availableApps.size}") }
-                        )
-                    }
-
-                    if (activeTab == "SELECTED") {
-                        OutlinedTextField(
-                            value = selectedQuery,
-                            onValueChange = { selectedQuery = it },
-                            label = { Text("Search selected apps") },
-                            modifier = Modifier.fillMaxWidth()
-                        )
-                    } else {
-                        OutlinedTextField(
-                            value = availableQuery,
-                            onValueChange = { availableQuery = it },
-                            label = { Text("Search available apps") },
-                            modifier = Modifier.fillMaxWidth()
-                        )
-                    }
-
-                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                        OutlinedButton(
-                            onClick = {
-                                draftAppSelection = draftAppSelection.toMutableSet().apply {
-                                    addAll(availableFiltered.map { it.packageName })
-                                }
-                            },
-                            modifier = Modifier.weight(1f)
-                        ) {
-                            Text("Select Visible")
-                        }
-                        OutlinedButton(
-                            onClick = { draftAppSelection = mutableSetOf() },
-                            modifier = Modifier.weight(1f)
-                        ) {
-                            Text("Select None")
-                        }
-                    }
-
-                    Surface(
-                        modifier = Modifier.fillMaxWidth(),
-                        shape = RoundedCornerShape(12.dp),
-                        color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f)
+                    Column(
+                        modifier = Modifier
+                            .weight(1f, fill = false)
+                            .verticalScroll(rememberScrollState()),
+                        verticalArrangement = Arrangement.spacedBy(MdvSpace.S3)
                     ) {
-                        Column(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .padding(10.dp)
-                        ) {
-                            val appsToShow = if (activeTab == "SELECTED") selectedFiltered else availableFiltered
-                            val emptyText = if (activeTab == "SELECTED") {
-                                "No selected app matches your search"
-                            } else {
-                                "No available app matches your search"
-                            }
+                        Text(stringResource(R.string.split_tunnel_dialog_title), style = MaterialTheme.typography.titleMedium)
+                        Text(
+                            stringResource(R.string.split_tunnel_dialog_desc),
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MdvColor.OnSurfaceVariant
+                        )
 
-                            Text(
-                                if (activeTab == "SELECTED") "Selected Apps" else "Available Apps",
-                                style = MaterialTheme.typography.labelLarge,
-                                color = MaterialTheme.colorScheme.primary
+                        Row(horizontalArrangement = Arrangement.spacedBy(MdvSpace.S2)) {
+                            MdvFilterChip(
+                                selected = activeTab == "SELECTED",
+                                onClick = { activeTab = "SELECTED" },
+                                label = stringResource(R.string.split_tunnel_selected_count, selectedApps.size)
                             )
+                            MdvFilterChip(
+                                selected = activeTab == "AVAILABLE",
+                                onClick = { activeTab = "AVAILABLE" },
+                                label = stringResource(R.string.split_tunnel_available_count, availableApps.size)
+                            )
+                        }
 
-                            if (appsToShow.isEmpty()) {
+                        if (activeTab == "SELECTED") {
+                            OutlinedTextField(
+                                value = selectedQuery,
+                                onValueChange = { selectedQuery = it },
+                                label = { Text(stringResource(R.string.split_tunnel_search_selected)) },
+                                modifier = Modifier.fillMaxWidth()
+                            )
+                        } else {
+                            OutlinedTextField(
+                                value = availableQuery,
+                                onValueChange = { availableQuery = it },
+                                label = { Text(stringResource(R.string.split_tunnel_search_available)) },
+                                modifier = Modifier.fillMaxWidth()
+                            )
+                        }
+
+                        Row(horizontalArrangement = Arrangement.spacedBy(MdvSpace.S2)) {
+                            OutlinedButton(
+                                onClick = {
+                                    draftAppSelection = draftAppSelection.toMutableSet().apply {
+                                        addAll(availableFiltered.map { it.packageName })
+                                    }
+                                },
+                                modifier = Modifier.weight(1f)
+                            ) {
+                                Text(stringResource(R.string.split_tunnel_select_visible))
+                            }
+                            OutlinedButton(
+                                onClick = { draftAppSelection = mutableSetOf() },
+                                modifier = Modifier.weight(1f)
+                            ) {
+                                Text(stringResource(R.string.split_tunnel_select_none))
+                            }
+                        }
+
+                        Surface(
+                            modifier = Modifier.fillMaxWidth(),
+                            shape = RoundedCornerShape(12.dp),
+                            color = MdvColor.SurfaceHigh
+                        ) {
+                            Column(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(10.dp)
+                            ) {
+                                val appsToShow = if (activeTab == "SELECTED") selectedFiltered else availableFiltered
+                                val emptyText = if (activeTab == "SELECTED") {
+                                    stringResource(R.string.split_tunnel_empty_selected)
+                                } else {
+                                    stringResource(R.string.split_tunnel_empty_available)
+                                }
+
                                 Text(
-                                    emptyText,
-                                    style = MaterialTheme.typography.bodySmall,
-                                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f),
-                                    modifier = Modifier.padding(top = 8.dp)
+                                    if (activeTab == "SELECTED") {
+                                        stringResource(R.string.split_tunnel_selected_apps)
+                                    } else {
+                                        stringResource(R.string.split_tunnel_available_apps)
+                                    },
+                                    style = MaterialTheme.typography.labelLarge,
+                                    color = MdvColor.PrimaryContainer
                                 )
-                            } else {
-                                LazyColumn(
-                                    modifier = Modifier
-                                        .fillMaxWidth()
-                                        .heightIn(min = 180.dp, max = 260.dp)
-                                ) {
-                                    items(appsToShow, key = { it.packageName }) { app ->
-                                        AppRow(
-                                            app = app,
-                                            checked = draftAppSelection.contains(app.packageName),
-                                            onToggle = {
-                                                draftAppSelection = draftAppSelection.toMutableSet().apply {
-                                                    if (!add(app.packageName)) remove(app.packageName)
+
+                                if (appsToShow.isEmpty()) {
+                                    Text(
+                                        emptyText,
+                                        style = MaterialTheme.typography.bodySmall,
+                                        color = MdvColor.OnSurfaceVariant,
+                                        modifier = Modifier.padding(top = 8.dp)
+                                    )
+                                } else {
+                                    LazyColumn(
+                                        modifier = Modifier
+                                            .fillMaxWidth()
+                                            .heightIn(min = 180.dp, max = 260.dp)
+                                    ) {
+                                        items(appsToShow, key = { it.packageName }) { app ->
+                                            AppRow(
+                                                app = app,
+                                                checked = draftAppSelection.contains(app.packageName),
+                                                onToggle = {
+                                                    draftAppSelection = draftAppSelection.toMutableSet().apply {
+                                                        if (!add(app.packageName)) remove(app.packageName)
+                                                    }
                                                 }
-                                            }
-                                        )
+                                            )
+                                        }
                                     }
                                 }
                             }
                         }
                     }
+                    Spacer(modifier = Modifier.height(2.dp))
 
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.End
+                    Surface(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .shadow(6.dp, RoundedCornerShape(12.dp))
+                            .navigationBarsPadding(),
+                        shape = RoundedCornerShape(12.dp),
+                        color = MdvColor.SurfaceHigh
                     ) {
-                        TextButton(onClick = { showAppPicker = false }) {
-                            Text("Cancel")
-                        }
-                        Button(
-                            onClick = {
-                                draft = draft.copy(splitPackagesCsv = draftAppSelection.sorted().joinToString(","))
-                                showAppPicker = false
-                            }
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(horizontal = MdvSpace.S2, vertical = MdvSpace.S2),
+                            horizontalArrangement = Arrangement.End
                         ) {
-                            Text("Apply")
+                            TextButton(onClick = { showAppPicker = false }) {
+                                Text(stringResource(R.string.action_cancel))
+                            }
+                            Button(
+                                onClick = {
+                                    draft = draft.copy(splitPackagesCsv = draftAppSelection.sorted().joinToString(","))
+                                    showAppPicker = false
+                                }
+                            ) {
+                                Text(stringResource(R.string.action_apply))
+                            }
                         }
                     }
                 }
@@ -488,7 +561,7 @@ private fun AppRow(
     val context = LocalContext.current
     val appIconBitmap = remember(app.packageName) {
         runCatching {
-            context.packageManager.getApplicationIcon(app.packageName).toBitmap(48, 48)
+            context.packageManager.getApplicationIcon(app.packageName).toBitmap(32, 32)
         }.getOrNull()
     }
     Row(

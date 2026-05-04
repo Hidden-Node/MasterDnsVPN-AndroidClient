@@ -41,8 +41,21 @@ class MasterDnsVpnService : VpnService() {
         private const val SOCKS_STARTUP_TIMEOUT_MS = 30 * 60 * 1000L
         private const val SOCKS_POLL_INTERVAL_MS = 500L
 
-        // Browser packages that may need Android networking companion processes.
-        private val BROWSER_PACKAGES = setOf(
+        // Companion packages that browsers and apps rely on for network access.
+        // These must be included alongside any user-selected app to ensure traffic
+        // actually flows through the tunnel (e.g. Chrome uses WebView & GMS).
+        private val BROWSER_COMPANION_PACKAGES = setOf(
+            "com.google.android.webview",
+            "com.android.webview",
+            "com.google.android.gms",
+            "com.google.android.gsf",
+            "com.android.chrome",          // system Chrome on some OEMs
+            "com.google.android.captiveportallogin"
+        )
+
+        // If at least one browser is selected for split tunneling, companion packages
+        // are also allowed so selected browsers can fully function through VPN.
+        private val KNOWN_BROWSER_PACKAGES = setOf(
             "com.android.chrome",
             "com.chrome.beta",
             "com.chrome.dev",
@@ -51,22 +64,15 @@ class MasterDnsVpnService : VpnService() {
             "org.mozilla.firefox_beta",
             "org.mozilla.fenix",
             "com.microsoft.emmx",
+            "com.brave.browser",
             "com.opera.browser",
             "com.opera.mini.native",
-            "com.brave.browser",
             "com.sec.android.app.sbrowser",
-            "com.duckduckgo.mobile.android"
+            "com.duckduckgo.mobile.android",
+            "com.vivaldi.browser",
+            "com.UCMobile.intl",
+            "com.kiwibrowser.browser"
         )
-
-        // Add these only when at least one browser is explicitly selected by user.
-        private val BROWSER_COMPANION_PACKAGES = setOf(
-            "com.google.android.webview",
-            "com.android.webview",
-            "com.google.android.gms",
-            "com.google.android.gsf",
-            "com.google.android.captiveportallogin"
-        )
-
     }
 
     private val serviceScope = CoroutineScope(Dispatchers.IO + SupervisorJob())
@@ -75,10 +81,13 @@ class MasterDnsVpnService : VpnService() {
     private var goClientJob: Job? = null
     private var httpProxyJob: Job? = null
     private var sharingSocksJob: Job? = null
+    private var sharingSocksServer: java.net.ServerSocket? = null
     private var logTailJob: Job? = null
     private var wakeLock: PowerManager.WakeLock? = null
     private var mtuExportTargetUri: String? = null
     private var mtuConfigDir: File? = null
+    @Volatile
+    private var tunBridgeActive = false
     @Volatile
     private var isStopping = false
     @Volatile
@@ -257,21 +266,36 @@ class MasterDnsVpnService : VpnService() {
                     return@launch
                 }
 
-                // Establish VPN TUN interface
-                // Determine the DNS server to advertise to Android:
-                // - When LOCAL_DNS is enabled, Go core runs its own DNS listener on 127.0.0.1.
-                //   We advertise the VPN interface address (10.0.0.2) so DNS queries come
-                //   through the TUN and get forwarded by tun2socks → Go core local DNS.
-                // - Otherwise fall back to 8.8.8.8 / 8.8.4.4 which travel through the
-                //   tunnel via tun2socks → SOCKS5 → Go core → resolver servers.
-                val vpnDnsServer = if (localDnsEnabled && !proxyMode) "10.0.0.2" else "8.8.8.8"
+                val vpnDnsServers = if (globalSettings.customDnsServers.isNotBlank()) {
+                    globalSettings.customDnsServers
+                        .split(",")
+                        .map { it.trim() }
+                        .filter { it.isNotEmpty() }
+                        .also { servers ->
+                            VpnManager.appendLog("Using custom DNS servers: ${servers.joinToString()}")
+                        }
+                } else if (globalSettings.fakeDnsEnabled) {
+                    listOf("172.19.0.2").also {
+                        VpnManager.appendLog("Using TUN bridge DNS: 172.19.0.2")
+                    }
+                } else if (localDnsEnabled && !proxyMode) {
+                    listOf("10.0.0.2").also {
+                        VpnManager.appendLog("Using local DNS via TUN address: 10.0.0.2")
+                    }
+                } else {
+                    listOf("8.8.8.8")
+                }
 
                 val builder = Builder()
                     .setSession(getString(R.string.app_name))
                     .setMtu(1500)
-                    .addAddress("10.0.0.2", 32)
+                    .addAddress(if (globalSettings.fakeDnsEnabled) "172.19.0.1" else "10.0.0.2", if (globalSettings.fakeDnsEnabled) 30 else 32)
                     .addRoute("0.0.0.0", 0)
-                    .addDnsServer(vpnDnsServer)
+                vpnDnsServers.forEach { builder.addDnsServer(it) }
+                if (globalSettings.fakeDnsEnabled) {
+                    builder.addRoute("198.18.0.0", 16)
+                    VpnManager.appendLog("Added fake DNS route: 198.18.0.0/16")
+                }
 
                 if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) {
                     val splitEnabled = globalSettings.splitTunnelingEnabled &&
@@ -283,23 +307,27 @@ class MasterDnsVpnService : VpnService() {
                             .filter { it.isNotEmpty() }
                             .toSet()
 
-                        // Keep split tunnel strict by default, but when user explicitly
-                        // selects a browser, include required companion processes so
-                        // browser traffic can still traverse the tunnel reliably.
-                        val browserSelected = userSelected.any { it in BROWSER_PACKAGES }
-                        val finalAllowed = if (browserSelected) {
+                        val browserSelected = userSelected.any { it in KNOWN_BROWSER_PACKAGES }
+                        val installedCompanions = if (browserSelected) {
                             val pm = packageManager
-                            val installedCompanions = BROWSER_COMPANION_PACKAGES.filter { pkg ->
+                            BROWSER_COMPANION_PACKAGES.filter { pkg ->
                                 runCatching { pm.getApplicationInfo(pkg, 0) }.isSuccess
                             }.toSet()
-                            userSelected + installedCompanions
                         } else {
-                            userSelected
+                            emptySet()
                         }
 
+                        // Do NOT include our own packageName here.
+                        // tun2socks reads from the TUN fd directly (not via the route table),
+                        // and Go core's outbound UDP sockets must bypass the TUN to reach
+                        // resolver servers directly — exactly like the non-split path which
+                        // uses addDisallowedApplication(packageName).
+                        val finalAllowed = userSelected + installedCompanions
+
                         VpnManager.appendLog(
-                            "Split tunnel enabled for ${userSelected.size} selected app(s)" +
-                                if (browserSelected) " + browser companions" else ""
+                            "Split tunnel: ${userSelected.size} selected apps, " +
+                            "${installedCompanions.size} companion packages added " +
+                            "(browser selected: $browserSelected)"
                         )
 
                         finalAllowed.forEach { pkg ->
@@ -320,9 +348,15 @@ class MasterDnsVpnService : VpnService() {
 
                 VpnManager.appendLog("TUN interface established (fd=${vpnInterface!!.fd})")
 
-                // Start Go-based tun2socks bridge
-                VpnManager.appendLog("Starting tun2socks bridge: TUN fd -> socks5://127.0.0.1:$socksPort")
-                mobile.Mobile.startTun(vpnInterface!!.fd.toLong(), "127.0.0.1:$socksPort")
+                if (globalSettings.fakeDnsEnabled) {
+                    VpnManager.appendLog("Starting DNS-aware TUN bridge...")
+                    mobile.Mobile.startTunBridge(vpnInterface!!.fd.toLong(), 1500L, "127.0.0.1:$socksPort")
+                    tunBridgeActive = true
+                    VpnManager.appendLog("DNS-aware TUN bridge started")
+                } else {
+                    VpnManager.appendLog("Starting tun2socks bridge: TUN fd -> socks5://127.0.0.1:$socksPort")
+                    mobile.Mobile.startTun(vpnInterface!!.fd.toLong(), "127.0.0.1:$socksPort")
+                }
 
                 // Update state
                 VpnManager.updateState(VpnManager.VpnState.CONNECTED)
@@ -354,6 +388,11 @@ class MasterDnsVpnService : VpnService() {
                 connectJob?.cancel()
                 VpnManager.appendLog("Stopping VPN...")
 
+                if (tunBridgeActive) {
+                    runCatching { mobile.Mobile.stopTunBridge() }
+                    tunBridgeActive = false
+                }
+
                 // Stop Go client and Tun bridge
                 runCatching {
                     if (mobile.Mobile.isRunning()) {
@@ -374,6 +413,8 @@ class MasterDnsVpnService : VpnService() {
                 httpProxyJob?.cancel()
                 sharingSocksJob?.cancel()
                 logTailJob?.cancel()
+                runCatching { sharingSocksServer?.close() }
+                sharingSocksServer = null
 
                 VpnManager.updateState(VpnManager.VpnState.DISCONNECTED)
                 VpnManager.stopTrafficMonitor()
@@ -571,7 +612,10 @@ class MasterDnsVpnService : VpnService() {
                 if (length > pointer) {
                     raf.seek(pointer)
                     while (true) {
-                        val line = raf.readLine() ?: break
+                        val rawLine = raf.readLine() ?: break
+                        // RandomAccessFile.readLine() decodes as ISO-8859-1; convert back to UTF-8
+                        // so emojis/symbols from Go core logs are preserved in the UI logs tab.
+                        val line = String(rawLine.toByteArray(Charsets.ISO_8859_1), Charsets.UTF_8)
                         if (line.isNotBlank()) {
                             VpnManager.appendCoreLog(line)
                             maybeReportSocksAuthIssue(line)
@@ -630,12 +674,24 @@ class MasterDnsVpnService : VpnService() {
         wakeLock = null
     }
 
-    private fun startInternetSharing(socksPort: Int, httpPort: Int, username: String, password: String) {
+    private suspend fun startInternetSharing(socksPort: Int, httpPort: Int, username: String, password: String) {
+        // Match GooseRelayVPN behavior: free stale listeners and retry when sharing ports are busy.
+        if (isLocalPortInUse(socksPort) || isLocalPortInUse(httpPort)) {
+            VpnManager.appendLog("Sharing ports in use, attempting to free...")
+            if (mobile.Mobile.isRunning()) {
+                runCatching { mobile.Mobile.stopClient() }
+            }
+            delay(500L)
+        }
+
         sharingSocksJob?.cancel()
+        sharingSocksServer?.close()
+        sharingSocksServer = null
         sharingSocksJob = serviceScope.launch {
             try {
                 val server = java.net.ServerSocket(socksPort, 50, InetAddress.getByName("0.0.0.0"))
                 server.reuseAddress = true
+                sharingSocksServer = server
                 VpnManager.appendLog("Sharing SOCKS5 proxy ready on 0.0.0.0:$socksPort")
                 while (isActive) {
                     val client = server.accept() ?: continue

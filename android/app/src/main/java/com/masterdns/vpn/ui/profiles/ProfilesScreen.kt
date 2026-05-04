@@ -16,6 +16,7 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.PasswordVisualTransformation
@@ -23,8 +24,12 @@ import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import com.google.gson.Gson
+import com.masterdns.vpn.R
 import com.masterdns.vpn.data.local.ProfileEntity
+import com.masterdns.vpn.ui.components.mdv.controls.MdvBackTopAppBar
 import com.masterdns.vpn.ui.theme.ConnectedGreen
+import com.masterdns.vpn.ui.theme.MdvColor
+import com.masterdns.vpn.ui.theme.MdvSpace
 import kotlinx.coroutines.launch
 
 private data class ImportedProfileDraft(
@@ -53,17 +58,17 @@ fun ProfilesScreen(
         if (uri == null) return@rememberLauncherForActivityResult
         val text = readTextFromUri(context, uri)
         val draft = parseProfileTomlForImport(
-            fileName = readDisplayName(context, uri) ?: "Imported Profile",
+            fileName = readDisplayName(context, uri) ?: context.getString(R.string.profiles_imported_profile_default),
             tomlContent = text
         )
         if (draft == null) {
-            scope.launch { snackbarHostState.showSnackbar("Invalid TOML: DOMAIN/ENCRYPTION_KEY not found") }
+            scope.launch { snackbarHostState.showSnackbar(context.getString(R.string.profiles_invalid_toml_msg)) }
             return@rememberLauncherForActivityResult
         }
         importedDraft = draft
         editingProfile = null
         showEditor = true
-        scope.launch { snackbarHostState.showSnackbar("TOML imported into profile form") }
+        scope.launch { snackbarHostState.showSnackbar(context.getString(R.string.profiles_toml_imported_msg)) }
     }
     val importResolversLauncher = rememberLauncherForActivityResult(
         ActivityResultContracts.OpenDocument()
@@ -71,25 +76,22 @@ fun ProfilesScreen(
         if (uri == null) return@rememberLauncherForActivityResult
         val text = readTextFromUri(context, uri).trim()
         if (text.isBlank()) {
-            scope.launch { snackbarHostState.showSnackbar("Resolvers file is empty") }
+            scope.launch { snackbarHostState.showSnackbar(context.getString(R.string.profiles_resolvers_empty_msg)) }
             return@rememberLauncherForActivityResult
         }
         importedResolvers = text
         editingProfile = null
         showEditor = true
-        scope.launch { snackbarHostState.showSnackbar("Resolvers imported into profile form") }
+        scope.launch { snackbarHostState.showSnackbar(context.getString(R.string.profiles_resolvers_imported_msg)) }
     }
 
     Scaffold(
+        containerColor = MdvColor.Background,
         snackbarHost = { SnackbarHost(hostState = snackbarHostState) },
         topBar = {
-            TopAppBar(
-                title = { Text("Profiles", fontWeight = FontWeight.Bold) },
-                navigationIcon = {
-                    IconButton(onClick = onBack) {
-                        Icon(Icons.Filled.ArrowBack, contentDescription = "Back")
-                    }
-                },
+            MdvBackTopAppBar(
+                title = stringResource(R.string.title_profiles),
+                onBack = onBack,
                 actions = {
                     IconButton(onClick = {
                         editingProfile = null
@@ -97,7 +99,7 @@ fun ProfilesScreen(
                         importedResolvers = null
                         showEditor = true
                     }) {
-                        Icon(Icons.Filled.Add, contentDescription = "Add Profile")
+                        Icon(Icons.Filled.Add, contentDescription = stringResource(R.string.profiles_add))
                     }
                 }
             )
@@ -158,13 +160,13 @@ fun ProfilesScreen(
                         Icons.Filled.PersonAdd,
                         contentDescription = null,
                         modifier = Modifier.size(64.dp),
-                        tint = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.4f)
+                        tint = MdvColor.OnSurfaceVariant.copy(alpha = 0.7f)
                     )
                     Spacer(modifier = Modifier.height(16.dp))
                     Text(
-                        "No profiles yet",
+                        stringResource(R.string.profiles_empty_title),
                         style = MaterialTheme.typography.titleMedium,
-                        color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f)
+                        color = MdvColor.OnSurfaceVariant
                     )
                     Spacer(modifier = Modifier.height(8.dp))
                     FilledTonalButton(onClick = {
@@ -173,15 +175,15 @@ fun ProfilesScreen(
                         importedResolvers = null
                         showEditor = true
                     }) {
-                        Text("Create Profile")
+                        Text(stringResource(R.string.profiles_create))
                     }
                 }
             }
         } else {
             LazyColumn(
                 modifier = Modifier.fillMaxSize().padding(padding),
-                contentPadding = PaddingValues(16.dp),
-                verticalArrangement = Arrangement.spacedBy(8.dp)
+                contentPadding = PaddingValues(MdvSpace.S4),
+                verticalArrangement = Arrangement.spacedBy(MdvSpace.S2)
             ) {
                 items(profiles) { profile ->
                     ProfileCard(
@@ -214,9 +216,9 @@ fun ProfileCard(
         shape = RoundedCornerShape(16.dp),
         colors = CardDefaults.cardColors(
             containerColor = if (profile.isSelected)
-                MaterialTheme.colorScheme.primaryContainer
+                MdvColor.PrimaryContainer.copy(alpha = 0.16f)
             else
-                MaterialTheme.colorScheme.surfaceVariant
+                MdvColor.SurfaceHigh
         )
     ) {
         Row(
@@ -227,7 +229,7 @@ fun ProfileCard(
             if (profile.isSelected) {
                 Icon(
                     Icons.Filled.CheckCircle,
-                    contentDescription = "Selected",
+                    contentDescription = stringResource(R.string.profiles_selected),
                     tint = ConnectedGreen,
                     modifier = Modifier.size(24.dp)
                 )
@@ -242,18 +244,18 @@ fun ProfileCard(
                 Text(
                     text = profile.domains.replace("[\"", "").replace("\"]", ""),
                     style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f)
+                    color = MdvColor.OnSurfaceVariant
                 )
             }
 
-            IconButton(onClick = onEdit) {
-                Icon(Icons.Filled.Edit, contentDescription = "Edit", modifier = Modifier.size(20.dp))
+            IconButton(onClick = onEdit, modifier = Modifier.size(48.dp)) {
+                Icon(Icons.Filled.Edit, contentDescription = stringResource(R.string.profiles_edit), modifier = Modifier.size(20.dp))
             }
-            IconButton(onClick = onSettings) {
-                Icon(Icons.Filled.Settings, contentDescription = "Settings", modifier = Modifier.size(20.dp))
+            IconButton(onClick = onSettings, modifier = Modifier.size(48.dp)) {
+                Icon(Icons.Filled.Settings, contentDescription = stringResource(R.string.profiles_settings), modifier = Modifier.size(20.dp))
             }
-            IconButton(onClick = onDelete) {
-                Icon(Icons.Filled.Delete, contentDescription = "Delete", modifier = Modifier.size(20.dp))
+            IconButton(onClick = onDelete, modifier = Modifier.size(48.dp)) {
+                Icon(Icons.Filled.Delete, contentDescription = stringResource(R.string.profiles_delete), modifier = Modifier.size(20.dp))
             }
         }
     }
@@ -273,7 +275,6 @@ private fun ProfileEditorDialog(
     var name by remember { mutableStateOf(profile?.name.orEmpty()) }
     var domains by remember { mutableStateOf(profile?.domains?.removeSurrounding("[\"", "\"]").orEmpty()) }
     var encryptionKey by remember { mutableStateOf(profile?.encryptionKey.orEmpty()) }
-    var encryptionMethod by remember { mutableIntStateOf(profile?.encryptionMethod ?: 1) }
     var resolvers by remember { mutableStateOf(profile?.resolvers ?: "8.8.8.8") }
     var showKey by remember { mutableStateOf(false) }
     var showResolversEditor by remember { mutableStateOf(false) }
@@ -284,7 +285,6 @@ private fun ProfileEditorDialog(
             name = profile.name
             domains = profile.domains.removeSurrounding("[\"", "\"]")
             encryptionKey = profile.encryptionKey
-            encryptionMethod = profile.encryptionMethod
             resolvers = profile.resolvers
             showResolversEditor = false
         }
@@ -299,7 +299,6 @@ private fun ProfileEditorDialog(
             }
             domains = importedDraft.domainInput
             encryptionKey = importedProfile.encryptionKey
-            encryptionMethod = importedProfile.encryptionMethod
             resolvers = importedProfile.resolvers
         }
         if (!importedResolvers.isNullOrBlank()) {
@@ -309,7 +308,15 @@ private fun ProfileEditorDialog(
 
     AlertDialog(
         onDismissRequest = onDismiss,
-        title = { Text(if (profile != null) "Edit Profile" else "New Profile") },
+        title = {
+            Text(
+                if (profile != null) {
+                    stringResource(R.string.profiles_dialog_edit_title)
+                } else {
+                    stringResource(R.string.profiles_dialog_new_title)
+                }
+            )
+        },
         text = {
             Column(
                 modifier = Modifier.fillMaxWidth(),
@@ -318,7 +325,7 @@ private fun ProfileEditorDialog(
                 OutlinedTextField(
                     value = name,
                     onValueChange = { name = it },
-                    label = { Text("Profile Name") },
+                    label = { Text(stringResource(R.string.profiles_name)) },
                     singleLine = true,
                     modifier = Modifier.fillMaxWidth()
                 )
@@ -333,7 +340,7 @@ private fun ProfileEditorDialog(
                         ) {
                             Icon(Icons.Filled.UploadFile, contentDescription = null)
                             Spacer(modifier = Modifier.width(8.dp))
-                            Text("Import TOML")
+                            Text(stringResource(R.string.action_import_toml))
                         }
                         OutlinedButton(
                             onClick = onImportResolvers,
@@ -341,7 +348,7 @@ private fun ProfileEditorDialog(
                         ) {
                             Icon(Icons.Filled.Description, contentDescription = null)
                             Spacer(modifier = Modifier.width(8.dp))
-                            Text("Import Resolvers")
+                            Text(stringResource(R.string.profiles_import_resolvers_short))
                         }
                     }
                 }
@@ -349,7 +356,7 @@ private fun ProfileEditorDialog(
                 OutlinedTextField(
                     value = domains,
                     onValueChange = { domains = it },
-                    label = { Text("Domain (e.g., v.domain.com)") },
+                    label = { Text(stringResource(R.string.profiles_domain_hint)) },
                     singleLine = true,
                     modifier = Modifier.fillMaxWidth()
                 )
@@ -357,7 +364,7 @@ private fun ProfileEditorDialog(
                 OutlinedTextField(
                     value = encryptionKey,
                     onValueChange = { encryptionKey = it },
-                    label = { Text("Encryption Key") },
+                    label = { Text(stringResource(R.string.profiles_encryption_key)) },
                     singleLine = true,
                     modifier = Modifier.fillMaxWidth(),
                     visualTransformation = if (showKey) VisualTransformation.None else PasswordVisualTransformation(),
@@ -365,54 +372,30 @@ private fun ProfileEditorDialog(
                         IconButton(onClick = { showKey = !showKey }) {
                             Icon(
                                 if (showKey) Icons.Filled.VisibilityOff else Icons.Filled.Visibility,
-                                contentDescription = "Toggle visibility"
+                                contentDescription = if (showKey) {
+                                    stringResource(R.string.profiles_hide_sensitive)
+                                } else {
+                                    stringResource(R.string.profiles_show_sensitive)
+                                }
                             )
                         }
                     }
                 )
 
-                // Encryption method dropdown
-                var expanded by remember { mutableStateOf(false) }
-                val methods = listOf("None", "XOR", "ChaCha20", "AES-128-GCM", "AES-192-GCM", "AES-256-GCM")
-                ExposedDropdownMenuBox(
-                    expanded = expanded,
-                    onExpandedChange = { expanded = !expanded }
-                ) {
-                    OutlinedTextField(
-                        value = methods.getOrElse(encryptionMethod) { "XOR" },
-                        onValueChange = {},
-                        readOnly = true,
-                        label = { Text("Encryption Method") },
-                        trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded) },
-                        modifier = Modifier.menuAnchor().fillMaxWidth()
-                    )
-                    ExposedDropdownMenu(expanded = expanded, onDismissRequest = { expanded = false }) {
-                        methods.forEachIndexed { index, methodName ->
-                            DropdownMenuItem(
-                                text = { Text(methodName) },
-                                onClick = {
-                                    encryptionMethod = index
-                                    expanded = false
-                                }
-                            )
-                        }
-                    }
-                }
-
                 if (!showResolversEditor && largeResolversText) {
                     Card(
                         modifier = Modifier.fillMaxWidth(),
-                        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)
+                        colors = CardDefaults.cardColors(containerColor = MdvColor.SurfaceHigh)
                     ) {
                         Column(modifier = Modifier.padding(10.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                            Text("Resolvers list is large (${resolvers.lines().size} lines)")
+                            Text(stringResource(R.string.profiles_large_resolvers_title, resolvers.lines().size))
                             Text(
-                                "To avoid UI lag, tap Edit to open the text box.",
+                                stringResource(R.string.profiles_large_resolvers_desc),
                                 style = MaterialTheme.typography.bodySmall,
-                                color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f)
+                                color = MdvColor.OnSurfaceVariant
                             )
                             OutlinedButton(onClick = { showResolversEditor = true }) {
-                                Text("Edit Resolvers")
+                                Text(stringResource(R.string.profiles_edit_resolvers))
                             }
                         }
                     }
@@ -420,7 +403,7 @@ private fun ProfileEditorDialog(
                     OutlinedTextField(
                         value = resolvers,
                         onValueChange = { resolvers = it },
-                        label = { Text("Resolvers (one per line)") },
+                        label = { Text(stringResource(R.string.profiles_resolvers_label)) },
                         modifier = Modifier.fillMaxWidth().height(120.dp),
                         maxLines = 6,
                         keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Uri)
@@ -440,19 +423,18 @@ private fun ProfileEditorDialog(
                             name = name.trim().ifEmpty { "Profile" },
                             domains = if (domainJson == "[]") gson.toJson(listOf(domains.trim())) else domainJson,
                             encryptionKey = encryptionKey,
-                            encryptionMethod = encryptionMethod,
                             resolvers = resolvers.trim()
                         )
                     )
                 },
                 enabled = name.isNotBlank() && domains.isNotBlank()
             ) {
-                Text("Save")
+                Text(stringResource(R.string.action_save))
             }
         },
         dismissButton = {
             TextButton(onClick = onDismiss) {
-                Text("Cancel")
+                Text(stringResource(R.string.action_cancel))
             }
         }
     )

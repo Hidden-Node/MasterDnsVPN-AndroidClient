@@ -5,40 +5,56 @@ import android.net.VpnService
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.animateColorAsState
-import androidx.compose.animation.core.animateFloatAsState
-import androidx.compose.animation.core.*
-import androidx.compose.foundation.Image
+import androidx.compose.animation.core.EaseInOutCubic
+import androidx.compose.animation.core.RepeatMode
+import androidx.compose.animation.core.animateFloat
+import androidx.compose.animation.core.infiniteRepeatable
+import androidx.compose.animation.core.rememberInfiniteTransition
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
-import androidx.compose.foundation.clickable
-import androidx.compose.foundation.layout.*
-import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Info
-import androidx.compose.material.icons.filled.PowerSettingsNew
-import androidx.compose.material3.*
-import androidx.compose.runtime.*
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
+import androidx.compose.foundation.layout.BoxWithConstraints
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.statusBarsPadding
+import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.widthIn
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Text
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
-import androidx.compose.ui.draw.scale
-import androidx.compose.ui.draw.shadow
-import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.res.painterResource
-import androidx.compose.ui.text.SpanStyle
-import androidx.compose.ui.text.buildAnnotatedString
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.style.TextAlign
-import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import com.google.gson.Gson
 import com.google.gson.reflect.TypeToken
 import com.masterdns.vpn.R
-import com.masterdns.vpn.ui.theme.*
+import com.masterdns.vpn.ui.theme.ConnectedGreen
+import com.masterdns.vpn.ui.theme.ConnectingAmber
+import com.masterdns.vpn.ui.theme.DisconnectedRed
+import com.masterdns.vpn.ui.theme.MdvColor
+import com.masterdns.vpn.ui.theme.MdvSpace
 import com.masterdns.vpn.util.VpnManager
+
+private data class HomeLayoutMetrics(
+    val horizontalPadding: androidx.compose.ui.unit.Dp,
+    val verticalPadding: androidx.compose.ui.unit.Dp,
+    val isWide: Boolean
+)
 
 @Composable
 fun HomeScreen(
@@ -51,7 +67,9 @@ fun HomeScreen(
     val downBps by VpnManager.downloadSpeedBps.collectAsState()
     val scanStatus by VpnManager.scanStatus.collectAsState()
     val selectedProfile by viewModel.selectedProfile.collectAsState()
+    val error by VpnManager.errorMessage.collectAsState()
     val context = LocalContext.current
+
     val advanced = remember(selectedProfile?.advancedJson) {
         parseAdvanced(selectedProfile?.advancedJson.orEmpty())
     }
@@ -74,18 +92,15 @@ fun HomeScreen(
     val isConnected = vpnState == VpnManager.VpnState.CONNECTED
     val isConnecting = vpnState == VpnManager.VpnState.CONNECTING
     val isDisconnecting = vpnState == VpnManager.VpnState.DISCONNECTING
-    val totalResolvers = selectedProfile?.resolvers
+    val profileResolversCount = selectedProfile?.resolvers
         ?.lineSequence()
         ?.map { it.trim() }
         ?.count { it.isNotEmpty() }
         ?.coerceAtLeast(1)
         ?: 1
+    val totalResolvers = scanStatus.scanTotalFromCore.takeIf { it > 0 } ?: profileResolversCount
     val scannedCount = (scanStatus.validCount + scanStatus.rejectedCount).coerceAtMost(totalResolvers)
-    val scanProgress by animateFloatAsState(
-        targetValue = (scannedCount.toFloat() / totalResolvers.toFloat()).coerceIn(0f, 1f),
-        animationSpec = tween(350),
-        label = "scanProgress"
-    )
+    val scanProgress = (scannedCount.toFloat() / totalResolvers.toFloat()).coerceIn(0f, 1f)
 
     val statusColor by animateColorAsState(
         targetValue = when (vpnState) {
@@ -99,339 +114,212 @@ fun HomeScreen(
         label = "statusColor"
     )
 
-    // Pulse animation for connecting state
-    val infiniteTransition = rememberInfiniteTransition(label = "pulse")
-    val pulseScale by infiniteTransition.animateFloat(
-        initialValue = 1f,
-        targetValue = 1.15f,
-        animationSpec = infiniteRepeatable(
-            animation = tween(800, easing = EaseInOutCubic),
-            repeatMode = RepeatMode.Reverse
-        ),
-        label = "pulseScale"
-    )
+    // Avoid running an infinite animation loop while idle/connected.
+    val pulseScale = if (isConnecting || isDisconnecting) {
+        val infiniteTransition = rememberInfiniteTransition(label = "pulse")
+        val animated by infiniteTransition.animateFloat(
+            initialValue = 1f,
+            targetValue = 1.15f,
+            animationSpec = infiniteRepeatable(
+                animation = tween(800, easing = EaseInOutCubic),
+                repeatMode = RepeatMode.Reverse
+            ),
+            label = "pulseScale"
+        )
+        animated
+    } else {
+        1f
+    }
 
-    Column(
+    val statusText = when (vpnState) {
+        VpnManager.VpnState.CONNECTED -> stringResource(R.string.home_state_connected)
+        VpnManager.VpnState.CONNECTING -> stringResource(R.string.home_state_connecting)
+        VpnManager.VpnState.DISCONNECTING -> stringResource(R.string.home_state_disconnecting)
+        VpnManager.VpnState.ERROR -> stringResource(R.string.home_state_error)
+        else -> stringResource(R.string.home_state_disconnected)
+    }
+
+    BoxWithConstraints(
         modifier = Modifier
             .fillMaxSize()
-            .background(MaterialTheme.colorScheme.background)
+            .background(MdvColor.Background)
             .statusBarsPadding()
-            .padding(24.dp),
-        horizontalAlignment = Alignment.CenterHorizontally
     ) {
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.SpaceBetween,
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            Row(
-                modifier = Modifier
-                    .clip(RoundedCornerShape(12.dp))
-                    .clickable { onOpenInfo() }
-                    .padding(horizontal = 8.dp, vertical = 6.dp),
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Image(
-                    painter = painterResource(id = R.drawable.ic_launcher_foreground_raw),
-                    contentDescription = "Open info page",
-                    modifier = Modifier.size(32.dp)
-                )
-                Spacer(modifier = Modifier.width(8.dp))
-                Text(
-                    text = "MDV-HN",
-                    style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold)
-                )
-            }
-            FilledIconButton(
-                onClick = onOpenInfo,
-                colors = IconButtonDefaults.filledIconButtonColors(
-                    containerColor = MaterialTheme.colorScheme.primaryContainer
-                )
-            ) {
-                Icon(
-                    imageVector = Icons.Filled.Info,
-                    contentDescription = "Open info page"
-                )
-            }
+        val metrics = when {
+            maxWidth >= 840.dp -> HomeLayoutMetrics(MdvSpace.S7, MdvSpace.S6, true)
+            maxWidth >= 600.dp -> HomeLayoutMetrics(MdvSpace.S6, MdvSpace.S5, false)
+            else -> HomeLayoutMetrics(MdvSpace.S4, MdvSpace.S6, false)
         }
 
-        // Status text
-        Text(
-            text = when (vpnState) {
-                VpnManager.VpnState.CONNECTED -> "Connected"
-                VpnManager.VpnState.CONNECTING -> "Connecting..."
-                VpnManager.VpnState.DISCONNECTING -> "Disconnecting..."
-                VpnManager.VpnState.ERROR -> "Error"
-                else -> "Disconnected"
-            },
-            style = MaterialTheme.typography.headlineMedium.copy(
-                fontWeight = FontWeight.Bold,
-                letterSpacing = 1.sp
-            ),
-            color = statusColor,
-            modifier = Modifier.padding(bottom = 8.dp)
-        )
-
-        // Selected profile name
-        Text(
-            text = selectedProfile?.name ?: "No profile selected",
-            style = MaterialTheme.typography.bodyLarge,
-            color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f),
-            modifier = Modifier.padding(bottom = 48.dp)
-        )
-
-        // Power button
-        Box(
-            contentAlignment = Alignment.Center,
-            modifier = Modifier
-                .size(160.dp)
-                .scale(if (isConnecting || isDisconnecting) pulseScale else 1f)
-        ) {
-            // Outer glow ring
-            Box(
-                modifier = Modifier
-                    .size(160.dp)
-                    .shadow(
-                        elevation = if (isConnected) 24.dp else 8.dp,
-                        shape = CircleShape,
-                        ambientColor = statusColor.copy(alpha = 0.3f),
-                        spotColor = statusColor.copy(alpha = 0.5f)
-                    )
-                    .background(
-                        brush = Brush.radialGradient(
-                            colors = listOf(
-                                statusColor.copy(alpha = 0.15f),
-                                Color.Transparent
-                            )
-                        ),
-                        shape = CircleShape
-                    )
-            )
-
-            // Button
-            FilledIconButton(
-                onClick = {
-                    when (vpnState) {
-                        VpnManager.VpnState.CONNECTED -> {
-                            VpnManager.disconnect(context)
-                        }
-                        VpnManager.VpnState.CONNECTING,
-                        VpnManager.VpnState.DISCONNECTING -> {
-                            VpnManager.disconnect(context)
-                        }
-                        VpnManager.VpnState.DISCONNECTED, VpnManager.VpnState.ERROR -> {
-                            val profile = selectedProfile
-                            if (profile == null) {
-                                onNavigateToProfiles()
-                                return@FilledIconButton
-                            }
-                            val vpnIntent = VpnService.prepare(context)
-                            if (vpnIntent != null) {
-                                vpnPermissionLauncher.launch(vpnIntent)
-                            } else {
-                                VpnManager.connect(context, profile)
-                            }
+        val toggleVpn: () -> Unit = {
+            when (vpnState) {
+                VpnManager.VpnState.CONNECTED -> VpnManager.disconnect(context)
+                VpnManager.VpnState.CONNECTING,
+                VpnManager.VpnState.DISCONNECTING -> VpnManager.disconnect(context)
+                VpnManager.VpnState.DISCONNECTED, VpnManager.VpnState.ERROR -> {
+                    val profile = selectedProfile
+                    if (profile == null) {
+                        onNavigateToProfiles()
+                    } else {
+                        val vpnIntent = VpnService.prepare(context)
+                        if (vpnIntent != null) {
+                            vpnPermissionLauncher.launch(vpnIntent)
+                        } else {
+                            VpnManager.connect(context, profile)
                         }
                     }
-                },
-                modifier = Modifier.size(120.dp),
-                shape = CircleShape,
-                colors = IconButtonDefaults.filledIconButtonColors(
-                    containerColor = if (isConnected) ConnectedGreen else MaterialTheme.colorScheme.primary
-                ),
-                enabled = true
-            ) {
-                Icon(
-                    imageVector = Icons.Filled.PowerSettingsNew,
-                    contentDescription = if (isConnected) "Disconnect" else "Connect",
-                    modifier = Modifier.size(56.dp),
-                    tint = Color.White
-                )
+                }
             }
         }
 
-        Spacer(modifier = Modifier.height(48.dp))
+        if (metrics.isWide) {
+            Column(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .verticalScroll(rememberScrollState())
+                    .padding(horizontal = metrics.horizontalPadding, vertical = metrics.verticalPadding)
+            ) {
+                MdvHomeHeader(onOpenInfo = onOpenInfo)
+                Spacer(modifier = Modifier.height(MdvSpace.S4))
+                Row(modifier = Modifier.fillMaxWidth()) {
+                    Column(
+                        modifier = Modifier.weight(1f),
+                        horizontalAlignment = Alignment.CenterHorizontally
+                    ) {
+                        Text(
+                            text = stringResource(R.string.home_network_status),
+                            style = MaterialTheme.typography.labelSmall,
+                            color = MdvColor.OnSurfaceVariant
+                        )
+                        Spacer(modifier = Modifier.height(MdvSpace.S2))
+                        Text(
+                            text = statusText,
+                            style = MaterialTheme.typography.headlineMedium.copy(
+                                fontWeight = FontWeight.Bold,
+                                letterSpacing = 1.sp
+                            ),
+                            color = statusColor
+                        )
+                        Text(
+                            text = selectedProfile?.name ?: stringResource(R.string.home_no_profile_selected),
+                            style = MaterialTheme.typography.bodyLarge,
+                            color = MdvColor.OnSurfaceVariant
+                        )
+                        Spacer(modifier = Modifier.height(MdvSpace.S6))
+                        MdvConnectionNodeButton(
+                            isConnected = isConnected,
+                            shouldPulse = isConnecting || isDisconnecting,
+                            pulseScale = pulseScale,
+                            statusColor = statusColor,
+                            onToggle = toggleVpn
+                        )
+                    }
 
-        // Profile selector card
-        Card(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(horizontal = 16.dp),
-            shape = RoundedCornerShape(14.dp),
-            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)
-        ) {
-            Column(modifier = Modifier.fillMaxWidth().padding(12.dp)) {
-                Text(
-                    text = "Connection Status",
-                    style = MaterialTheme.typography.labelLarge,
-                    color = MaterialTheme.colorScheme.primary
-                )
-                Spacer(modifier = Modifier.height(4.dp))
-                Text(
-                    text = when (vpnState) {
-                        VpnManager.VpnState.CONNECTED -> "Connected and running"
-                        VpnManager.VpnState.CONNECTING -> "Preparing tunnel (tap again to cancel)"
-                        VpnManager.VpnState.DISCONNECTING -> "Disconnecting..."
-                        VpnManager.VpnState.ERROR -> "Error - check logs"
-                        else -> "Disconnected"
-                    },
-                    style = MaterialTheme.typography.bodyMedium
-                )
-                if (scanStatus.lastResolver.isNotBlank()) {
-                    Spacer(modifier = Modifier.height(4.dp))
-                    Text(
-                        text = "Resolver: ${scanStatus.lastResolver}  ${scanStatus.lastDecision}",
-                        style = MaterialTheme.typography.bodySmall
-                    )
-                }
-                if (scanStatus.validCount > 0 || scanStatus.rejectedCount > 0) {
-                    Spacer(modifier = Modifier.height(2.dp))
-                    Text(
-                        text = buildAnnotatedString {
-                            append("Valid: ")
-                            pushStyle(SpanStyle(color = ConnectedGreen, fontWeight = FontWeight.Bold))
-                            append(scanStatus.validCount.toString())
-                            pop()
-                            append("   Rejected: ")
-                            pushStyle(SpanStyle(color = DisconnectedRed, fontWeight = FontWeight.Bold))
-                            append(scanStatus.rejectedCount.toString())
-                            pop()
-                        },
-                        style = MaterialTheme.typography.bodySmall
-                    )
-                }
-                if (scanStatus.scanning || isConnecting) {
-                    Spacer(modifier = Modifier.height(8.dp))
-                    Text(
-                        text = "DNS Scan Progress: $scannedCount / $totalResolvers",
-                        style = MaterialTheme.typography.bodySmall
-                    )
-                    Spacer(modifier = Modifier.height(6.dp))
-                    LinearProgressIndicator(
-                        progress = { scanProgress },
+                    Spacer(modifier = Modifier.width(MdvSpace.S6))
+
+                    Column(
                         modifier = Modifier
-                            .fillMaxWidth()
-                            .height(10.dp),
-                        color = MaterialTheme.colorScheme.primary,
-                        trackColor = MaterialTheme.colorScheme.surfaceTint.copy(alpha = 0.22f)
-                    )
-                }
-                if (scanStatus.syncedUploadMtu > 0 || scanStatus.syncedDownloadMtu > 0) {
-                    Spacer(modifier = Modifier.height(2.dp))
-                    Text(
-                        text = "Synced MTU: UP ${scanStatus.syncedUploadMtu} / DOWN ${scanStatus.syncedDownloadMtu}",
-                        style = MaterialTheme.typography.bodySmall
-                    )
-                }
-                if (scanStatus.activeResolvers > 0) {
-                    Spacer(modifier = Modifier.height(2.dp))
-                    Text(
-                        text = "Active Resolvers: ${scanStatus.activeResolvers}",
-                        style = MaterialTheme.typography.bodySmall.copy(fontWeight = FontWeight.SemiBold)
-                    )
-                }
-                Spacer(modifier = Modifier.height(6.dp))
-                Text(
-                    text = "Download: ${formatSpeed(downBps)}   Upload: ${formatSpeed(upBps)}",
-                    style = MaterialTheme.typography.bodySmall
-                )
-                Spacer(modifier = Modifier.height(8.dp))
-                Text(
-                    text = "SOCKS5: $proxyHost:$proxyPort",
-                    style = MaterialTheme.typography.bodySmall.copy(fontWeight = FontWeight.SemiBold)
-                )
-                if (socksAuthEnabled) {
-                    Spacer(modifier = Modifier.height(6.dp))
-                    Text(
-                        text = "SOCKS5 authentication",
-                        style = MaterialTheme.typography.bodySmall.copy(fontWeight = FontWeight.SemiBold)
-                    )
-                    if (socksUser.isNotBlank()) {
-                        Text(
-                            text = "Username: $socksUser",
-                            style = MaterialTheme.typography.bodySmall
+                            .weight(1f)
+                            .widthIn(max = 560.dp)
+                    ) {
+                        MdvConnectionTelemetryCard(
+                            vpnState = vpnState,
+                            scanStatus = scanStatus,
+                            scannedCount = scannedCount,
+                            totalResolvers = totalResolvers,
+                            scanProgress = scanProgress,
+                            downBps = downBps,
+                            upBps = upBps,
+                            proxyHost = proxyHost,
+                            proxyPort = proxyPort,
+                            socksAuthEnabled = socksAuthEnabled,
+                            socksUser = socksUser,
+                            socksPass = socksPass,
+                            isConnecting = isConnecting
                         )
-                    }
-                    if (socksPass.isNotBlank()) {
-                        Text(
-                            text = "Password: $socksPass",
-                            style = MaterialTheme.typography.bodySmall
+                        Spacer(modifier = Modifier.height(MdvSpace.S3))
+                        MdvProfileSelectorCard(
+                            profileName = selectedProfile?.name ?: stringResource(R.string.profiles_create),
+                            onNavigateToProfiles = onNavigateToProfiles
                         )
+                        error?.let { msg ->
+                            Spacer(modifier = Modifier.height(MdvSpace.S4))
+                            MdvErrorCard(msg = msg)
+                        }
                     }
                 }
             }
-        }
-
-        Spacer(modifier = Modifier.height(12.dp))
-
-        // Profile selector card
-        Card(
-            onClick = onNavigateToProfiles,
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(horizontal = 16.dp),
-            shape = RoundedCornerShape(16.dp),
-            colors = CardDefaults.cardColors(
-                containerColor = MaterialTheme.colorScheme.surfaceVariant
-            )
-        ) {
-            Row(
+        } else {
+            Column(
                 modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(16.dp),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically
+                    .fillMaxSize()
+                    .verticalScroll(rememberScrollState())
+                    .padding(horizontal = metrics.horizontalPadding, vertical = metrics.verticalPadding)
+                    .widthIn(max = 640.dp),
+                horizontalAlignment = Alignment.CenterHorizontally
             ) {
-                Column {
-                    Text(
-                        text = "Profile",
-                        style = MaterialTheme.typography.labelMedium,
-                        color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f)
-                    )
-                    Text(
-                        text = selectedProfile?.name ?: "Tap to create a profile",
-                        style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.SemiBold),
-                        color = MaterialTheme.colorScheme.onSurface
-                    )
+                MdvHomeHeader(onOpenInfo = onOpenInfo)
+                Spacer(modifier = Modifier.height(MdvSpace.S4))
+                Text(
+                    text = stringResource(R.string.home_network_status),
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MdvColor.OnSurfaceVariant
+                )
+                Spacer(modifier = Modifier.height(MdvSpace.S2))
+                Text(
+                    text = statusText,
+                    style = MaterialTheme.typography.headlineMedium.copy(
+                        fontWeight = FontWeight.Bold,
+                        letterSpacing = 1.sp
+                    ),
+                    color = statusColor
+                )
+                Text(
+                    text = selectedProfile?.name ?: stringResource(R.string.home_no_profile_selected),
+                    style = MaterialTheme.typography.bodyLarge,
+                    color = MdvColor.OnSurfaceVariant
+                )
+                Spacer(modifier = Modifier.height(MdvSpace.S6))
+
+                MdvConnectionNodeButton(
+                    isConnected = isConnected,
+                    shouldPulse = isConnecting || isDisconnecting,
+                    pulseScale = pulseScale,
+                    statusColor = statusColor,
+                    onToggle = toggleVpn
+                )
+
+                Spacer(modifier = Modifier.height(MdvSpace.S6))
+
+                MdvConnectionTelemetryCard(
+                    vpnState = vpnState,
+                    scanStatus = scanStatus,
+                    scannedCount = scannedCount,
+                    totalResolvers = totalResolvers,
+                    scanProgress = scanProgress,
+                    downBps = downBps,
+                    upBps = upBps,
+                    proxyHost = proxyHost,
+                    proxyPort = proxyPort,
+                    socksAuthEnabled = socksAuthEnabled,
+                    socksUser = socksUser,
+                    socksPass = socksPass,
+                    isConnecting = isConnecting
+                )
+
+                Spacer(modifier = Modifier.height(MdvSpace.S3))
+
+                MdvProfileSelectorCard(
+                    profileName = selectedProfile?.name ?: stringResource(R.string.profiles_create),
+                    onNavigateToProfiles = onNavigateToProfiles
+                )
+
+                error?.let { msg ->
+                    Spacer(modifier = Modifier.height(MdvSpace.S4))
+                    MdvErrorCard(msg = msg)
                 }
-                Text(
-                    text = "→",
-                    style = MaterialTheme.typography.titleLarge,
-                    color = MaterialTheme.colorScheme.primary
-                )
             }
         }
-
-        // Error message
-        val error by VpnManager.errorMessage.collectAsState()
-        error?.let { msg ->
-            Spacer(modifier = Modifier.height(16.dp))
-            Card(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(horizontal = 16.dp),
-                shape = RoundedCornerShape(12.dp),
-                colors = CardDefaults.cardColors(containerColor = DisconnectedRed.copy(alpha = 0.15f))
-            ) {
-                Text(
-                    text = msg,
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = DisconnectedRed,
-                    modifier = Modifier.padding(12.dp),
-                    textAlign = TextAlign.Center
-                )
-            }
-        }
-    }
-}
-
-private fun formatSpeed(bps: Long): String {
-    val kb = 1024.0
-    val mb = kb * 1024.0
-    return when {
-        bps >= mb -> String.format("%.2f MB/s", bps / mb)
-        bps >= kb -> String.format("%.1f KB/s", bps / kb)
-        else -> "${bps} B/s"
     }
 }
 
