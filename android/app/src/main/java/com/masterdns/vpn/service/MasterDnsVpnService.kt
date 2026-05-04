@@ -23,6 +23,7 @@ import kotlinx.coroutines.*
 import java.io.File
 import java.io.FileInputStream
 import java.io.RandomAccessFile
+import java.net.DatagramSocket
 import java.net.InetAddress
 import java.net.InetSocketAddress
 import java.net.ServerSocket
@@ -82,6 +83,7 @@ class MasterDnsVpnService : VpnService() {
     private var httpProxyJob: Job? = null
     private var sharingSocksJob: Job? = null
     private var sharingSocksServer: java.net.ServerSocket? = null
+    private var sharingHttpServer: java.net.ServerSocket? = null
     private var logTailJob: Job? = null
     private var wakeLock: PowerManager.WakeLock? = null
     private var mtuExportTargetUri: String? = null
@@ -142,6 +144,7 @@ class MasterDnsVpnService : VpnService() {
                 val listenIpOverride: String? = null
 
                 VpnManager.appendLog("Loading profile: ${profile.name}")
+                ensureGoCoreStopped()
                 ensureSocksPortAvailable(socksPort)
 
                 // Generate config files
@@ -188,6 +191,10 @@ class MasterDnsVpnService : VpnService() {
                     )
                     5353
                 } else null
+                val effectiveLocalDnsPort = safeDnsPort ?: localDnsPort
+                if (!proxyMode && localDnsEnabled) {
+                    ensureLocalDnsPortAvailable(effectiveLocalDnsPort)
+                }
 
                 configFile.writeText(
                     ConfigGenerator.generateConfig(
@@ -415,6 +422,8 @@ class MasterDnsVpnService : VpnService() {
                 logTailJob?.cancel()
                 runCatching { sharingSocksServer?.close() }
                 sharingSocksServer = null
+                runCatching { sharingHttpServer?.close() }
+                sharingHttpServer = null
 
                 VpnManager.updateState(VpnManager.VpnState.DISCONNECTED)
                 VpnManager.stopTrafficMonitor()
@@ -579,14 +588,56 @@ class MasterDnsVpnService : VpnService() {
                 mobile.Mobile.stopClient()
             }
         }
-        delay(400L)
 
-        if (!isLocalPortInUse(port)) {
-            VpnManager.appendLog("SOCKS5 port $port released successfully")
-            return
+        repeat(15) {
+            delay(300L)
+            if (!isLocalPortInUse(port)) {
+                VpnManager.appendLog("SOCKS5 port $port released successfully")
+                return
+            }
+            VpnManager.appendLog("SOCKS5 port $port still busy, retrying...")
         }
 
         throw IllegalStateException("SOCKS5 port $port is already in use. Change LISTEN_PORT or close the app using it.")
+    }
+
+    private suspend fun ensureLocalDnsPortAvailable(port: Int) {
+        if (!isLocalUdpPortInUse(port)) return
+        VpnManager.appendLog("Local DNS UDP port $port is busy, attempting to free it...")
+
+        runCatching {
+            if (mobile.Mobile.isRunning()) {
+                mobile.Mobile.stopClient()
+            }
+        }
+
+        repeat(15) {
+            delay(300L)
+            if (!isLocalUdpPortInUse(port)) {
+                VpnManager.appendLog("Local DNS UDP port $port released successfully")
+                return
+            }
+            VpnManager.appendLog("Local DNS UDP port $port still busy, retrying...")
+        }
+
+        throw IllegalStateException(
+            "Local DNS UDP port $port is already in use. Change LOCAL_DNS_PORT or close the app using it."
+        )
+    }
+
+    private suspend fun ensureGoCoreStopped() {
+        if (!mobile.Mobile.isRunning()) return
+        VpnManager.appendLog("Go core is still running, stopping it first...")
+        runCatching { mobile.Mobile.stopClient() }
+
+        repeat(20) {
+            delay(200L)
+            if (!mobile.Mobile.isRunning()) {
+                VpnManager.appendLog("Go core stopped successfully")
+                return
+            }
+        }
+        VpnManager.appendLog("Warning: Go core may still be running")
     }
 
     private fun isLocalPortInUse(port: Int): Boolean {
@@ -594,6 +645,16 @@ class MasterDnsVpnService : VpnService() {
             ServerSocket().use { server ->
                 server.reuseAddress = true
                 server.bind(InetSocketAddress(InetAddress.getByName("127.0.0.1"), port))
+            }
+            false
+        }.getOrElse { true }
+    }
+
+    private fun isLocalUdpPortInUse(port: Int): Boolean {
+        return runCatching {
+            DatagramSocket(null).use { socket ->
+                socket.reuseAddress = true
+                socket.bind(InetSocketAddress(InetAddress.getByName("127.0.0.1"), port))
             }
             false
         }.getOrElse { true }
@@ -706,10 +767,13 @@ class MasterDnsVpnService : VpnService() {
         }
 
         httpProxyJob?.cancel()
+        sharingHttpServer?.close()
+        sharingHttpServer = null
         httpProxyJob = serviceScope.launch {
             try {
                 val server = java.net.ServerSocket(httpPort, 50, InetAddress.getByName("0.0.0.0"))
                 server.reuseAddress = true
+                sharingHttpServer = server
                 VpnManager.appendLog("HTTP proxy ready on 0.0.0.0:$httpPort")
                 while (isActive) {
                     val client = server.accept() ?: continue
