@@ -72,6 +72,7 @@ import com.masterdns.vpn.ui.components.mdv.controls.MdvBackTopAppBar
 import com.masterdns.vpn.ui.components.mdv.controls.MdvTopAppBar
 import com.masterdns.vpn.ui.theme.MdvColor
 import com.masterdns.vpn.ui.theme.MdvSpace
+import com.masterdns.vpn.util.ResolverAnalyzer
 import kotlinx.coroutines.launch
 
 private enum class FieldType { TEXT, BOOL, OPTION }
@@ -156,6 +157,7 @@ private val configFields = listOf(
     SettingField("Resolver", "RECHECK_INACTIVE_SERVERS_ENABLED", "RECHECK_INACTIVE_SERVERS_ENABLED", "Re-check inactive resolvers", type = FieldType.BOOL),
     SettingField("Resolver", "AUTO_DISABLE_TIMEOUT_SERVERS", "AUTO_DISABLE_TIMEOUT_SERVERS", "Auto disable timeout resolvers", type = FieldType.BOOL),
     SettingField("Resolver", "AUTO_DISABLE_TIMEOUT_WINDOW_SECONDS", "AUTO_DISABLE_TIMEOUT_WINDOW_SECONDS", "Timeout-only window seconds", keyboardType = KeyboardType.Decimal),
+    SettingField("Resolver", "RESOLVER_CIDR_ENABLED", "RESOLVER_CIDR_ENABLED", "Parse and expand CIDR resolver ranges", type = FieldType.BOOL),
     SettingField("Resolver", "BASE_ENCODE_DATA", "BASE_ENCODE_DATA", "Use base-encoded payloads", type = FieldType.BOOL),
     SettingField("Compression", "UPLOAD_COMPRESSION_TYPE", "UPLOAD_COMPRESSION_TYPE", "0=Off, 1=Snappy, 2=LZ4, 3=ZSTD, 4=Gzip, 5=Zlib", keyboardType = KeyboardType.Number),
     SettingField("Compression", "DOWNLOAD_COMPRESSION_TYPE", "DOWNLOAD_COMPRESSION_TYPE", "0=Off, 1=Snappy, 2=LZ4, 3=ZSTD, 4=Gzip, 5=Zlib", keyboardType = KeyboardType.Number),
@@ -270,9 +272,18 @@ fun SettingsScreen(
     ) { uri ->
         val selected = profile
         if (uri != null && selected != null) {
-            val text = readTextFromUri(context, uri)
-            viewModel.importResolvers(selected, text)
-            scope.launch { snackbarHostState.showSnackbar(context.getString(R.string.settings_resolvers_imported_msg)) }
+            val cidrEnabled = fieldsState["RESOLVER_CIDR_ENABLED"]?.toBooleanStrictOrNull() ?: true
+            val imported = ResolverAnalyzer.importUriToCache(context, uri, cidrEnabled)
+            if (imported == null) {
+                scope.launch { snackbarHostState.showSnackbar(context.getString(R.string.profiles_resolvers_empty_msg)) }
+                return@rememberLauncherForActivityResult
+            }
+            viewModel.importResolvers(selected, imported, cidrEnabled)
+            scope.launch {
+                snackbarHostState.showSnackbar(
+                    context.getString(R.string.settings_resolvers_imported_stats_msg, imported.stats.summary())
+                )
+            }
         }
     }
     val pickMtuExportLauncher = rememberLauncherForActivityResult(
@@ -420,9 +431,45 @@ fun SettingsScreen(
                         Spacer(modifier = Modifier.height(MdvSpace.S1))
                         MdvPrimaryActionButton(
                             text = stringResource(R.string.action_import_resolvers),
-                            onClick = { importResolversLauncher.launch(arrayOf("text/*")) },
+                            onClick = {
+                                importResolversLauncher.launch(
+                                    arrayOf(
+                                        "text/plain",
+                                        "application/octet-stream",
+                                        "*/*"
+                                    )
+                                )
+                            },
                             icon = Icons.Filled.UploadFile
                         )
+                        if (selected.resolverSourceType == "FILE") {
+                            val stats = ResolverAnalyzer.statsFromJson(selected.resolverStatsJson)
+                            Spacer(modifier = Modifier.height(MdvSpace.S1))
+                            Card(
+                                colors = CardDefaults.cardColors(containerColor = MdvColor.SurfaceHigh),
+                                modifier = Modifier.fillMaxWidth()
+                            ) {
+                                Column(
+                                    modifier = Modifier.padding(12.dp),
+                                    verticalArrangement = Arrangement.spacedBy(4.dp)
+                                ) {
+                                    Text(
+                                        text = stringResource(
+                                            R.string.profiles_imported_resolver_file,
+                                            selected.resolverFileName.ifBlank { "client_resolvers.txt" }
+                                        ),
+                                        style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.SemiBold),
+                                        color = MdvColor.OnSurface
+                                    )
+                                    Text(
+                                        text = stats?.summary()
+                                            ?: stringResource(R.string.profiles_resolver_stats_unavailable),
+                                        style = MaterialTheme.typography.bodySmall,
+                                        color = MdvColor.OnSurfaceVariant
+                                    )
+                                }
+                            }
+                        }
                         Spacer(modifier = Modifier.height(MdvSpace.S1))
                         MdvPrimaryActionButton(
                             text = stringResource(R.string.action_pick_mtu_destination),
@@ -465,6 +512,25 @@ fun SettingsScreen(
                                             color = MdvColor.Error
                                         )
                                     }
+                                }
+                                Spacer(modifier = Modifier.height(MdvSpace.S2))
+                            }
+                        }
+                        if (section == "MTU") {
+                            val parallelism = fieldsState["MTU_TEST_PARALLELISM"]?.toIntOrNull() ?: 16
+                            if (parallelism > 100) {
+                                Card(
+                                    colors = CardDefaults.cardColors(
+                                        containerColor = MdvColor.ErrorContainer
+                                    ),
+                                    modifier = Modifier.fillMaxWidth()
+                                ) {
+                                    Text(
+                                        text = stringResource(R.string.settings_mtu_parallelism_warning, parallelism),
+                                        style = MaterialTheme.typography.bodySmall,
+                                        color = MdvColor.Error,
+                                        modifier = Modifier.padding(12.dp)
+                                    )
                                 }
                                 Spacer(modifier = Modifier.height(MdvSpace.S2))
                             }
@@ -634,6 +700,7 @@ private fun defaultValuesFor(profile: ProfileEntity): Map<String, String> {
         put("RECHECK_INACTIVE_SERVERS_ENABLED", adv("RECHECK_INACTIVE_SERVERS_ENABLED", "true"))
         put("AUTO_DISABLE_TIMEOUT_SERVERS", adv("AUTO_DISABLE_TIMEOUT_SERVERS", "true"))
         put("AUTO_DISABLE_TIMEOUT_WINDOW_SECONDS", adv("AUTO_DISABLE_TIMEOUT_WINDOW_SECONDS", "30.0"))
+        put("RESOLVER_CIDR_ENABLED", adv("RESOLVER_CIDR_ENABLED", "true"))
         put("BASE_ENCODE_DATA", adv("BASE_ENCODE_DATA", "false"))
         put("UPLOAD_COMPRESSION_TYPE", profile.uploadCompression.toString())
         put("DOWNLOAD_COMPRESSION_TYPE", profile.downloadCompression.toString())

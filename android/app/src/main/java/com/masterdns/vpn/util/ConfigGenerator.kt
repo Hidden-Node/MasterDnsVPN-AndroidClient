@@ -80,6 +80,7 @@ object ConfigGenerator {
             appendLine("RECHECK_INACTIVE_SERVERS_ENABLED = ${cfg("RECHECK_INACTIVE_SERVERS_ENABLED", "true")}")
             appendLine("AUTO_DISABLE_TIMEOUT_SERVERS = ${cfg("AUTO_DISABLE_TIMEOUT_SERVERS", "true")}")
             appendLine("AUTO_DISABLE_TIMEOUT_WINDOW_SECONDS = ${cfg("AUTO_DISABLE_TIMEOUT_WINDOW_SECONDS", "30.0")}")
+            appendLine("RESOLVER_CIDR_ENABLED = ${cfg("RESOLVER_CIDR_ENABLED", "true")}")
             appendLine("BASE_ENCODE_DATA = ${cfg("BASE_ENCODE_DATA", "false")}")
             appendLine()
 
