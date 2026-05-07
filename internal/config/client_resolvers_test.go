@@ -62,6 +62,34 @@ func TestLoadClientResolversRejectsHugeCIDR(t *testing.T) {
 	}
 }
 
+func TestLoadClientResolversCanDisableCIDRExpansion(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "client_resolvers.txt")
+
+	content := `
+192.168.10.0/30
+8.8.8.8
+`
+	if err := os.WriteFile(path, []byte(content), 0o644); err != nil {
+		t.Fatalf("WriteFile failed: %v", err)
+	}
+
+	resolvers, resolverMap, err := LoadClientResolversWithOptions(path, ResolverLoadOptions{CIDREnabled: false})
+	if err != nil {
+		t.Fatalf("LoadClientResolversWithOptions returned error: %v", err)
+	}
+
+	if len(resolvers) != 1 {
+		t.Fatalf("unexpected resolver count: got=%d want=%d", len(resolvers), 1)
+	}
+	if resolverMap["8.8.8.8"] != 53 {
+		t.Fatalf("unexpected default resolver map: %+v", resolverMap)
+	}
+	if _, ok := resolverMap["192.168.10.1"]; ok {
+		t.Fatal("CIDR entry should not be expanded when disabled")
+	}
+}
+
 func TestLoadClientResolversDropsDuplicateIPsEvenWithDifferentPorts(t *testing.T) {
 	dir := t.TempDir()
 	path := filepath.Join(dir, "client_resolvers.txt")

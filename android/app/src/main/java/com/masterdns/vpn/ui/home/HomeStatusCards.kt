@@ -35,6 +35,7 @@ fun MdvConnectionTelemetryCard(
     scannedCount: Int,
     totalResolvers: Int,
     scanProgress: Float,
+    scanEtaText: String,
     downBps: Long,
     upBps: Long,
     proxyHost: String,
@@ -99,6 +100,14 @@ fun MdvConnectionTelemetryCard(
                     style = MaterialTheme.typography.bodySmall,
                     color = MdvColor.OnSurfaceVariant
                 )
+                if (scanEtaText.isNotBlank()) {
+                    androidx.compose.foundation.layout.Spacer(modifier = Modifier.height(2.dp))
+                    Text(
+                        text = stringResource(R.string.home_dns_scan_eta, scanEtaText),
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MdvColor.OnSurfaceVariant
+                    )
+                }
                 androidx.compose.foundation.layout.Spacer(modifier = Modifier.height(MdvSpace.S1))
                 LinearProgressIndicator(
                     progress = { scanProgress },

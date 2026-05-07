@@ -28,6 +28,10 @@ type ResolverAddress struct {
 	Port int
 }
 
+type ResolverLoadOptions struct {
+	CIDREnabled bool
+}
+
 type resolverTarget struct {
 	addr     netip.Addr
 	prefix   netip.Prefix
@@ -35,6 +39,10 @@ type resolverTarget struct {
 }
 
 func LoadClientResolvers(filename string) ([]ResolverAddress, map[string]int, error) {
+	return LoadClientResolversWithOptions(filename, ResolverLoadOptions{CIDREnabled: true})
+}
+
+func LoadClientResolversWithOptions(filename string, options ResolverLoadOptions) ([]ResolverAddress, map[string]int, error) {
 	path, err := filepath.Abs(filename)
 	if err != nil {
 		return nil, nil, err
@@ -66,6 +74,9 @@ func LoadClientResolvers(filename string) ([]ResolverAddress, map[string]int, er
 
 		if !target.isPrefix {
 			addResolver(&endpoints, resolverMap, seenIPs, target.addr.String(), port)
+			continue
+		}
+		if !options.CIDREnabled {
 			continue
 		}
 

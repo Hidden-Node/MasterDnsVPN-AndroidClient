@@ -13,6 +13,10 @@ data class ProfileEntity(
     val protocolType: String = "SOCKS5",  // SOCKS5 or TCP
     val listenPort: Int = 18000,
     val resolvers: String = "",       // newline-separated list
+    val resolverSourceType: String = "INLINE", // INLINE or FILE
+    val resolverFileName: String = "",
+    val resolverCachedPath: String = "",
+    val resolverStatsJson: String = "",
     val resolverBalancingStrategy: Int = 2,
     val packetDuplicationCount: Int = 2,
     val setupPacketDuplicationCount: Int = 2,

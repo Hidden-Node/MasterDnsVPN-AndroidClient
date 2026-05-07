@@ -48,6 +48,7 @@ import com.masterdns.vpn.ui.theme.ConnectingAmber
 import com.masterdns.vpn.ui.theme.DisconnectedRed
 import com.masterdns.vpn.ui.theme.MdvColor
 import com.masterdns.vpn.ui.theme.MdvSpace
+import com.masterdns.vpn.util.ResolverAnalyzer
 import com.masterdns.vpn.util.VpnManager
 
 private data class HomeLayoutMetrics(
@@ -92,15 +93,29 @@ fun HomeScreen(
     val isConnected = vpnState == VpnManager.VpnState.CONNECTED
     val isConnecting = vpnState == VpnManager.VpnState.CONNECTING
     val isDisconnecting = vpnState == VpnManager.VpnState.DISCONNECTING
-    val profileResolversCount = selectedProfile?.resolvers
-        ?.lineSequence()
-        ?.map { it.trim() }
-        ?.count { it.isNotEmpty() }
-        ?.coerceAtLeast(1)
-        ?: 1
+    val profileResolversCount = remember(selectedProfile?.id, selectedProfile?.resolvers, selectedProfile?.resolverStatsJson) {
+        val selected = selectedProfile
+        val fileStatsCount = selected
+            ?.takeIf { it.resolverSourceType == "FILE" }
+            ?.let { ResolverAnalyzer.statsFromJson(it.resolverStatsJson)?.uniqueUsableIps }
+            ?.takeIf { it > 0 }
+        fileStatsCount
+            ?: selected?.resolvers
+                ?.lineSequence()
+                ?.map { it.trim() }
+                ?.count { it.isNotEmpty() }
+                ?.coerceAtLeast(1)
+            ?: 1
+    }
     val totalResolvers = scanStatus.scanTotalFromCore.takeIf { it > 0 } ?: profileResolversCount
     val scannedCount = (scanStatus.validCount + scanStatus.rejectedCount).coerceAtMost(totalResolvers)
     val scanProgress = (scannedCount.toFloat() / totalResolvers.toFloat()).coerceIn(0f, 1f)
+    val scanEtaText = estimateScanEta(
+        scannedCount = scannedCount,
+        totalResolvers = totalResolvers,
+        startedAtMs = scanStatus.scanStartedAtMs,
+        updatedAtMs = scanStatus.scanUpdatedAtMs
+    )
 
     val statusColor by animateColorAsState(
         targetValue = when (vpnState) {
@@ -228,6 +243,7 @@ fun HomeScreen(
                             scannedCount = scannedCount,
                             totalResolvers = totalResolvers,
                             scanProgress = scanProgress,
+                            scanEtaText = scanEtaText,
                             downBps = downBps,
                             upBps = upBps,
                             proxyHost = proxyHost,
@@ -297,6 +313,7 @@ fun HomeScreen(
                     scannedCount = scannedCount,
                     totalResolvers = totalResolvers,
                     scanProgress = scanProgress,
+                    scanEtaText = scanEtaText,
                     downBps = downBps,
                     upBps = upBps,
                     proxyHost = proxyHost,
@@ -329,5 +346,26 @@ private fun parseAdvanced(json: String): Map<String, String> {
         Gson().fromJson<Map<String, String>>(json, type) ?: emptyMap()
     } catch (_: Exception) {
         emptyMap()
+    }
+}
+
+private fun estimateScanEta(
+    scannedCount: Int,
+    totalResolvers: Int,
+    startedAtMs: Long,
+    updatedAtMs: Long
+): String {
+    if (scannedCount <= 0 || totalResolvers <= scannedCount || startedAtMs <= 0L || updatedAtMs <= startedAtMs) {
+        return ""
+    }
+    val elapsedMs = (updatedAtMs - startedAtMs).coerceAtLeast(1L)
+    val remaining = totalResolvers - scannedCount
+    val etaSeconds = ((elapsedMs / scannedCount.toDouble()) * remaining / 1000.0).toLong().coerceAtLeast(1L)
+    val minutes = etaSeconds / 60
+    val seconds = etaSeconds % 60
+    return if (minutes > 0) {
+        "${minutes}m ${seconds}s"
+    } else {
+        "${seconds}s"
     }
 }
