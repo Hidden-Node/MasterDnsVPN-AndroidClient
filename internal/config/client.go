@@ -52,7 +52,6 @@ type ClientConfig struct {
 	RecheckInactiveServersEnabled         bool              `toml:"RECHECK_INACTIVE_SERVERS_ENABLED"`
 	AutoDisableTimeoutServers             bool              `toml:"AUTO_DISABLE_TIMEOUT_SERVERS"`
 	AutoDisableTimeoutWindowSeconds       float64           `toml:"AUTO_DISABLE_TIMEOUT_WINDOW_SECONDS"`
-	ResolverCIDREnabled                   bool              `toml:"RESOLVER_CIDR_ENABLED"`
 	BaseEncodeData                        bool              `toml:"BASE_ENCODE_DATA"`
 	UploadCompressionType                 int               `toml:"UPLOAD_COMPRESSION_TYPE"`
 	DownloadCompressionType               int               `toml:"DOWNLOAD_COMPRESSION_TYPE"`
@@ -154,7 +153,6 @@ func defaultClientConfig() ClientConfig {
 		RecheckInactiveServersEnabled:         true,
 		AutoDisableTimeoutServers:             true,
 		AutoDisableTimeoutWindowSeconds:       30.0,
-		ResolverCIDREnabled:                   true,
 		BaseEncodeData:                        false,
 		UploadCompressionType:                 compression.TypeOff,
 		DownloadCompressionType:               compression.TypeOff,
@@ -479,9 +477,7 @@ func finalizeClientConfig(cfg ClientConfig) (ClientConfig, error) {
 
 	cfg.ResolversFilePath = strings.TrimSpace(cfg.ResolversFilePath)
 
-	resolvers, resolverMap, err := LoadClientResolversWithOptions(cfg.ResolversPath(), ResolverLoadOptions{
-		CIDREnabled: cfg.ResolverCIDREnabled,
-	})
+	resolvers, resolverMap, err := LoadClientResolvers(cfg.ResolversPath())
 	if err != nil {
 		return cfg, err
 	}

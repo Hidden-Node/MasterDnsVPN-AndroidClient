@@ -203,7 +203,6 @@ func (c *Client) prepareMTUSuccessOutputFile() string {
 	outputPath := c.resolveMTUSuccessOutputPath()
 	c.mtuOutputMu.Lock()
 	c.mtuUsageSeparatorWritten = false
-	c.mtuSessionWorkingResolvers = make(map[string]struct{})
 	c.mtuSuccessOutputPath = ""
 	c.mtuOutputMu.Unlock()
 	if outputPath == "" {
@@ -349,24 +348,6 @@ func (c *Client) appendMTUSuccessLine(conn *Connection) {
 	if c == nil {
 		return
 	}
-	resolverKey := strings.TrimSpace(conn.ResolverLabel)
-	if resolverKey == "" {
-		resolverKey = strings.TrimSpace(conn.Resolver)
-	}
-	if resolverKey == "" {
-		return
-	}
-	c.mtuOutputMu.Lock()
-	if c.mtuSessionWorkingResolvers == nil {
-		c.mtuSessionWorkingResolvers = make(map[string]struct{})
-	}
-	if _, exists := c.mtuSessionWorkingResolvers[resolverKey]; exists {
-		c.mtuOutputMu.Unlock()
-		return
-	}
-	c.mtuSessionWorkingResolvers[resolverKey] = struct{}{}
-	c.mtuOutputMu.Unlock()
-
 	template := c.mtuServersFileFormat
 	if template == "" {
 		template = defaultMTUServersFileFormat
