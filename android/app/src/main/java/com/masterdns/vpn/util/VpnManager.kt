@@ -68,9 +68,7 @@ object VpnManager {
         val scanTotalFromCore: Int = 0,
         val activeResolvers: Int = 0,
         val syncedUploadMtu: Int = 0,
-        val syncedDownloadMtu: Int = 0,
-        val scanStartedAtMs: Long = 0L,
-        val scanUpdatedAtMs: Long = 0L
+        val syncedDownloadMtu: Int = 0
     )
 
     private val _scanStatus = MutableStateFlow(ScanStatus())
@@ -174,12 +172,7 @@ object VpnManager {
 
         updateState(VpnState.CONNECTING)
         clearError()
-        val now = System.currentTimeMillis()
-        _scanStatus.value = ScanStatus(
-            scanning = true,
-            scanStartedAtMs = now,
-            scanUpdatedAtMs = now
-        )
+        _scanStatus.value = ScanStatus(scanning = true)
 
         val intent = Intent(context, MasterDnsVpnService::class.java).apply {
             action = MasterDnsVpnService.ACTION_CONNECT
@@ -215,12 +208,6 @@ object VpnManager {
     }
 
     private fun parseScanLine(line: String) {
-        fun currentScanTimestamps(): Pair<Long, Long> {
-            val now = System.currentTimeMillis()
-            val started = _scanStatus.value.scanStartedAtMs.takeIf { it > 0L } ?: now
-            return started to now
-        }
-
         val indexedProgressMatch = Regex(
             "(?:scan|scanning|resolver|resolvers|mtu).{0,40}?(\\d+)\\s*/\\s*(\\d+)",
             setOf(RegexOption.IGNORE_CASE, RegexOption.DOT_MATCHES_ALL)
@@ -228,12 +215,7 @@ object VpnManager {
         if (indexedProgressMatch != null) {
             val total = indexedProgressMatch.groupValues[2].toIntOrNull()
             if (total != null && total > 0) {
-                val (started, updated) = currentScanTimestamps()
-                _scanStatus.value = _scanStatus.value.copy(
-                    scanTotalFromCore = total,
-                    scanStartedAtMs = started,
-                    scanUpdatedAtMs = updated
-                )
+                _scanStatus.value = _scanStatus.value.copy(scanTotalFromCore = total)
             }
         }
 
@@ -244,12 +226,7 @@ object VpnManager {
         if (totalCandidatesMatch != null) {
             val total = totalCandidatesMatch.groupValues[1].toIntOrNull()
             if (total != null && total > 0) {
-                val (started, updated) = currentScanTimestamps()
-                _scanStatus.value = _scanStatus.value.copy(
-                    scanTotalFromCore = total,
-                    scanStartedAtMs = started,
-                    scanUpdatedAtMs = updated
-                )
+                _scanStatus.value = _scanStatus.value.copy(scanTotalFromCore = total)
             }
         }
 
@@ -266,15 +243,12 @@ object VpnManager {
                 line.contains("Rejected", ignoreCase = true) -> "Rejected"
                 else -> ""
             }
-            val (started, updated) = currentScanTimestamps()
             _scanStatus.value = _scanStatus.value.copy(
                 scanning = true,
                 lastResolver = resolver,
                 lastDecision = decision,
                 validCount = valid,
-                rejectedCount = rejected,
-                scanStartedAtMs = started,
-                scanUpdatedAtMs = updated
+                rejectedCount = rejected
             )
             return
         }
@@ -325,12 +299,7 @@ object VpnManager {
         }
 
         if (line.contains("Testing MTU sizes", ignoreCase = true)) {
-            val (started, updated) = currentScanTimestamps()
-            _scanStatus.value = _scanStatus.value.copy(
-                scanning = true,
-                scanStartedAtMs = started,
-                scanUpdatedAtMs = updated
-            )
+            _scanStatus.value = _scanStatus.value.copy(scanning = true)
             return
         }
 

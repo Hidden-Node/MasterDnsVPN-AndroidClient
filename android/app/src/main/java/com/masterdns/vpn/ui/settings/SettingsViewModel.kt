@@ -7,9 +7,7 @@ import com.google.gson.Gson
 import com.google.gson.reflect.TypeToken
 import com.masterdns.vpn.data.local.ProfileEntity
 import com.masterdns.vpn.data.repository.ProfileRepository
-import com.masterdns.vpn.util.ImportedResolverFile
 import com.masterdns.vpn.util.ConfigGenerator
-import com.masterdns.vpn.util.ResolverAnalyzer
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
@@ -75,20 +73,9 @@ class SettingsViewModel @Inject constructor(
         return result
     }
 
-    fun importResolvers(profile: ProfileEntity, imported: ImportedResolverFile, cidrEnabled: Boolean) {
+    fun importResolvers(profile: ProfileEntity, resolversText: String) {
         viewModelScope.launch {
-            val advanced = parseAdvanced(profile.advancedJson).toMutableMap()
-            advanced["RESOLVER_CIDR_ENABLED"] = cidrEnabled.toString()
-            profileRepository.updateProfile(
-                profile.copy(
-                    resolvers = "",
-                    resolverSourceType = "FILE",
-                    resolverFileName = imported.displayName,
-                    resolverCachedPath = imported.cachedPath,
-                    resolverStatsJson = ResolverAnalyzer.statsToJson(imported.stats.copy(cidrEnabled = cidrEnabled)),
-                    advancedJson = gson.toJson(advanced)
-                )
-            )
+            profileRepository.updateProfile(profile.copy(resolvers = resolversText.trim()))
         }
     }
 
@@ -188,7 +175,6 @@ class SettingsViewModel @Inject constructor(
             "RECHECK_INACTIVE_SERVERS_ENABLED",
             "AUTO_DISABLE_TIMEOUT_SERVERS",
             "AUTO_DISABLE_TIMEOUT_WINDOW_SECONDS",
-            "RESOLVER_CIDR_ENABLED",
             "BASE_ENCODE_DATA",
             "UPLOAD_COMPRESSION_TYPE",
             "DOWNLOAD_COMPRESSION_TYPE",
@@ -267,7 +253,6 @@ class SettingsViewModel @Inject constructor(
             "RECHECK_INACTIVE_SERVERS_ENABLED",
             "AUTO_DISABLE_TIMEOUT_SERVERS",
             "AUTO_DISABLE_TIMEOUT_WINDOW_SECONDS",
-            "RESOLVER_CIDR_ENABLED",
             "BASE_ENCODE_DATA",
             "COMPRESSION_MIN_SIZE",
             "MIN_UPLOAD_MTU",

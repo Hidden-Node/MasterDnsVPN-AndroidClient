@@ -64,7 +64,6 @@ type Client struct {
 	mtuSuccessOutputPath                  string
 	mtuOutputMu                           sync.Mutex
 	mtuUsageSeparatorWritten              bool
-	mtuSessionWorkingResolvers            map[string]struct{}
 	mtuUsingSeparatorText                 string
 	mtuRemovedServerLogFormat             string
 	mtuAddedServerLogFormat               string
@@ -267,7 +266,6 @@ func New(cfg config.ClientConfig, log *logger.Logger, codec *security.Codec) *Cl
 		mtuSaveToFile:                         cfg.SaveMTUServersToFile,
 		mtuServersFileName:                    cfg.MTUServersFileName,
 		mtuServersFileFormat:                  cfg.MTUServersFileFormat,
-		mtuSessionWorkingResolvers:            make(map[string]struct{}),
 		mtuUsingSeparatorText:                 cfg.MTUUsingSeparatorText,
 		mtuRemovedServerLogFormat:             cfg.MTURemovedServerLogFormat,
 		mtuAddedServerLogFormat:               cfg.MTUAddedServerLogFormat,
