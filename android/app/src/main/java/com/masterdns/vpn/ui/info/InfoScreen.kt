@@ -81,6 +81,7 @@ fun InfoScreen(onBack: () -> Unit) {
                 ) {
                     Box(
                         modifier = Modifier
+                            .fillMaxWidth()
                             .background(
                                 brush = Brush.linearGradient(
                                     colors = listOf(
