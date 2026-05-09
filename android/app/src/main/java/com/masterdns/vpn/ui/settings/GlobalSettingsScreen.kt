@@ -75,8 +75,13 @@ import com.masterdns.vpn.ui.components.mdv.controls.MdvTopAppBar
 import com.masterdns.vpn.ui.theme.MdvColor
 import com.masterdns.vpn.ui.theme.MdvSpace
 import com.masterdns.vpn.util.GlobalSettings
+import com.masterdns.vpn.util.SplitTunnelMode
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.Dp
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
+import androidx.compose.runtime.LaunchedEffect
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -213,6 +218,22 @@ fun GlobalSettingsScreen(vm: GlobalSettingsViewModel = viewModel()) {
                         )
 
                         if (draft.splitTunnelingEnabled) {
+                            Row(
+                                modifier = Modifier.fillMaxWidth().padding(horizontal = MdvSpace.S3),
+                                horizontalArrangement = Arrangement.spacedBy(MdvSpace.S2)
+                            ) {
+                                MdvFilterChip(
+                                    selected = draft.splitTunnelMode == SplitTunnelMode.INCLUDE,
+                                    onClick = { draft = draft.copy(splitTunnelMode = SplitTunnelMode.INCLUDE) },
+                                    label = "Proxy Selected Apps"
+                                )
+                                MdvFilterChip(
+                                    selected = draft.splitTunnelMode == SplitTunnelMode.EXCLUDE,
+                                    onClick = { draft = draft.copy(splitTunnelMode = SplitTunnelMode.EXCLUDE) },
+                                    label = "Bypass Selected Apps"
+                                )
+                            }
+                            androidx.compose.foundation.layout.Spacer(modifier = Modifier.height(MdvSpace.S2))
                             Card(
                                 onClick = {
                                     draftAppSelection = parseCsv(draft.splitPackagesCsv).toMutableSet()
