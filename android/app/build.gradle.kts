@@ -8,7 +8,7 @@ plugins {
 
 android {
     namespace = "com.masterdns.vpn"
-    compileSdk = 35
+    compileSdk = 36
     val appVersionName = System.getenv("ANDROID_VERSION_NAME")
         ?.takeIf { it.isNotBlank() }
         ?: "1.0.0"
@@ -19,14 +19,14 @@ android {
     defaultConfig {
         applicationId = "com.masterdns.vpn"
         minSdk = 21
-        targetSdk = 35
+        targetSdk = 36
         versionCode = appVersionCode
         versionName = appVersionName
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
 
         ndk {
-            abiFilters += listOf("arm64-v8a", "armeabi-v7a", "x86")
+            abiFilters += listOf("arm64-v8a", "armeabi-v7a", "x86_64", "x86")
         }
     }
 
@@ -83,7 +83,7 @@ android {
         abi {
             isEnable = true
             reset()
-            include("arm64-v8a", "armeabi-v7a", "x86")
+            include("arm64-v8a", "armeabi-v7a", "x86_64", "x86")
             isUniversalApk = true
         }
     }

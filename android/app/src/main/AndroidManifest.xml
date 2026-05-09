@@ -28,6 +28,11 @@
         android:networkSecurityConfig="@xml/network_security_config"
         tools:targetApi="31">
 
+        <!-- Required by Android 14+ for FOREGROUND_SERVICE_SPECIAL_USE -->
+        <property
+            android:name="android.app.PROPERTY_SPECIAL_USE_FGS_SUBTYPE"
+            android:value="This app uses a foreground service to maintain a VPN tunnel connection." />
+
         <activity
             android:name=".MainActivity"
             android:exported="true"
