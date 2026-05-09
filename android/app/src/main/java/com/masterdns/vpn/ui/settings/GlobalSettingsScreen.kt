@@ -77,7 +77,6 @@ import com.masterdns.vpn.ui.theme.MdvSpace
 import com.masterdns.vpn.util.GlobalSettings
 import com.masterdns.vpn.util.SplitTunnelMode
 import androidx.compose.ui.unit.Dp
-import androidx.compose.ui.unit.Dp
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
