@@ -209,7 +209,7 @@ object VpnManager {
 
     private fun parseScanLine(line: String) {
         val indexedProgressMatch = Regex(
-            "(?:scan|scanning|resolver|resolvers|mtu).{0,40}?(\\d+)\\s*/\\s*(\\d+)",
+            "(?:scan|scanning|resolver|resolvers|mtu|accepted|rejected).{0,40}?(\\d+)\\s*/\\s*(\\d+)",
             setOf(RegexOption.IGNORE_CASE, RegexOption.DOT_MATCHES_ALL)
         ).find(line)
         if (indexedProgressMatch != null) {
