@@ -292,6 +292,7 @@ private fun ProfileEditorDialog(
         }
     }
     var newDomainInput by remember { mutableStateOf("") }
+    var isDomainInputFocused by remember { mutableStateOf(false) }
     var encryptionKey by remember { mutableStateOf(profile?.encryptionKey.orEmpty()) }
     var resolvers by remember { mutableStateOf(profile?.resolvers ?: "8.8.8.8") }
     var showKey by remember { mutableStateOf(false) }
@@ -404,27 +405,42 @@ private fun ProfileEditorDialog(
                         }
                     }
 
-                    OutlinedTextField(
-                        value = newDomainInput,
-                        onValueChange = { newDomainInput = it },
-                        label = { Text(stringResource(R.string.profiles_domain_hint)) },
-                        singleLine = true,
+                    Row(
                         modifier = Modifier.fillMaxWidth(),
-                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Uri),
-                        trailingIcon = {
-                            IconButton(
-                                onClick = {
-                                    val d = newDomainInput.trim()
-                                    if (d.isNotEmpty() && !domainList.contains(d)) {
-                                        domainList.add(d)
-                                        newDomainInput = ""
-                                    }
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        OutlinedTextField(
+                            value = newDomainInput,
+                            onValueChange = { newDomainInput = it },
+                            label = { Text(stringResource(R.string.profiles_domain_hint)) },
+                            placeholder = {
+                                if (isDomainInputFocused) {
+                                    Text("(e.g. v.example.com)")
                                 }
-                            ) {
-                                Icon(Icons.Filled.Add, contentDescription = "Add Domain")
-                            }
+                            },
+                            singleLine = true,
+                            modifier = Modifier
+                                .weight(1f)
+                                .androidx.compose.ui.focus.onFocusChanged { focusState ->
+                                    isDomainInputFocused = focusState.isFocused
+                                },
+                            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Uri)
+                        )
+                        Spacer(modifier = Modifier.width(12.dp))
+                        FilledIconButton(
+                            onClick = {
+                                val d = newDomainInput.trim()
+                                if (d.isNotEmpty() && !domainList.contains(d)) {
+                                    domainList.add(d)
+                                    newDomainInput = ""
+                                }
+                            },
+                            modifier = Modifier.size(48.dp),
+                            colors = IconButtonDefaults.filledIconButtonColors(containerColor = ConnectedGreen)
+                        ) {
+                            Icon(Icons.Filled.Add, contentDescription = "Add Domain", tint = MdvColor.Background)
                         }
-                    )
+                    }
                 }
 
                 OutlinedTextField(
@@ -480,8 +496,14 @@ private fun ProfileEditorDialog(
         confirmButton = {
             FilledTonalButton(
                 onClick = {
+                    val d = newDomainInput.trim()
+                    val finalDomainList = if (d.isNotEmpty() && !domainList.contains(d)) {
+                        domainList + d
+                    } else {
+                        domainList.toList()
+                    }
                     val baseProfile = profile ?: importedDraft?.profile ?: ProfileEntity(name = "", domains = "")
-                    val domainJson = gson.toJson(domainList)
+                    val domainJson = gson.toJson(finalDomainList)
                     onSave(
                         baseProfile.copy(
                             name = name.trim().ifEmpty { "Profile" },
@@ -491,7 +513,7 @@ private fun ProfileEditorDialog(
                         )
                     )
                 },
-                enabled = name.isNotBlank() && domainList.isNotEmpty()
+                enabled = name.isNotBlank() && (domainList.isNotEmpty() || newDomainInput.isNotBlank())
             ) {
                 Text(stringResource(R.string.action_save))
             }
