@@ -13,9 +13,9 @@ data class ProfileEntity(
     val protocolType: String = "SOCKS5",  // SOCKS5 or TCP
     val listenPort: Int = 18000,
     val resolvers: String = "",       // newline-separated list
-    val resolverBalancingStrategy: Int = 2,
-    val packetDuplicationCount: Int = 2,
-    val setupPacketDuplicationCount: Int = 2,
+    val resolverBalancingStrategy: Int = 3,
+    val packetDuplicationCount: Int = 3,
+    val setupPacketDuplicationCount: Int = 4,
     val uploadCompression: Int = 0,
     val downloadCompression: Int = 0,
     val logLevel: String = "INFO",
