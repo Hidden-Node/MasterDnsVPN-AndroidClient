@@ -34,7 +34,7 @@ import kotlinx.coroutines.launch
 
 private data class ImportedProfileDraft(
     val profile: ProfileEntity,
-    val domainInput: String
+    val domainList: List<String>
 )
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -241,8 +241,13 @@ fun ProfileCard(
                     text = profile.name,
                     style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.SemiBold)
                 )
+                val domainsList = try {
+                    gson.fromJson<List<String>>(profile.domains, object : com.google.gson.reflect.TypeToken<List<String>>() {}.type)
+                } catch (e: Exception) {
+                    profile.domains.removePrefix("[").removeSuffix("]").split(",").map { it.trim().removeSurrounding("\"") }.filter { it.isNotEmpty() }
+                }
                 Text(
-                    text = profile.domains.replace("[\"", "").replace("\"]", ""),
+                    text = domainsList.joinToString(", "),
                     style = MaterialTheme.typography.bodySmall,
                     color = MdvColor.OnSurfaceVariant
                 )
@@ -273,7 +278,20 @@ private fun ProfileEditorDialog(
     onDismiss: () -> Unit
 ) {
     var name by remember { mutableStateOf(profile?.name.orEmpty()) }
-    var domains by remember { mutableStateOf(profile?.domains?.removeSurrounding("[\"", "\"]").orEmpty()) }
+    val domainList = remember {
+        androidx.compose.runtime.mutableStateListOf<String>().apply {
+            val domainsJson = profile?.domains
+            if (!domainsJson.isNullOrBlank()) {
+                val parsed = try {
+                    gson.fromJson<List<String>>(domainsJson, object : com.google.gson.reflect.TypeToken<List<String>>() {}.type)
+                } catch (e: Exception) {
+                    domainsJson.removePrefix("[").removeSuffix("]").split(",").map { it.trim().removeSurrounding("\"") }.filter { it.isNotEmpty() }
+                }
+                addAll(parsed)
+            }
+        }
+    }
+    var newDomainInput by remember { mutableStateOf("") }
     var encryptionKey by remember { mutableStateOf(profile?.encryptionKey.orEmpty()) }
     var resolvers by remember { mutableStateOf(profile?.resolvers ?: "8.8.8.8") }
     var showKey by remember { mutableStateOf(false) }
@@ -283,7 +301,13 @@ private fun ProfileEditorDialog(
     LaunchedEffect(profile?.id) {
         if (profile != null) {
             name = profile.name
-            domains = profile.domains.removeSurrounding("[\"", "\"]")
+            domainList.clear()
+            val parsed = try {
+                gson.fromJson<List<String>>(profile.domains, object : com.google.gson.reflect.TypeToken<List<String>>() {}.type)
+            } catch (e: Exception) {
+                profile.domains.removePrefix("[").removeSuffix("]").split(",").map { it.trim().removeSurrounding("\"") }.filter { it.isNotEmpty() }
+            }
+            domainList.addAll(parsed)
             encryptionKey = profile.encryptionKey
             resolvers = profile.resolvers
             showResolversEditor = false
@@ -297,7 +321,8 @@ private fun ProfileEditorDialog(
                 // Keep user-entered profile name if they typed it before import.
                 name = importedProfile.name
             }
-            domains = importedDraft.domainInput
+            domainList.clear()
+            domainList.addAll(importedDraft.domainList)
             encryptionKey = importedProfile.encryptionKey
             resolvers = importedProfile.resolvers
         }
@@ -353,13 +378,54 @@ private fun ProfileEditorDialog(
                     }
                 }
 
-                OutlinedTextField(
-                    value = domains,
-                    onValueChange = { domains = it },
-                    label = { Text(stringResource(R.string.profiles_domain_hint)) },
-                    singleLine = true,
-                    modifier = Modifier.fillMaxWidth()
-                )
+                Column(modifier = Modifier.fillMaxWidth()) {
+                    if (domainList.isNotEmpty()) {
+                        @OptIn(androidx.compose.foundation.layout.ExperimentalLayoutApi::class)
+                        androidx.compose.foundation.layout.FlowRow(
+                            modifier = Modifier.fillMaxWidth().padding(bottom = 8.dp),
+                            horizontalArrangement = Arrangement.spacedBy(8.dp),
+                            verticalArrangement = Arrangement.spacedBy(8.dp)
+                        ) {
+                            domainList.forEach { domain ->
+                                InputChip(
+                                    selected = false,
+                                    onClick = { },
+                                    label = { Text(domain) },
+                                    trailingIcon = {
+                                        IconButton(
+                                            onClick = { domainList.remove(domain) },
+                                            modifier = Modifier.size(16.dp)
+                                        ) {
+                                            Icon(Icons.Filled.Close, contentDescription = "Remove")
+                                        }
+                                    }
+                                )
+                            }
+                        }
+                    }
+
+                    OutlinedTextField(
+                        value = newDomainInput,
+                        onValueChange = { newDomainInput = it },
+                        label = { Text(stringResource(R.string.profiles_domain_hint)) },
+                        singleLine = true,
+                        modifier = Modifier.fillMaxWidth(),
+                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Uri),
+                        trailingIcon = {
+                            IconButton(
+                                onClick = {
+                                    val d = newDomainInput.trim()
+                                    if (d.isNotEmpty() && !domainList.contains(d)) {
+                                        domainList.add(d)
+                                        newDomainInput = ""
+                                    }
+                                }
+                            ) {
+                                Icon(Icons.Filled.Add, contentDescription = "Add Domain")
+                            }
+                        }
+                    )
+                }
 
                 OutlinedTextField(
                     value = encryptionKey,
@@ -415,19 +481,17 @@ private fun ProfileEditorDialog(
             FilledTonalButton(
                 onClick = {
                     val baseProfile = profile ?: importedDraft?.profile ?: ProfileEntity(name = "", domains = "")
-                    val domainJson = gson.toJson(
-                        domains.split(",").map { it.trim() }.filter { it.isNotEmpty() }
-                    )
+                    val domainJson = gson.toJson(domainList)
                     onSave(
                         baseProfile.copy(
                             name = name.trim().ifEmpty { "Profile" },
-                            domains = if (domainJson == "[]") gson.toJson(listOf(domains.trim())) else domainJson,
+                            domains = domainJson,
                             encryptionKey = encryptionKey,
                             resolvers = resolvers.trim()
                         )
                     )
                 },
-                enabled = name.isNotBlank() && domains.isNotBlank()
+                enabled = name.isNotBlank() && domainList.isNotEmpty()
             ) {
                 Text(stringResource(R.string.action_save))
             }
@@ -456,19 +520,22 @@ private fun readDisplayName(context: Context, uri: Uri): String? {
 
 private fun parseProfileTomlForImport(fileName: String, tomlContent: String): ImportedProfileDraft? {
     val values = mutableMapOf<String, String>()
+    var parsedDomainsList = emptyList<String>()
     tomlContent.lineSequence().forEach { raw ->
         val line = raw.substringBefore("#").trim()
         if (line.isEmpty() || "=" !in line) return@forEach
         val key = line.substringBefore("=").trim()
         val valueRaw = line.substringAfter("=").trim()
-        val parsed = when {
-            key == "DOMAINS" -> valueRaw
+        if (key == "DOMAINS") {
+            parsedDomainsList = valueRaw
                 .removePrefix("[")
                 .removeSuffix("]")
                 .split(",")
                 .map { it.trim().removeSurrounding("\"") }
                 .filter { it.isNotBlank() }
-                .joinToString(", ")
+            return@forEach
+        }
+        val parsed = when {
             valueRaw.startsWith("\"") && valueRaw.endsWith("\"") ->
                 valueRaw.removeSurrounding("\"")
             else -> valueRaw
@@ -476,7 +543,7 @@ private fun parseProfileTomlForImport(fileName: String, tomlContent: String): Im
         values[key] = parsed
     }
 
-    val parsedDomain = values["DOMAINS"]?.takeIf { it.isNotBlank() } ?: return null
+    val parsedDomain = if (parsedDomainsList.isNotEmpty()) parsedDomainsList else return null
     val parsedKey = values["ENCRYPTION_KEY"]?.takeIf { it.isNotBlank() } ?: return null
 
     val advanced = mutableMapOf<String, String>()
@@ -486,7 +553,7 @@ private fun parseProfileTomlForImport(fileName: String, tomlContent: String): Im
 
     val importedProfile = ProfileEntity(
         name = fileName,
-        domains = gson.toJson(parsedDomain.split(",").map { it.trim() }.filter { it.isNotEmpty() }),
+        domains = gson.toJson(parsedDomain),
         encryptionMethod = values["DATA_ENCRYPTION_METHOD"]?.toIntOrNull() ?: 1,
         encryptionKey = parsedKey,
         protocolType = normalizeProtocol(values["PROTOCOL_TYPE"]),
@@ -503,7 +570,7 @@ private fun parseProfileTomlForImport(fileName: String, tomlContent: String): Im
 
     return ImportedProfileDraft(
         profile = importedProfile,
-        domainInput = parsedDomain
+        domainList = parsedDomain
     )
 }
 
