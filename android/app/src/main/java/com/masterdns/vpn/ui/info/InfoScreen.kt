@@ -35,6 +35,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalUriHandler
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
@@ -75,7 +76,8 @@ fun InfoScreen(onBack: () -> Unit) {
         ) {
             item {
                 Card(
-                    shape = RoundedCornerShape(20.dp),
+                    shape = RoundedCornerShape(24.dp),
+                    elevation = CardDefaults.cardElevation(defaultElevation = 8.dp),
                     colors = CardDefaults.cardColors(containerColor = MdvColor.SurfaceLow),
                     modifier = Modifier.fillMaxWidth()
                 ) {
@@ -85,22 +87,29 @@ fun InfoScreen(onBack: () -> Unit) {
                             .background(
                                 brush = Brush.linearGradient(
                                     colors = listOf(
-                                        MdvColor.PrimaryContainer,
+                                        MdvColor.PrimaryContainer.copy(alpha = 0.9f),
                                         MdvColor.Primary
                                     )
                                 )
                             )
-                            .padding(18.dp)
+                            .padding(20.dp)
                     ) {
                         Row(verticalAlignment = Alignment.CenterVertically) {
-                            Image(
-                                painter = painterResource(id = R.drawable.ic_launcher_foreground_raw),
-                                contentDescription = stringResource(R.string.info_app_logo),
+                            Box(
                                 modifier = Modifier
-                                    .size(64.dp)
-                                    .clip(CircleShape)
-                            )
-                            Spacer(modifier = Modifier.size(12.dp))
+                                    .size(76.dp)
+                                    .background(Color.White.copy(alpha = 0.2f), RoundedCornerShape(20.dp))
+                                    .padding(4.dp)
+                            ) {
+                                Image(
+                                    painter = painterResource(id = R.drawable.masterdnsvpn),
+                                    contentDescription = stringResource(R.string.info_app_logo),
+                                    modifier = Modifier
+                                        .fillMaxSize()
+                                        .clip(RoundedCornerShape(16.dp))
+                                )
+                            }
+                            Spacer(modifier = Modifier.width(16.dp))
                             Column {
                                 Text(
                                     text = stringResource(R.string.info_app_name_title),
