@@ -92,15 +92,13 @@ fun HomeScreen(
     val isConnected = vpnState == VpnManager.VpnState.CONNECTED
     val isConnecting = vpnState == VpnManager.VpnState.CONNECTING
     val isDisconnecting = vpnState == VpnManager.VpnState.DISCONNECTING
-    val profileResolversCount = selectedProfile?.resolvers
-        ?.lineSequence()
-        ?.map { it.trim() }
-        ?.count { it.isNotEmpty() }
-        ?.coerceAtLeast(1)
-        ?: 1
-    val totalResolvers = scanStatus.scanTotalFromCore.takeIf { it > 0 } ?: profileResolversCount
-    val scannedCount = (scanStatus.validCount + scanStatus.rejectedCount).coerceAtMost(totalResolvers)
-    val scanProgress = (scannedCount.toFloat() / totalResolvers.toFloat()).coerceIn(0f, 1f)
+    val totalResolvers = scanStatus.scanTotalFromCore
+    val scannedCount = scanStatus.validCount + scanStatus.rejectedCount
+    val scanProgress = if (totalResolvers > 0) {
+        (scannedCount.toFloat() / totalResolvers.toFloat()).coerceIn(0f, 1f)
+    } else {
+        0f
+    }
 
     val statusColor by animateColorAsState(
         targetValue = when (vpnState) {
