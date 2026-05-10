@@ -245,9 +245,18 @@ fun SettingsScreen(
     val exportLauncher = rememberLauncherForActivityResult(
         ActivityResultContracts.CreateDocument("text/x-toml")
     ) { uri ->
-        val content = pendingExportContent ?: return@rememberLauncherForActivityResult
-        if (uri != null) {
-            writeTextToUri(context, uri, content)
+        val content = pendingExportContent
+        if (uri != null && content != null) {
+            runCatching {
+                context.grantUriPermission(
+                    context.packageName,
+                    uri,
+                    Intent.FLAG_GRANT_READ_URI_PERMISSION or Intent.FLAG_GRANT_WRITE_URI_PERMISSION
+                )
+            }
+            context.contentResolver.openOutputStream(uri, "wt")?.bufferedWriter()?.use {
+                it.write(content)
+            }
             scope.launch { snackbarHostState.showSnackbar(context.getString(R.string.settings_toml_exported_msg)) }
         }
         pendingExportContent = null
