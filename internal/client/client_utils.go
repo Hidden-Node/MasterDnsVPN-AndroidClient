@@ -398,6 +398,24 @@ func (c *Client) pruneRecentlyClosedLocked(now time.Time) {
 		delete(c.recentlyClosedStreams, entry.streamID)
 		heap.Pop(&c.recentlyClosedHeap)
 	}
+	c.compactRecentlyClosedHeapLocked()
+}
+
+func (c *Client) compactRecentlyClosedHeapLocked() {
+	mapLen := len(c.recentlyClosedStreams)
+	threshold := mapLen + mapLen/2
+	if threshold < mapLen+4 {
+		threshold = mapLen + 4
+	}
+	if len(c.recentlyClosedHeap) <= threshold {
+		return
+	}
+	rebuilt := make(recentlyClosedHeap, 0, mapLen)
+	for streamID, expires := range c.recentlyClosedStreams {
+		rebuilt = append(rebuilt, recentlyClosedEntry{streamID: streamID, expires: expires})
+	}
+	heap.Init(&rebuilt)
+	c.recentlyClosedHeap = rebuilt
 }
 
 func (c *Client) evictRecentlyClosedLocked(capacity int) {
@@ -564,7 +582,16 @@ func (c *Client) PrintBanner() {
 		strategyName = "Least Loss"
 	case 4:
 		strategyName = "Lowest Latency"
+	case 5:
+		strategyName = "Hybrid Score"
+	case 6:
+		strategyName = "Loss Then Latency"
+	case 7:
+		strategyName = "Least Loss Top Random"
+	case 8:
+		strategyName = "Least Loss Top Round Robin"
 	}
+
 	c.log.Infof("⚖  <cyan>Resolver Balancing, Strategy:</cyan> <yellow>%s (%d)</yellow>", strategyName, c.cfg.ResolverBalancingStrategy)
 
 	domainList := ""

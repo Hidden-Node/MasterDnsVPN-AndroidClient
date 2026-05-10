@@ -117,20 +117,20 @@ LOCAL_DNS_CACHE_FLUSH_INTERVAL_SECONDS = 60.0
 # 7 = Least Loss Top Random (random choice inside the best 10% loss tier)
 # 8 = Least Loss Top Round Robin (round-robin inside the best 10% loss tier)
 # Modes 3, 4, 5, 6, 7, and 8 use runtime feedback from sends/successes.
-RESOLVER_BALANCING_STRATEGY = 2
+RESOLVER_BALANCING_STRATEGY = 3
 
 # Duplicate each normal outgoing tunnel packet this many times.
-# Clamped in code to [1, 4].
+# Clamped in code to [1, 10].
 # Higher values improve resilience but increase bandwidth and CPU usage.
-PACKET_DUPLICATION_COUNT = 2
+PACKET_DUPLICATION_COUNT = 3
 
 # Duplicate stream setup packets (STREAM_SYN / SOCKS5_SYN) this many times.
-# Clamped in code to [PACKET_DUPLICATION_COUNT, 5].
-SETUP_PACKET_DUPLICATION_COUNT = 2
+# Clamped in code to [PACKET_DUPLICATION_COUNT, 12].
+SETUP_PACKET_DUPLICATION_COUNT = 4
 
 # Stream-aware resolver failover.
 # If a stream keeps resending on the same preferred resolver, it can move.
-# Threshold is clamped to [1, 128].
+# Threshold is clamped to [1, 256].
 STREAM_RESOLVER_FAILOVER_RESEND_THRESHOLD = 2
 
 # Minimum seconds between preferred-resolver switches for the same stream.
@@ -181,19 +181,28 @@ COMPRESSION_MIN_SIZE = 120
 # Minimum accepted upload/download MTUs after testing.
 # 0 can be used to effectively disable a bound, but keep realistic values.
 MIN_UPLOAD_MTU = 38
-MIN_DOWNLOAD_MTU = 100
+MIN_DOWNLOAD_MTU = 200
 
 # Initial maximum MTU search bounds.
 # Must be >= the matching MIN value if both are set.
 MAX_UPLOAD_MTU = 150
-MAX_DOWNLOAD_MTU = 500
+MAX_DOWNLOAD_MTU = 4000
+
+# If true, the client dynamically identifies and drops "bottleneck" resolvers
+# during the initial MTU testing phase.
+# This prevents a small number of weak servers from dragging down the global
+# Synced MTU (Upload/Download) for the entire network. The underlying algorithm 
+# is highly intelligent: it strictly protects network redundancy, balances 
+# upload vs. download gains, and only removes servers if the overall network 
+# sees a meaningful performance boost. Highly recommended to keep true.
+AUTO_REMOVE_LOW_MTU_SERVERS = true
 
 # MTU probe retries and timeout.
 # Parallelism is auto-raised internally when resolver count is large, but you
 # can still override it in advanced setups if needed.
 MTU_TEST_RETRIES = 2
 MTU_TEST_TIMEOUT = 2.0
-MTU_TEST_PARALLELISM = 16
+MTU_TEST_PARALLELISM = 32
 
 # Export successful MTU-tested resolvers to a file.
 SAVE_MTU_SERVERS_TO_FILE = false
@@ -289,26 +298,26 @@ MAX_PACKETS_PER_BATCH = 8
 
 # ARQ data/control behavior.
 # These values are clamped in code and should stay internally consistent.
-ARQ_WINDOW_SIZE = 600
-ARQ_INITIAL_RTO_SECONDS = 1.0
-ARQ_MAX_RTO_SECONDS = 5.0
+ARQ_WINDOW_SIZE = 1000
+ARQ_INITIAL_RTO_SECONDS = 0.5
+ARQ_MAX_RTO_SECONDS = 3.0
 ARQ_CONTROL_INITIAL_RTO_SECONDS = 0.5
-ARQ_CONTROL_MAX_RTO_SECONDS = 3.0
-ARQ_MAX_CONTROL_RETRIES = 400
+ARQ_CONTROL_MAX_RTO_SECONDS = 2.0
+ARQ_MAX_CONTROL_RETRIES = 126
 ARQ_INACTIVITY_TIMEOUT_SECONDS = 1800.0
 ARQ_DATA_PACKET_TTL_SECONDS = 2400.0
 ARQ_CONTROL_PACKET_TTL_SECONDS = 1200.0
-ARQ_MAX_DATA_RETRIES = 1200
+ARQ_MAX_DATA_RETRIES = 126
 
 # Maximum out-of-order gap ahead of rcvNxt that can trigger STREAM_DATA_NACK.
 # 0 disables NACK generation entirely.
 # Keep this small so only near-miss gaps cause early resend requests.
-ARQ_DATA_NACK_MAX_GAP = 16
+ARQ_DATA_NACK_MAX_GAP = 32
 
 # Minimum seconds between repeated NACKs for the same missing sequence number.
 # Clamped to [0.1s, 30s].
 ARQ_DATA_NACK_INITIAL_DELAY_SECONDS = 0.1
-ARQ_DATA_NACK_REPEAT_SECONDS = 1.0
+ARQ_DATA_NACK_REPEAT_SECONDS = 0.8
 
 ARQ_TERMINAL_DRAIN_TIMEOUT_SECONDS = 120.0
 ARQ_TERMINAL_ACK_WAIT_TIMEOUT_SECONDS = 90.0

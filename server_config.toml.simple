@@ -46,9 +46,9 @@ UDP_PORT = 53
 
 # UDP readers, DNS workers, and front-door request queue are smart-sized
 # internally. Only override them if you are profiling a specific host.
-UDP_READERS = 4
-DNS_REQUEST_WORKERS = 8
-MAX_CONCURRENT_REQUESTS = 16384
+UDP_READERS = 6
+DNS_REQUEST_WORKERS = 10
+MAX_CONCURRENT_REQUESTS = 32768
 
 # UDP socket read/write buffer size in bytes.
 SOCKET_BUFFER_SIZE = 8388608
@@ -68,8 +68,8 @@ DROP_LOG_INTERVAL_SECONDS = 2.0
 
 # Deferred-session workers and queue depth are also smart-sized internally.
 # Override them only if you are tuning a specific production host.
-DEFERRED_SESSION_WORKERS = 4
-DEFERRED_SESSION_QUEUE_LIMIT = 4096
+DEFERRED_SESSION_WORKERS = 6
+DEFERRED_SESSION_QUEUE_LIMIT = 8192
 
 # Initial queue / store capacities are now derived automatically by the server
 # from workers, ARQ window, and batching pressure.
@@ -148,7 +148,7 @@ DNS_CACHE_TTL_SECONDS = 300.0
 # ------------------------------------------------------------------------------
 
 # Timeout for outbound connect attempts made by the server.
-SOCKS_CONNECT_TIMEOUT = 120.0
+SOCKS_CONNECT_TIMEOUT = 60.0
 
 # If true, then in SOCKS5 mode the server does not connect to the final target directly.
 # Instead, it first connects to another SOCKS5 proxy at FORWARD_IP:FORWARD_PORT
@@ -206,7 +206,7 @@ ENCRYPTION_KEY_FILE = "encrypt_key.txt"
 
 # Maximum packable control blocks emitted in one response.
 # The default is already conservative; override only for deliberate batching tests.
-MAX_PACKETS_PER_BATCH = 5
+MAX_PACKETS_PER_BATCH = 10
 
 # Duplicate the last packed control-block response this many dispatcher turns.
 # 1 = disabled.
@@ -220,26 +220,26 @@ STREAM_RESULT_PACKET_TTL_SECONDS = 300.0
 STREAM_FAILURE_PACKET_TTL_SECONDS = 120.0
 
 # ARQ timing / retry profile.
-ARQ_WINDOW_SIZE = 800
-ARQ_INITIAL_RTO_SECONDS = 1.0
-ARQ_MAX_RTO_SECONDS = 5.0
+ARQ_WINDOW_SIZE = 1000
+ARQ_INITIAL_RTO_SECONDS = 0.5
+ARQ_MAX_RTO_SECONDS = 3.0
 ARQ_CONTROL_INITIAL_RTO_SECONDS = 0.5
-ARQ_CONTROL_MAX_RTO_SECONDS = 3.0
-ARQ_MAX_CONTROL_RETRIES = 400
+ARQ_CONTROL_MAX_RTO_SECONDS = 2.0
+ARQ_MAX_CONTROL_RETRIES = 126
 ARQ_INACTIVITY_TIMEOUT_SECONDS = 1800.0
 ARQ_DATA_PACKET_TTL_SECONDS = 2400.0
 ARQ_CONTROL_PACKET_TTL_SECONDS = 1200.0
-ARQ_MAX_DATA_RETRIES = 1200
+ARQ_MAX_DATA_RETRIES = 126
 
 # Maximum out-of-order gap ahead of rcvNxt that can trigger STREAM_DATA_NACK.
 # 0 disables NACK generation entirely.
 # Keep this small so only near-miss gaps cause early resend requests.
-ARQ_DATA_NACK_MAX_GAP = 16
+ARQ_DATA_NACK_MAX_GAP = 32
 
 # Minimum seconds between repeated NACKs for the same missing sequence number.
 # Clamped to [0.1s, 30s].
 ARQ_DATA_NACK_INITIAL_DELAY_SECONDS = 0.3
-ARQ_DATA_NACK_REPEAT_SECONDS = 1.0
+ARQ_DATA_NACK_REPEAT_SECONDS = 0.8
 
 ARQ_TERMINAL_DRAIN_TIMEOUT_SECONDS = 120.0
 ARQ_TERMINAL_ACK_WAIT_TIMEOUT_SECONDS = 90.0

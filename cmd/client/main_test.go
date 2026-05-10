@@ -2,8 +2,19 @@ package main
 
 import (
 	"bytes"
+	"os"
 	"testing"
 )
+
+func withClientTestArgs(t *testing.T, args []string, fn func()) {
+	t.Helper()
+	prev := os.Args
+	os.Args = args
+	t.Cleanup(func() {
+		os.Args = prev
+	})
+	fn()
+}
 
 func TestParseClientCLIArgsAcceptsDefaultNoArgs(t *testing.T) {
 	opts, overrides, err := parseClientCLIArgs(nil, &bytes.Buffer{})
@@ -66,4 +77,19 @@ func TestParseClientCLIArgsAcceptsJSONBase64Mode(t *testing.T) {
 	if overrides.ResolversFilePath != nil {
 		t.Fatal("did not expect resolver override in json base64 mode")
 	}
+}
+
+func TestParseClientCLIArgsIgnoresExecutableInjectedAsPositionalConfig(t *testing.T) {
+	withClientTestArgs(t, []string{"/data/data/com.termux/files/home/MasterDNS/MasterDnsVPN_Client_Termux_ARM64"}, func() {
+		opts, overrides, err := parseClientCLIArgs([]string{"/data/data/com.termux/files/home/MasterDNS/MasterDnsVPN_Client_Termux_ARM64"}, &bytes.Buffer{})
+		if err != nil {
+			t.Fatalf("parseClientCLIArgs returned error: %v", err)
+		}
+		if opts.configPath != "client_config.toml" {
+			t.Fatalf("unexpected config path after injected executable path: got=%q want=%q", opts.configPath, "client_config.toml")
+		}
+		if overrides.ResolversFilePath != nil {
+			t.Fatal("did not expect resolver override when executable path is injected")
+		}
+	})
 }

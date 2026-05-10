@@ -62,6 +62,7 @@ type ClientConfig struct {
 	MinDownloadMTU                        int               `toml:"MIN_DOWNLOAD_MTU"`
 	MaxUploadMTU                          int               `toml:"MAX_UPLOAD_MTU"`
 	MaxDownloadMTU                        int               `toml:"MAX_DOWNLOAD_MTU"`
+	AutoRemoveLowMTUServers               bool              `toml:"AUTO_REMOVE_LOW_MTU_SERVERS"`
 	MTUTestRetries                        int               `toml:"MTU_TEST_RETRIES"`
 	MTUTestTimeout                        float64           `toml:"MTU_TEST_TIMEOUT"`
 	MTUTestParallelism                    int               `toml:"MTU_TEST_PARALLELISM"`
@@ -163,6 +164,7 @@ func defaultClientConfig() ClientConfig {
 		MinDownloadMTU:                        100,
 		MaxUploadMTU:                          150,
 		MaxDownloadMTU:                        500,
+		AutoRemoveLowMTUServers:               true,
 		MTUTestRetries:                        2,
 		MTUTestTimeout:                        2.0,
 		MTUTestParallelism:                    16,
@@ -388,26 +390,26 @@ func finalizeClientConfig(cfg ClientConfig) (ClientConfig, error) {
 		return cfg, fmt.Errorf("invalid RESOLVER_BALANCING_STRATEGY: %d", cfg.ResolverBalancingStrategy)
 	}
 
-	cfg.PacketDuplicationCount = clampInt(defaultIntBelow(cfg.PacketDuplicationCount, 1, 2), 1, 4)
-	cfg.SetupPacketDuplicationCount = clampInt(defaultIntBelow(cfg.SetupPacketDuplicationCount, 1, max(2, cfg.PacketDuplicationCount)), cfg.PacketDuplicationCount, 5)
-	cfg.StreamResolverFailoverResendThreshold = clampInt(defaultIntBelow(cfg.StreamResolverFailoverResendThreshold, 1, 2), 1, 128)
+	cfg.PacketDuplicationCount = clampInt(defaultIntBelow(cfg.PacketDuplicationCount, 1, 2), 1, 10)
+	cfg.SetupPacketDuplicationCount = clampInt(defaultIntBelow(cfg.SetupPacketDuplicationCount, 1, max(2, cfg.PacketDuplicationCount)), cfg.PacketDuplicationCount, 12)
+	cfg.StreamResolverFailoverResendThreshold = clampInt(defaultIntBelow(cfg.StreamResolverFailoverResendThreshold, 1, 2), 1, 256)
 	cfg.StreamResolverFailoverCooldownSec = clampFloat(defaultFloatAtMostZero(cfg.StreamResolverFailoverCooldownSec, 2.5), 0.1, 120.0)
 	cfg.AutoDisableTimeoutWindowSeconds = clampFloat(defaultFloatAtMostZero(cfg.AutoDisableTimeoutWindowSeconds, 30.0), 1.0, 86400.0)
 	cfg.MaxPacketsPerBatch = clampInt(defaultIntBelow(cfg.MaxPacketsPerBatch, 1, 8), 1, 64)
-	cfg.ARQWindowSize = clampInt(defaultIntBelow(cfg.ARQWindowSize, 1, 600), 1, 6000)
-	cfg.ARQInitialRTOSeconds = clampFloat(defaultFloatAtMostZero(cfg.ARQInitialRTOSeconds, 1.0), 0.05, 60.0)
-	cfg.ARQMaxRTOSeconds = clampFloat(defaultFloatAtMostZero(cfg.ARQMaxRTOSeconds, 5.0), cfg.ARQInitialRTOSeconds, 120.0)
-	cfg.ARQControlInitialRTOSeconds = clampFloat(defaultFloatAtMostZero(cfg.ARQControlInitialRTOSeconds, 0.5), 0.05, 60.0)
-	cfg.ARQControlMaxRTOSeconds = clampFloat(defaultFloatAtMostZero(cfg.ARQControlMaxRTOSeconds, 3.0), cfg.ARQControlInitialRTOSeconds, 120.0)
-	cfg.ARQMaxControlRetries = clampInt(defaultIntBelow(cfg.ARQMaxControlRetries, 1, 400), 5, 5000)
-	cfg.ARQInactivityTimeoutSeconds = clampFloat(defaultFloatAtMostZero(cfg.ARQInactivityTimeoutSeconds, 1800.0), 30.0, 86400.0)
-	cfg.ARQDataPacketTTLSeconds = clampFloat(defaultFloatAtMostZero(cfg.ARQDataPacketTTLSeconds, 2400.0), 30.0, 86400.0)
-	cfg.ARQControlPacketTTLSeconds = clampFloat(defaultFloatAtMostZero(cfg.ARQControlPacketTTLSeconds, 1200.0), 30.0, 86400.0)
-	cfg.ARQMaxDataRetries = clampInt(defaultIntBelow(cfg.ARQMaxDataRetries, 1, 1200), 60, 100000)
-	dataNackGapCap := min(max(cfg.ARQWindowSize/8, 4), 128)
+	cfg.ARQWindowSize = clampInt(defaultIntBelow(cfg.ARQWindowSize, 1, 600), 1, 8000)
+	cfg.ARQInitialRTOSeconds = clampFloat(defaultFloatAtMostZero(cfg.ARQInitialRTOSeconds, 0.5), 0.01, 60.0)
+	cfg.ARQMaxRTOSeconds = clampFloat(defaultFloatAtMostZero(cfg.ARQMaxRTOSeconds, 3.0), cfg.ARQInitialRTOSeconds, 120.0)
+	cfg.ARQControlInitialRTOSeconds = clampFloat(defaultFloatAtMostZero(cfg.ARQControlInitialRTOSeconds, 0.5), 0.01, 60.0)
+	cfg.ARQControlMaxRTOSeconds = clampFloat(defaultFloatAtMostZero(cfg.ARQControlMaxRTOSeconds, 2.0), cfg.ARQControlInitialRTOSeconds, 120.0)
+	cfg.ARQMaxControlRetries = clampInt(defaultIntBelow(cfg.ARQMaxControlRetries, 1, 128), 5, 5000)
+	cfg.ARQInactivityTimeoutSeconds = clampFloat(defaultFloatAtMostZero(cfg.ARQInactivityTimeoutSeconds, 1800.0), 10.0, 86400.0)
+	cfg.ARQDataPacketTTLSeconds = clampFloat(defaultFloatAtMostZero(cfg.ARQDataPacketTTLSeconds, 2400.0), 10.0, 86400.0)
+	cfg.ARQControlPacketTTLSeconds = clampFloat(defaultFloatAtMostZero(cfg.ARQControlPacketTTLSeconds, 1200.0), 10.0, 86400.0)
+	cfg.ARQMaxDataRetries = clampInt(defaultIntBelow(cfg.ARQMaxDataRetries, 1, 128), 5, 100000)
+	dataNackGapCap := min(min(max(cfg.ARQWindowSize/8, 16), 128), cfg.ARQWindowSize-1)
 	cfg.ARQDataNackMaxGap = clampInt(defaultIntBelow(cfg.ARQDataNackMaxGap, 0, 16), 0, dataNackGapCap)
-	cfg.ARQDataNackInitialDelaySeconds = clampFloat(defaultFloatAtMostZero(cfg.ARQDataNackInitialDelaySeconds, 0.1), 0.1, 30.0)
-	cfg.ARQDataNackRepeatSeconds = clampFloat(defaultFloatAtMostZero(cfg.ARQDataNackRepeatSeconds, 1.0), 0.2, 30.0)
+	cfg.ARQDataNackInitialDelaySeconds = clampFloat(defaultFloatAtMostZero(cfg.ARQDataNackInitialDelaySeconds, 0.1), 0.01, 60.0)
+	cfg.ARQDataNackRepeatSeconds = clampFloat(defaultFloatAtMostZero(cfg.ARQDataNackRepeatSeconds, 1.0), 0.01, 60.0)
 	cfg.ARQTerminalDrainTimeoutSec = clampFloat(defaultFloatAtMostZero(cfg.ARQTerminalDrainTimeoutSec, 120.0), 10.0, 3600.0)
 	cfg.ARQTerminalAckWaitTimeoutSec = clampFloat(defaultFloatAtMostZero(cfg.ARQTerminalAckWaitTimeoutSec, 90.0), 5.0, 3600.0)
 
@@ -440,7 +442,7 @@ func finalizeClientConfig(cfg ClientConfig) (ClientConfig, error) {
 
 	cfg.TunnelPacketTimeoutSec = clampFloat(defaultFloatAtMostZero(cfg.TunnelPacketTimeoutSec, 10.0), 0.5, 120.0)
 	cfg.DispatcherIdlePollIntervalSeconds = clampFloat(defaultFloatAtMostZero(cfg.DispatcherIdlePollIntervalSeconds, 0.020), 0.001, 1.0)
-	cfg.PingAggressiveIntervalSeconds = clampFloat(defaultFloatAtMostZero(cfg.PingAggressiveIntervalSeconds, 0.100), 0.1, 30.0)
+	cfg.PingAggressiveIntervalSeconds = clampFloat(defaultFloatAtMostZero(cfg.PingAggressiveIntervalSeconds, 0.100), 0.01, 30.0)
 	cfg.PingLazyIntervalSeconds = clampFloat(defaultFloatAtMostZero(cfg.PingLazyIntervalSeconds, 0.750), cfg.PingAggressiveIntervalSeconds, 60.0)
 	cfg.PingCooldownIntervalSeconds = clampFloat(defaultFloatAtMostZero(cfg.PingCooldownIntervalSeconds, 2.0), cfg.PingLazyIntervalSeconds, 300.0)
 	cfg.PingColdIntervalSeconds = clampFloat(defaultFloatAtMostZero(cfg.PingColdIntervalSeconds, 15.0), cfg.PingCooldownIntervalSeconds, 3600.0)
@@ -547,6 +549,7 @@ func defaultIntBelow(value int, minValue int, fallback int) int {
 	if value < minValue {
 		return fallback
 	}
+
 	return value
 }
 
@@ -1020,9 +1023,11 @@ func clampInt(value int, minValue int, maxValue int) int {
 	if value < minValue {
 		return minValue
 	}
+
 	if value > maxValue {
 		return maxValue
 	}
+
 	return value
 }
 
@@ -1030,6 +1035,7 @@ func defaultFloatAtMostZero(value float64, fallback float64) float64 {
 	if value <= 0 {
 		return fallback
 	}
+
 	return value
 }
 

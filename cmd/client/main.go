@@ -25,6 +25,42 @@ import (
 	"masterdnsvpn-go/internal/version"
 )
 
+func samePath(a string, b string) bool {
+	if a == "" || b == "" {
+		return false
+	}
+
+	aResolved := runtimepath.Resolve(a)
+	bResolved := runtimepath.Resolve(b)
+
+	if absA, err := filepath.Abs(aResolved); err == nil {
+		aResolved = absA
+	}
+	if absB, err := filepath.Abs(bResolved); err == nil {
+		bResolved = absB
+	}
+
+	aClean := filepath.Clean(aResolved)
+	bClean := filepath.Clean(bResolved)
+	if aClean == bClean {
+		return true
+	}
+
+	return filepath.Base(aClean) == filepath.Base(bClean)
+}
+
+func normalizeClientPositionalArgs(args []string) []string {
+	if len(args) == 0 {
+		return args
+	}
+
+	if samePath(args[0], os.Args[0]) {
+		return args[1:]
+	}
+
+	return args
+}
+
 func waitForExitInput() {
 	_, _ = fmt.Fprint(os.Stderr, "Press Enter to exit...")
 	reader := bufio.NewReader(os.Stdin)
@@ -129,24 +165,26 @@ func parseClientCLIArgs(args []string, output io.Writer) (*clientCLIOptions, con
 		overrides.Values["EncryptionKey"] = opts.keyShort
 	}
 
-	switch fs.NArg() {
+	positionalArgs := normalizeClientPositionalArgs(fs.Args())
+
+	switch len(positionalArgs) {
 	case 0:
 	case 1:
 		if opts.jsonPath == "" && opts.jsonBase64 == "" && (opts.configPath == "" || opts.configPath == "client_config.toml") {
-			opts.configPath = fs.Arg(0)
+			opts.configPath = positionalArgs[0]
 		} else {
-			return nil, config.ClientConfigOverrides{}, fmt.Errorf("unexpected positional arguments: %v", fs.Args())
+			return nil, config.ClientConfigOverrides{}, fmt.Errorf("unexpected positional arguments: %v", positionalArgs)
 		}
 	case 2:
 		if opts.jsonPath == "" && opts.jsonBase64 == "" && (opts.configPath == "" || opts.configPath == "client_config.toml") && opts.resolversPath == "" {
-			opts.configPath = fs.Arg(0)
-			resolvedResolversPath := runtimepath.Resolve(fs.Arg(1))
+			opts.configPath = positionalArgs[0]
+			resolvedResolversPath := runtimepath.Resolve(positionalArgs[1])
 			overrides.ResolversFilePath = &resolvedResolversPath
 		} else {
-			return nil, config.ClientConfigOverrides{}, fmt.Errorf("unexpected positional arguments: %v", fs.Args())
+			return nil, config.ClientConfigOverrides{}, fmt.Errorf("unexpected positional arguments: %v", positionalArgs)
 		}
 	default:
-		return nil, config.ClientConfigOverrides{}, fmt.Errorf("unexpected positional arguments: %v", fs.Args())
+		return nil, config.ClientConfigOverrides{}, fmt.Errorf("unexpected positional arguments: %v", positionalArgs)
 	}
 
 	return opts, overrides, nil

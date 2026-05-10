@@ -347,6 +347,7 @@ func finalizeServerConfig(cfg ServerConfig) (ServerConfig, error) {
 	if cfg.ClosedSessionRetentionSecs <= 0 {
 		cfg.ClosedSessionRetentionSecs = 600.0
 	}
+
 	cfg.SessionInitReuseTTLSeconds = clampFloat(defaultFloatAtMostZero(cfg.SessionInitReuseTTLSeconds, 600.0), 1.0, 86400.0)
 	cfg.RecentlyClosedStreamTTLSeconds = clampFloat(defaultFloatAtMostZero(cfg.RecentlyClosedStreamTTLSeconds, 600.0), 1.0, 86400.0)
 	cfg.RecentlyClosedStreamCap = clampInt(defaultIntBelow(cfg.RecentlyClosedStreamCap, 1, 2000), 1, 1000000)
@@ -380,6 +381,7 @@ func finalizeServerConfig(cfg ServerConfig) (ServerConfig, error) {
 	if cfg.DNSFragmentAssemblyTimeoutSecs <= 0 {
 		cfg.DNSFragmentAssemblyTimeoutSecs = 300.0
 	}
+
 	cfg.StreamSetupAckTTLSeconds = clampFloat(defaultFloatAtMostZero(cfg.StreamSetupAckTTLSeconds, 400.0), 1.0, 86400.0)
 	cfg.StreamResultPacketTTLSeconds = clampFloat(defaultFloatAtMostZero(cfg.StreamResultPacketTTLSeconds, 300.0), 1.0, 86400.0)
 	cfg.StreamFailurePacketTTLSeconds = clampFloat(defaultFloatAtMostZero(cfg.StreamFailurePacketTTLSeconds, 120.0), 1.0, 86400.0)
@@ -437,19 +439,19 @@ func finalizeServerConfig(cfg ServerConfig) (ServerConfig, error) {
 	}
 
 	cfg.ARQWindowSize = clampInt(defaultIntBelow(cfg.ARQWindowSize, 1, 800), 1, 8000)
-	cfg.ARQInitialRTOSeconds = clampFloat(defaultFloatAtMostZero(cfg.ARQInitialRTOSeconds, 1.0), 0.05, 60.0)
-	cfg.ARQMaxRTOSeconds = clampFloat(defaultFloatAtMostZero(cfg.ARQMaxRTOSeconds, 5.0), cfg.ARQInitialRTOSeconds, 120.0)
-	cfg.ARQControlInitialRTOSeconds = clampFloat(defaultFloatAtMostZero(cfg.ARQControlInitialRTOSeconds, 0.5), 0.05, 60.0)
-	cfg.ARQControlMaxRTOSeconds = clampFloat(defaultFloatAtMostZero(cfg.ARQControlMaxRTOSeconds, 3.0), cfg.ARQControlInitialRTOSeconds, 120.0)
-	cfg.ARQMaxControlRetries = clampInt(defaultIntBelow(cfg.ARQMaxControlRetries, 1, 400), 5, 5000)
-	cfg.ARQInactivityTimeoutSeconds = clampFloat(defaultFloatAtMostZero(cfg.ARQInactivityTimeoutSeconds, 1800.0), 30.0, 86400.0)
-	cfg.ARQDataPacketTTLSeconds = clampFloat(defaultFloatAtMostZero(cfg.ARQDataPacketTTLSeconds, 2400.0), 30.0, 86400.0)
-	cfg.ARQControlPacketTTLSeconds = clampFloat(defaultFloatAtMostZero(cfg.ARQControlPacketTTLSeconds, 1200.0), 30.0, 86400.0)
-	cfg.ARQMaxDataRetries = clampInt(defaultIntBelow(cfg.ARQMaxDataRetries, 1, 1200), 60, 100000)
-	dataNackGapCap := min(max(cfg.ARQWindowSize/8, 4), 128)
+	cfg.ARQInitialRTOSeconds = clampFloat(defaultFloatAtMostZero(cfg.ARQInitialRTOSeconds, 0.5), 0.01, 60.0)
+	cfg.ARQMaxRTOSeconds = clampFloat(defaultFloatAtMostZero(cfg.ARQMaxRTOSeconds, 3.0), cfg.ARQInitialRTOSeconds, 120.0)
+	cfg.ARQControlInitialRTOSeconds = clampFloat(defaultFloatAtMostZero(cfg.ARQControlInitialRTOSeconds, 0.5), 0.01, 60.0)
+	cfg.ARQControlMaxRTOSeconds = clampFloat(defaultFloatAtMostZero(cfg.ARQControlMaxRTOSeconds, 2.0), cfg.ARQControlInitialRTOSeconds, 120.0)
+	cfg.ARQMaxControlRetries = clampInt(defaultIntBelow(cfg.ARQMaxControlRetries, 1, 128), 1, 5000)
+	cfg.ARQInactivityTimeoutSeconds = clampFloat(defaultFloatAtMostZero(cfg.ARQInactivityTimeoutSeconds, 1800.0), 10.0, 86400.0)
+	cfg.ARQDataPacketTTLSeconds = clampFloat(defaultFloatAtMostZero(cfg.ARQDataPacketTTLSeconds, 2400.0), 10.0, 86400.0)
+	cfg.ARQControlPacketTTLSeconds = clampFloat(defaultFloatAtMostZero(cfg.ARQControlPacketTTLSeconds, 1200.0), 10.0, 86400.0)
+	cfg.ARQMaxDataRetries = clampInt(defaultIntBelow(cfg.ARQMaxDataRetries, 1, 128), 1, 5000)
+	dataNackGapCap := min(min(max(cfg.ARQWindowSize/8, 16), 128), cfg.ARQWindowSize-1)
 	cfg.ARQDataNackMaxGap = clampInt(defaultIntBelow(cfg.ARQDataNackMaxGap, 0, 16), 0, dataNackGapCap)
-	cfg.ARQDataNackInitialDelaySeconds = clampFloat(defaultFloatAtMostZero(cfg.ARQDataNackInitialDelaySeconds, 0.3), 0.1, 30.0)
-	cfg.ARQDataNackRepeatSeconds = clampFloat(defaultFloatAtMostZero(cfg.ARQDataNackRepeatSeconds, 1.0), 0.2, 30.0)
+	cfg.ARQDataNackInitialDelaySeconds = clampFloat(defaultFloatAtMostZero(cfg.ARQDataNackInitialDelaySeconds, 0.3), 0.01, 30.0)
+	cfg.ARQDataNackRepeatSeconds = clampFloat(defaultFloatAtMostZero(cfg.ARQDataNackRepeatSeconds, 0.8), 0.01, 30.0)
 	cfg.ARQTerminalDrainTimeoutSec = clampFloat(defaultFloatAtMostZero(cfg.ARQTerminalDrainTimeoutSec, 120.0), 10.0, 3600.0)
 	cfg.ARQTerminalAckWaitTimeoutSec = clampFloat(defaultFloatAtMostZero(cfg.ARQTerminalAckWaitTimeoutSec, 90.0), 5.0, 3600.0)
 	cfg.MaxAllowedClientActiveSessions = clampInt(defaultIntBelow(cfg.MaxAllowedClientActiveSessions, 1, defaultServerConfig().MaxAllowedClientActiveSessions), 1, 255)
