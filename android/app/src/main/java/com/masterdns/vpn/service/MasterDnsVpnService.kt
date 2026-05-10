@@ -384,6 +384,10 @@ class MasterDnsVpnService : VpnService() {
                 connectJob?.cancel()
                 VpnManager.appendLog("Stopping VPN...")
 
+                // Close TUN interface FIRST to unblock any pending I/O in Go tunBridge/tun
+                runCatching { vpnInterface?.close() }
+                vpnInterface = null
+
                 if (tunBridgeActive) {
                     runCatching { mobile.Mobile.stopTunBridge() }
                     tunBridgeActive = false
@@ -399,10 +403,6 @@ class MasterDnsVpnService : VpnService() {
                 }.onFailure { e ->
                     Log.e(TAG, "Error stopping Go core", e)
                 }
-
-                // Close TUN interface
-                runCatching { vpnInterface?.close() }
-                vpnInterface = null
 
                 // Cancel coroutines
                 goClientJob?.cancel()
