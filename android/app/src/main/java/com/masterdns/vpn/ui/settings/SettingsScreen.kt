@@ -160,6 +160,7 @@ private val configFields = listOf(
     SettingField("Compression", "UPLOAD_COMPRESSION_TYPE", "UPLOAD_COMPRESSION_TYPE", "0=Off, 1=Snappy, 2=LZ4, 3=ZSTD, 4=Gzip, 5=Zlib", keyboardType = KeyboardType.Number),
     SettingField("Compression", "DOWNLOAD_COMPRESSION_TYPE", "DOWNLOAD_COMPRESSION_TYPE", "0=Off, 1=Snappy, 2=LZ4, 3=ZSTD, 4=Gzip, 5=Zlib", keyboardType = KeyboardType.Number),
     SettingField("Compression", "COMPRESSION_MIN_SIZE", "COMPRESSION_MIN_SIZE", "Min bytes to trigger compression", keyboardType = KeyboardType.Number),
+    SettingField("MTU", "AUTO_REMOVE_LOW_MTU_SERVERS", "AUTO_REMOVE_LOW_MTU_SERVERS", "Auto remove low MTU servers", type = FieldType.BOOL),
     SettingField("MTU", "MIN_UPLOAD_MTU", "MIN_UPLOAD_MTU", "Minimum upload MTU bytes", keyboardType = KeyboardType.Number),
     SettingField("MTU", "MIN_DOWNLOAD_MTU", "MIN_DOWNLOAD_MTU", "Minimum download MTU bytes", keyboardType = KeyboardType.Number),
     SettingField("MTU", "MAX_UPLOAD_MTU", "MAX_UPLOAD_MTU", "Maximum upload MTU bytes", keyboardType = KeyboardType.Number),
@@ -647,6 +648,7 @@ private fun defaultValuesFor(profile: ProfileEntity): Map<String, String> {
         put("UPLOAD_COMPRESSION_TYPE", profile.uploadCompression.toString())
         put("DOWNLOAD_COMPRESSION_TYPE", profile.downloadCompression.toString())
         put("COMPRESSION_MIN_SIZE", adv("COMPRESSION_MIN_SIZE", "120"))
+        put("AUTO_REMOVE_LOW_MTU_SERVERS", adv("AUTO_REMOVE_LOW_MTU_SERVERS", "true"))
         put("MIN_UPLOAD_MTU", adv("MIN_UPLOAD_MTU", "38"))
         put("MIN_DOWNLOAD_MTU", adv("MIN_DOWNLOAD_MTU", "200"))
         put("MAX_UPLOAD_MTU", adv("MAX_UPLOAD_MTU", "150"))
