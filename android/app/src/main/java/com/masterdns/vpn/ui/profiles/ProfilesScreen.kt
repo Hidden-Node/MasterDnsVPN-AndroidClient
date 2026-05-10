@@ -362,19 +362,33 @@ private fun ProfileEditorDialog(
                     ) {
                         OutlinedButton(
                             onClick = onImportToml,
-                            modifier = Modifier.weight(1f)
+                            modifier = Modifier.weight(1f),
+                            contentPadding = PaddingValues(vertical = 12.dp, horizontal = 4.dp)
                         ) {
-                            Icon(Icons.Filled.UploadFile, contentDescription = null)
-                            Spacer(modifier = Modifier.width(8.dp))
-                            Text(stringResource(R.string.action_import_toml))
+                            Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                                Icon(Icons.Filled.UploadFile, contentDescription = null)
+                                Spacer(modifier = Modifier.height(4.dp))
+                                Text(
+                                    stringResource(R.string.action_import_toml),
+                                    textAlign = androidx.compose.ui.text.style.TextAlign.Center,
+                                    style = MaterialTheme.typography.labelMedium
+                                )
+                            }
                         }
                         OutlinedButton(
                             onClick = onImportResolvers,
-                            modifier = Modifier.weight(1f)
+                            modifier = Modifier.weight(1f),
+                            contentPadding = PaddingValues(vertical = 12.dp, horizontal = 4.dp)
                         ) {
-                            Icon(Icons.Filled.Description, contentDescription = null)
-                            Spacer(modifier = Modifier.width(8.dp))
-                            Text(stringResource(R.string.profiles_import_resolvers_short))
+                            Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                                Icon(Icons.Filled.Description, contentDescription = null)
+                                Spacer(modifier = Modifier.height(4.dp))
+                                Text(
+                                    stringResource(R.string.profiles_import_resolvers_short),
+                                    textAlign = androidx.compose.ui.text.style.TextAlign.Center,
+                                    style = MaterialTheme.typography.labelMedium
+                                )
+                            }
                         }
                     }
                 }
@@ -463,6 +477,19 @@ private fun ProfileEditorDialog(
                         }
                     }
                 )
+
+                // Import Resolvers button for Edit mode (placed above the resolvers field)
+                if (profile != null) {
+                    OutlinedButton(
+                        onClick = onImportResolvers,
+                        modifier = Modifier.fillMaxWidth(),
+                        contentPadding = PaddingValues(vertical = 8.dp)
+                    ) {
+                        Icon(Icons.Filled.Description, contentDescription = null, modifier = Modifier.size(20.dp))
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Text(stringResource(R.string.profiles_import_resolvers_short))
+                    }
+                }
 
                 if (!showResolversEditor && largeResolversText) {
                     Card(
