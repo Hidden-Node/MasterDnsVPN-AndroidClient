@@ -58,6 +58,12 @@ object VpnManager {
     val uploadSpeedBps: StateFlow<Long> = _uploadSpeedBps.asStateFlow()
     private val _downloadSpeedBps = MutableStateFlow(0L)
     val downloadSpeedBps: StateFlow<Long> = _downloadSpeedBps.asStateFlow()
+    private val _uploadTotalBytes = MutableStateFlow(0L)
+    val uploadTotalBytes: StateFlow<Long> = _uploadTotalBytes.asStateFlow()
+    private val _downloadTotalBytes = MutableStateFlow(0L)
+    val downloadTotalBytes: StateFlow<Long> = _downloadTotalBytes.asStateFlow()
+    private val _connectedSinceMs = MutableStateFlow(0L)
+    val connectedSinceMs: StateFlow<Long> = _connectedSinceMs.asStateFlow()
 
     data class ScanStatus(
         val scanning: Boolean = false,
@@ -68,7 +74,9 @@ object VpnManager {
         val scanTotalFromCore: Int = 0,
         val activeResolvers: Int = 0,
         val syncedUploadMtu: Int = 0,
-        val syncedDownloadMtu: Int = 0
+        val syncedDownloadMtu: Int = 0,
+        val scanStartedAtMs: Long = 0L,
+        val scanUpdatedAtMs: Long = 0L
     )
 
     private val _scanStatus = MutableStateFlow(ScanStatus())
@@ -82,17 +90,23 @@ object VpnManager {
     fun updateState(newState: VpnState) {
         _state.value = newState
         if (newState == VpnState.CONNECTED) {
+            if (_connectedSinceMs.value == 0L) {
+                _connectedSinceMs.value = System.currentTimeMillis()
+            }
             _scanStatus.value = _scanStatus.value.copy(
                 lastResolver = "",
                 lastDecision = "",
                 scanning = false
             )
+        } else if (newState == VpnState.DISCONNECTED || newState == VpnState.ERROR) {
+            _connectedSinceMs.value = 0L
         }
     }
 
     fun setError(message: String) {
         _errorMessage.value = message
         _state.value = VpnState.ERROR
+        _connectedSinceMs.value = 0L
     }
 
     fun clearError() {
@@ -142,14 +156,20 @@ object VpnManager {
             var prevTx = TrafficStats.getUidTxBytes(uid).coerceAtLeast(0L)
             var prevRx = TrafficStats.getUidRxBytes(uid).coerceAtLeast(0L)
             var prevTime = System.currentTimeMillis()
+            _uploadTotalBytes.value = 0L
+            _downloadTotalBytes.value = 0L
             while (isActive) {
                 delay(1000L)
                 val now = System.currentTimeMillis()
                 val tx = TrafficStats.getUidTxBytes(uid).coerceAtLeast(0L)
                 val rx = TrafficStats.getUidRxBytes(uid).coerceAtLeast(0L)
                 val dt = (now - prevTime).coerceAtLeast(1L)
-                _uploadSpeedBps.value = ((tx - prevTx).coerceAtLeast(0L) * 1000L) / dt
-                _downloadSpeedBps.value = ((rx - prevRx).coerceAtLeast(0L) * 1000L) / dt
+                val txDelta = (tx - prevTx).coerceAtLeast(0L)
+                val rxDelta = (rx - prevRx).coerceAtLeast(0L)
+                _uploadSpeedBps.value = (txDelta * 1000L) / dt
+                _downloadSpeedBps.value = (rxDelta * 1000L) / dt
+                _uploadTotalBytes.value += txDelta
+                _downloadTotalBytes.value += rxDelta
                 prevTx = tx
                 prevRx = rx
                 prevTime = now
@@ -172,7 +192,15 @@ object VpnManager {
 
         updateState(VpnState.CONNECTING)
         clearError()
-        _scanStatus.value = ScanStatus(scanning = true)
+        val now = System.currentTimeMillis()
+        _connectedSinceMs.value = 0L
+        _uploadTotalBytes.value = 0L
+        _downloadTotalBytes.value = 0L
+        _scanStatus.value = ScanStatus(
+            scanning = true,
+            scanStartedAtMs = now,
+            scanUpdatedAtMs = now
+        )
 
         val intent = Intent(context, MasterDnsVpnService::class.java).apply {
             action = MasterDnsVpnService.ACTION_CONNECT
@@ -208,6 +236,12 @@ object VpnManager {
     }
 
     private fun parseScanLine(line: String) {
+        fun currentScanTimestamps(): Pair<Long, Long> {
+            val now = System.currentTimeMillis()
+            val started = _scanStatus.value.scanStartedAtMs.takeIf { it > 0L } ?: now
+            return started to now
+        }
+
         val indexedProgressMatch = Regex(
             "(?:scan|scanning|resolver|resolvers|mtu|accepted|rejected).{0,40}?(\\d+)\\s*/\\s*(\\d+)",
             setOf(RegexOption.IGNORE_CASE, RegexOption.DOT_MATCHES_ALL)
@@ -215,7 +249,12 @@ object VpnManager {
         if (indexedProgressMatch != null) {
             val total = indexedProgressMatch.groupValues[2].toIntOrNull()
             if (total != null && total > 0) {
-                _scanStatus.value = _scanStatus.value.copy(scanTotalFromCore = total)
+                val (started, updated) = currentScanTimestamps()
+                _scanStatus.value = _scanStatus.value.copy(
+                    scanTotalFromCore = total,
+                    scanStartedAtMs = started,
+                    scanUpdatedAtMs = updated
+                )
             }
         }
 
@@ -226,7 +265,12 @@ object VpnManager {
         if (totalCandidatesMatch != null) {
             val total = totalCandidatesMatch.groupValues[1].toIntOrNull()
             if (total != null && total > 0) {
-                _scanStatus.value = _scanStatus.value.copy(scanTotalFromCore = total)
+                val (started, updated) = currentScanTimestamps()
+                _scanStatus.value = _scanStatus.value.copy(
+                    scanTotalFromCore = total,
+                    scanStartedAtMs = started,
+                    scanUpdatedAtMs = updated
+                )
             }
         }
 
@@ -243,12 +287,15 @@ object VpnManager {
                 line.contains("Rejected", ignoreCase = true) -> "Rejected"
                 else -> ""
             }
+            val (started, updated) = currentScanTimestamps()
             _scanStatus.value = _scanStatus.value.copy(
                 scanning = true,
                 lastResolver = resolver,
                 lastDecision = decision,
                 validCount = valid,
-                rejectedCount = rejected
+                rejectedCount = rejected,
+                scanStartedAtMs = started,
+                scanUpdatedAtMs = updated
             )
             return
         }
@@ -299,7 +346,12 @@ object VpnManager {
         }
 
         if (line.contains("Testing MTU sizes", ignoreCase = true)) {
-            _scanStatus.value = _scanStatus.value.copy(scanning = true)
+            val (started, updated) = currentScanTimestamps()
+            _scanStatus.value = _scanStatus.value.copy(
+                scanning = true,
+                scanStartedAtMs = started,
+                scanUpdatedAtMs = updated
+            )
             return
         }
 

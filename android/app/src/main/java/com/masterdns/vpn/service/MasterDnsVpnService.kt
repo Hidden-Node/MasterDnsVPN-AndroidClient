@@ -18,6 +18,7 @@ import com.masterdns.vpn.R
 import com.masterdns.vpn.data.local.AppDatabase
 import com.masterdns.vpn.util.ConfigGenerator
 import com.masterdns.vpn.util.GlobalSettingsStore
+import com.masterdns.vpn.util.ResolverAnalyzer
 import com.masterdns.vpn.util.VpnManager
 import kotlinx.coroutines.*
 import java.io.File
@@ -68,6 +69,7 @@ class MasterDnsVpnService : VpnService() {
     private var sharingSocksServer: java.net.ServerSocket? = null
     private var sharingHttpServer: java.net.ServerSocket? = null
     private var logTailJob: Job? = null
+    private var notificationStatsJob: Job? = null
     private var wakeLock: PowerManager.WakeLock? = null
     private var mtuExportTargetUri: String? = null
     private var mtuConfigDir: File? = null
@@ -113,6 +115,7 @@ class MasterDnsVpnService : VpnService() {
 
                 // Show foreground notification
                 startForeground(NOTIFICATION_ID, buildNotification(getString(R.string.notification_connecting)))
+                startNotificationStats()
                 acquireWakeLock()
 
                 // Load profile from DB
@@ -189,7 +192,16 @@ class MasterDnsVpnService : VpnService() {
                         localDnsPortOverride = if (proxyMode) null else safeDnsPort
                     )
                 )
-                if (runtimeProfile.resolvers.isNotBlank()) {
+                val importedResolverFile = ResolverAnalyzer.profileImportedResolver(runtimeProfile)
+                    ?.takeIf { File(it.cachedPath).isFile }
+                if (importedResolverFile != null) {
+                    File(importedResolverFile.cachedPath).copyTo(resolversFile, overwrite = true)
+                    VpnManager.appendLog("Using imported resolver file: ${importedResolverFile.displayName}")
+                    VpnManager.appendLog("Resolver stats: ${importedResolverFile.stats.summary()}")
+                } else if (ResolverAnalyzer.profileImportedResolver(runtimeProfile) != null) {
+                    VpnManager.appendLog("Imported resolver file is missing; falling back to inline resolvers")
+                    resolversFile.writeText(ConfigGenerator.generateResolvers(runtimeProfile))
+                } else if (runtimeProfile.resolvers.isNotBlank()) {
                     resolversFile.writeText(ConfigGenerator.generateResolvers(runtimeProfile))
                 } else if (!resolversFile.exists() || resolversFile.readText().isBlank()) {
                     resolversFile.writeText(ConfigGenerator.generateResolvers(runtimeProfile))
@@ -250,9 +262,7 @@ class MasterDnsVpnService : VpnService() {
                     VpnManager.appendLog("Proxy mode active: skipping Android VpnService TUN setup")
                     VpnManager.updateState(VpnManager.VpnState.CONNECTED)
                     VpnManager.startTrafficMonitor(this@MasterDnsVpnService)
-                    val notification = buildNotification("Proxy mode active on port $socksPort")
-                    val manager = getSystemService(NOTIFICATION_SERVICE) as android.app.NotificationManager
-                    manager.notify(NOTIFICATION_ID, notification)
+                    notifyStatus("Proxy mode active on port $socksPort")
                     return@launch
                 }
 
@@ -360,9 +370,7 @@ class MasterDnsVpnService : VpnService() {
                 VpnManager.appendLog("VPN connected successfully!")
 
                 // Update notification
-                val notification = buildNotification(getString(R.string.notification_connected))
-                val manager = getSystemService(NOTIFICATION_SERVICE) as android.app.NotificationManager
-                manager.notify(NOTIFICATION_ID, notification)
+                notifyStatus(getString(R.string.notification_connected))
 
             } catch (e: CancellationException) {
                 VpnManager.appendLog("Connection canceled")
@@ -409,6 +417,7 @@ class MasterDnsVpnService : VpnService() {
                 httpProxyJob?.cancel()
                 sharingSocksJob?.cancel()
                 logTailJob?.cancel()
+                notificationStatsJob?.cancel()
                 runCatching { sharingSocksServer?.close() }
                 sharingSocksServer = null
                 runCatching { sharingHttpServer?.close() }
@@ -452,10 +461,71 @@ class MasterDnsVpnService : VpnService() {
         return NotificationCompat.Builder(this, App.CHANNEL_ID)
             .setContentTitle(getString(R.string.app_name))
             .setContentText(text)
+            .setStyle(NotificationCompat.BigTextStyle().bigText(text))
             .setSmallIcon(R.drawable.ic_vpn_key)
             .setContentIntent(pendingIntent)
             .setOngoing(true)
             .build()
+    }
+
+    private fun startNotificationStats() {
+        notificationStatsJob?.cancel()
+        notificationStatsJob = serviceScope.launch {
+            while (isActive) {
+                notifyStatus(notificationStatusText())
+                delay(2000L)
+            }
+        }
+    }
+
+    private fun notifyStatus(text: String) {
+        val manager = getSystemService(NOTIFICATION_SERVICE) as android.app.NotificationManager
+        manager.notify(NOTIFICATION_ID, buildNotification(text))
+    }
+
+    private fun notificationStatusText(): String {
+        val state = VpnManager.state.value
+        val scan = VpnManager.scanStatus.value
+        val down = formatBytesPerSecond(VpnManager.downloadSpeedBps.value)
+        val up = formatBytesPerSecond(VpnManager.uploadSpeedBps.value)
+        val totals = getString(
+            R.string.notification_traffic_totals,
+            formatBytes(VpnManager.downloadTotalBytes.value),
+            formatBytes(VpnManager.uploadTotalBytes.value)
+        )
+        return when {
+            state == VpnManager.VpnState.CONNECTING && scan.scanning -> {
+                val scanned = scan.validCount + scan.rejectedCount
+                val total = scan.scanTotalFromCore.takeIf { it > 0 }
+                if (total != null) {
+                    getString(R.string.notification_scanning_dns, scanned, total, down, up)
+                } else {
+                    getString(R.string.notification_connecting_with_speed, down, up)
+                }
+            }
+            state == VpnManager.VpnState.CONNECTED -> {
+                scan.activeResolvers.takeIf { it > 0 }?.let {
+                    getString(R.string.notification_connected_with_resolvers, down, up, totals, it)
+                } ?: getString(R.string.notification_connected_with_totals, down, up, totals)
+            }
+            state == VpnManager.VpnState.DISCONNECTING -> getString(R.string.notification_disconnecting_with_totals, totals)
+            state == VpnManager.VpnState.ERROR -> VpnManager.errorMessage.value ?: "Connection error"
+            else -> getString(R.string.notification_connecting)
+        }
+    }
+
+    private fun formatBytesPerSecond(bytes: Long): String = "${formatBytes(bytes)}/s"
+
+    private fun formatBytes(bytes: Long): String {
+        val kb = 1024.0
+        val mb = kb * 1024.0
+        val gb = mb * 1024.0
+        return when {
+            bytes >= gb -> String.format("%.2f GB", bytes / gb)
+            bytes >= mb -> String.format("%.2f MB", bytes / mb)
+            bytes >= kb -> String.format("%.1f KB", bytes / kb)
+            else -> "$bytes B"
+        }
     }
 
     override fun onDestroy() {
@@ -473,6 +543,7 @@ class MasterDnsVpnService : VpnService() {
             vpnInterface = null
         }
         releaseWakeLock()
+        notificationStatsJob?.cancel()
         serviceScope.cancel()
         super.onDestroy()
     }

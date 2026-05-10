@@ -30,6 +30,7 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -48,7 +49,9 @@ import com.masterdns.vpn.ui.theme.ConnectingAmber
 import com.masterdns.vpn.ui.theme.DisconnectedRed
 import com.masterdns.vpn.ui.theme.MdvColor
 import com.masterdns.vpn.ui.theme.MdvSpace
+import com.masterdns.vpn.util.ResolverAnalyzer
 import com.masterdns.vpn.util.VpnManager
+import kotlinx.coroutines.delay
 
 private data class HomeLayoutMetrics(
     val horizontalPadding: androidx.compose.ui.unit.Dp,
@@ -65,6 +68,9 @@ fun HomeScreen(
     val vpnState by VpnManager.state.collectAsState()
     val upBps by VpnManager.uploadSpeedBps.collectAsState()
     val downBps by VpnManager.downloadSpeedBps.collectAsState()
+    val upTotalBytes by VpnManager.uploadTotalBytes.collectAsState()
+    val downTotalBytes by VpnManager.downloadTotalBytes.collectAsState()
+    val connectedSinceMs by VpnManager.connectedSinceMs.collectAsState()
     val scanStatus by VpnManager.scanStatus.collectAsState()
     val selectedProfile by viewModel.selectedProfile.collectAsState()
     val error by VpnManager.errorMessage.collectAsState()
@@ -78,6 +84,9 @@ fun HomeScreen(
     val socksAuthEnabled = advanced["SOCKS5_AUTH"].equals("true", ignoreCase = true)
     val socksUser = advanced["SOCKS5_USER"]?.trim().orEmpty()
     val socksPass = advanced["SOCKS5_PASS"]?.trim().orEmpty()
+    val preConnectWarnings = remember(selectedProfile?.id, selectedProfile?.resolvers, selectedProfile?.advancedJson) {
+        buildPreConnectWarnings(context, selectedProfile, advanced)
+    }
 
     val vpnPermissionLauncher = rememberLauncherForActivityResult(
         ActivityResultContracts.StartActivityForResult()
@@ -98,6 +107,25 @@ fun HomeScreen(
         (scannedCount.toFloat() / totalResolvers.toFloat()).coerceIn(0f, 1f)
     } else {
         0f
+    }
+    val scanEtaText = estimateScanEta(
+        scannedCount = scannedCount,
+        totalResolvers = totalResolvers,
+        startedAtMs = scanStatus.scanStartedAtMs,
+        updatedAtMs = scanStatus.scanUpdatedAtMs
+    )
+    val nowMs by produceState(System.currentTimeMillis(), vpnState, connectedSinceMs) {
+        while (vpnState == VpnManager.VpnState.CONNECTED && connectedSinceMs > 0L) {
+            value = System.currentTimeMillis()
+            delay(1000L)
+        }
+    }
+    val connectionDurationText = remember(vpnState, connectedSinceMs, nowMs) {
+        if (vpnState == VpnManager.VpnState.CONNECTED && connectedSinceMs > 0L) {
+            formatDuration(((nowMs - connectedSinceMs) / 1000L).coerceAtLeast(0L))
+        } else {
+            ""
+        }
     }
 
     val statusColor by animateColorAsState(
@@ -226,8 +254,12 @@ fun HomeScreen(
                             scannedCount = scannedCount,
                             totalResolvers = totalResolvers,
                             scanProgress = scanProgress,
+                            scanEtaText = scanEtaText,
                             downBps = downBps,
                             upBps = upBps,
+                            downTotalBytes = downTotalBytes,
+                            upTotalBytes = upTotalBytes,
+                            connectionDurationText = connectionDurationText,
                             proxyHost = proxyHost,
                             proxyPort = proxyPort,
                             socksAuthEnabled = socksAuthEnabled,
@@ -240,6 +272,10 @@ fun HomeScreen(
                             profileName = selectedProfile?.name ?: stringResource(R.string.profiles_create),
                             onNavigateToProfiles = onNavigateToProfiles
                         )
+                        if (!isConnected && !isConnecting && preConnectWarnings.isNotEmpty()) {
+                            Spacer(modifier = Modifier.height(MdvSpace.S3))
+                            MdvPreConnectChecklist(warnings = preConnectWarnings)
+                        }
                         error?.let { msg ->
                             Spacer(modifier = Modifier.height(MdvSpace.S4))
                             MdvErrorCard(msg = msg)
@@ -295,8 +331,12 @@ fun HomeScreen(
                     scannedCount = scannedCount,
                     totalResolvers = totalResolvers,
                     scanProgress = scanProgress,
+                    scanEtaText = scanEtaText,
                     downBps = downBps,
                     upBps = upBps,
+                    downTotalBytes = downTotalBytes,
+                    upTotalBytes = upTotalBytes,
+                    connectionDurationText = connectionDurationText,
                     proxyHost = proxyHost,
                     proxyPort = proxyPort,
                     socksAuthEnabled = socksAuthEnabled,
@@ -312,12 +352,73 @@ fun HomeScreen(
                     onNavigateToProfiles = onNavigateToProfiles
                 )
 
+                if (!isConnected && !isConnecting && preConnectWarnings.isNotEmpty()) {
+                    Spacer(modifier = Modifier.height(MdvSpace.S3))
+                    MdvPreConnectChecklist(warnings = preConnectWarnings)
+                }
+
                 error?.let { msg ->
                     Spacer(modifier = Modifier.height(MdvSpace.S4))
                     MdvErrorCard(msg = msg)
                 }
             }
         }
+    }
+}
+
+private fun buildPreConnectWarnings(
+    context: android.content.Context,
+    profile: com.masterdns.vpn.data.local.ProfileEntity?,
+    advanced: Map<String, String>
+): List<String> {
+    if (profile == null) return listOf(context.getString(R.string.home_preconnect_no_profile))
+    val warnings = mutableListOf<String>()
+    val imported = ResolverAnalyzer.profileImportedResolver(profile)
+    if (imported != null) {
+        if (!java.io.File(imported.cachedPath).isFile) {
+            warnings += context.getString(R.string.home_preconnect_resolver_file_missing)
+        } else if (imported.stats.uniqueUsableIps <= 0) {
+            warnings += context.getString(R.string.home_preconnect_resolver_file_empty)
+        }
+    } else if (profile.resolvers.lineSequence().none { it.trim().isNotEmpty() }) {
+        warnings += context.getString(R.string.home_preconnect_no_inline_resolvers)
+    }
+    val localDnsEnabled = advanced["LOCAL_DNS_ENABLED"].equals("true", ignoreCase = true)
+    val localDnsPort = advanced["LOCAL_DNS_PORT"]?.toIntOrNull() ?: 5353
+    if (localDnsEnabled && localDnsPort <= 1024) {
+        warnings += context.getString(R.string.home_preconnect_dns_port_remap, localDnsPort)
+    }
+    if (advanced["SAVE_MTU_SERVERS_TO_FILE"].equals("true", ignoreCase = true) &&
+        advanced["MTU_EXPORT_URI"].isNullOrBlank()
+    ) {
+        warnings += context.getString(R.string.home_preconnect_mtu_export_missing)
+    }
+    return warnings
+}
+
+private fun estimateScanEta(
+    scannedCount: Int,
+    totalResolvers: Int,
+    startedAtMs: Long,
+    updatedAtMs: Long
+): String {
+    if (scannedCount < 3 || totalResolvers <= scannedCount || startedAtMs <= 0L || updatedAtMs <= startedAtMs) {
+        return ""
+    }
+    val elapsedMs = (updatedAtMs - startedAtMs).coerceAtLeast(1L)
+    val remaining = totalResolvers - scannedCount
+    val etaSeconds = ((elapsedMs / scannedCount.toDouble()) * remaining / 1000.0).toLong().coerceAtLeast(1L)
+    return formatDuration(etaSeconds)
+}
+
+private fun formatDuration(totalSeconds: Long): String {
+    val hours = totalSeconds / 3600
+    val minutes = (totalSeconds % 3600) / 60
+    val seconds = totalSeconds % 60
+    return when {
+        hours > 0 -> "${hours}h ${minutes}m"
+        minutes > 0 -> "${minutes}m ${seconds}s"
+        else -> "${seconds}s"
     }
 }
 

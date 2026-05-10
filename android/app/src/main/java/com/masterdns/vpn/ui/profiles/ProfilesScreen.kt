@@ -1,15 +1,19 @@
 package com.masterdns.vpn.ui.profiles
 
 import android.content.Context
+import android.content.Intent
 import android.net.Uri
 import android.provider.OpenableColumns
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
@@ -18,10 +22,10 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.text.input.VisualTransformation
-import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import com.google.gson.Gson
@@ -31,12 +35,12 @@ import com.masterdns.vpn.ui.components.mdv.controls.MdvBackTopAppBar
 import com.masterdns.vpn.ui.theme.ConnectedGreen
 import com.masterdns.vpn.ui.theme.MdvColor
 import com.masterdns.vpn.ui.theme.MdvSpace
+import com.masterdns.vpn.util.ImportedResolverFile
+import com.masterdns.vpn.util.ResolverAnalyzer
+import com.masterdns.vpn.util.ResolverStats
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
-
-private data class ImportedProfileDraft(
-    val profile: ProfileEntity,
-    val domainList: List<String>
-)
+import kotlinx.coroutines.withContext
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -48,42 +52,105 @@ fun ProfilesScreen(
     val profiles by viewModel.profiles.collectAsState()
     var showEditor by remember { mutableStateOf(false) }
     var editingProfile by remember { mutableStateOf<ProfileEntity?>(null) }
-    var importedDraft by remember { mutableStateOf<ImportedProfileDraft?>(null) }
-    var importedResolvers by remember { mutableStateOf<String?>(null) }
+    var importedResolvers by remember { mutableStateOf<ImportedResolverFile?>(null) }
     val context = androidx.compose.ui.platform.LocalContext.current
     val snackbarHostState = remember { SnackbarHostState() }
     val scope = rememberCoroutineScope()
+
+    // Export dialog state
+    var exportTarget by remember { mutableStateOf<ProfileEntity?>(null) }
+
     val importLauncher = rememberLauncherForActivityResult(
         ActivityResultContracts.OpenDocument()
     ) { uri ->
         if (uri == null) return@rememberLauncherForActivityResult
         val text = readTextFromUri(context, uri)
-        val draft = parseProfileTomlForImport(
-            fileName = readDisplayName(context, uri) ?: context.getString(R.string.profiles_imported_profile_default),
-            tomlContent = text
-        )
-        if (draft == null) {
+        val name = readDisplayName(context, uri)
+            ?: context.getString(R.string.profiles_imported_profile_default)
+        if (text.isBlank()) {
             scope.launch { snackbarHostState.showSnackbar(context.getString(R.string.profiles_invalid_toml_msg)) }
             return@rememberLauncherForActivityResult
         }
-        importedDraft = draft
-        editingProfile = null
-        showEditor = true
-        scope.launch { snackbarHostState.showSnackbar(context.getString(R.string.profiles_toml_imported_msg)) }
+        scope.launch {
+            val imported = viewModel.importProfileFromToml(text, name)
+            if (imported != null) {
+                snackbarHostState.showSnackbar(context.getString(R.string.profiles_toml_imported_msg))
+            } else {
+                snackbarHostState.showSnackbar(context.getString(R.string.profiles_invalid_toml_msg))
+            }
+        }
     }
+
     val importResolversLauncher = rememberLauncherForActivityResult(
         ActivityResultContracts.OpenDocument()
     ) { uri ->
         if (uri == null) return@rememberLauncherForActivityResult
-        val text = readTextFromUri(context, uri).trim()
-        if (text.isBlank()) {
-            scope.launch { snackbarHostState.showSnackbar(context.getString(R.string.profiles_resolvers_empty_msg)) }
-            return@rememberLauncherForActivityResult
+        scope.launch {
+            val imported = withContext(Dispatchers.IO) {
+                ResolverAnalyzer.importUriToCache(context, uri)
+            }
+            if (imported == null) {
+                snackbarHostState.showSnackbar(context.getString(R.string.profiles_resolvers_empty_msg))
+                return@launch
+            }
+            ResolverAnalyzer.discardImportedResolver(importedResolvers)
+            importedResolvers = imported
+            showEditor = true
+            snackbarHostState.showSnackbar(
+                context.getString(R.string.profiles_resolvers_imported_stats_msg, imported.stats.summary())
+            )
         }
-        importedResolvers = text
-        editingProfile = null
-        showEditor = true
-        scope.launch { snackbarHostState.showSnackbar(context.getString(R.string.profiles_resolvers_imported_msg)) }
+    }
+
+    var exportToSaveLocked by remember { mutableStateOf<Boolean?>(null) }
+    val saveExportLauncher = rememberLauncherForActivityResult(
+        ActivityResultContracts.CreateDocument("application/toml")
+    ) { uri ->
+        if (uri != null && exportTarget != null && exportToSaveLocked != null) {
+            scope.launch {
+                val config = viewModel.exportProfileToml(exportTarget!!.id, exportToSaveLocked!!)
+                if (config != null) {
+                    runCatching {
+                        context.grantUriPermission(
+                            context.packageName,
+                            uri,
+                            Intent.FLAG_GRANT_READ_URI_PERMISSION or Intent.FLAG_GRANT_WRITE_URI_PERMISSION
+                        )
+                        context.contentResolver.takePersistableUriPermission(
+                            uri,
+                            Intent.FLAG_GRANT_READ_URI_PERMISSION or Intent.FLAG_GRANT_WRITE_URI_PERMISSION
+                        )
+                    }
+                    runCatching {
+                        context.contentResolver.openOutputStream(uri)?.use { outputStream ->
+                            outputStream.write(config.toByteArray())
+                            outputStream.flush()
+                        }
+                    }
+                    snackbarHostState.showSnackbar(context.getString(R.string.profiles_export_saved))
+                }
+            }
+        }
+        exportTarget = null
+        exportToSaveLocked = null
+    }
+
+    // Export dialog
+    if (exportTarget != null && exportToSaveLocked == null) {
+        ExportProfileDialog(
+            profileName = exportTarget!!.name,
+            onDismiss = { exportTarget = null },
+            onShare = { locked ->
+                viewModel.exportProfile(context, exportTarget!!.id, exportTarget!!.name, lockIdentity = locked)
+                exportTarget = null
+            },
+            onSaveToFile = { locked ->
+                exportToSaveLocked = locked
+                val safeName = exportTarget!!.name.replace(Regex("[^a-zA-Z0-9_-]"), "_")
+                val suffix = if (locked) "_locked" else ""
+                saveExportLauncher.launch("${safeName}_client_config$suffix.toml")
+            }
+        )
     }
 
     Scaffold(
@@ -95,8 +162,20 @@ fun ProfilesScreen(
                 onBack = onBack,
                 actions = {
                     IconButton(onClick = {
+                        importLauncher.launch(
+                            arrayOf(
+                                "application/toml",
+                                "text/x-toml",
+                                "text/plain",
+                                "application/octet-stream",
+                                "*/*"
+                            )
+                        )
+                    }) {
+                        Icon(Icons.Filled.UploadFile, contentDescription = stringResource(R.string.action_import_toml))
+                    }
+                    IconButton(onClick = {
                         editingProfile = null
-                        importedDraft = null
                         importedResolvers = null
                         showEditor = true
                     }) {
@@ -109,19 +188,7 @@ fun ProfilesScreen(
         if (showEditor) {
             ProfileEditorDialog(
                 profile = editingProfile,
-                importedDraft = importedDraft,
                 importedResolvers = importedResolvers,
-                onImportToml = {
-                    importLauncher.launch(
-                        arrayOf(
-                            "application/toml",
-                            "text/x-toml",
-                            "text/plain",
-                            "application/octet-stream",
-                            "*/*"
-                        )
-                    )
-                },
                 onImportResolvers = {
                     importResolversLauncher.launch(
                         arrayOf(
@@ -139,15 +206,16 @@ fun ProfilesScreen(
                     }
                     showEditor = false
                     editingProfile = null
-                    importedDraft = null
                     importedResolvers = null
                 },
                 onDismiss = {
+                    ResolverAnalyzer.discardImportedResolver(importedResolvers)
                     showEditor = false
                     editingProfile = null
-                    importedDraft = null
                     importedResolvers = null
-                }
+                },
+                viewModel = viewModel,
+                snackbarHostState = snackbarHostState
             )
         }
 
@@ -172,7 +240,6 @@ fun ProfilesScreen(
                     Spacer(modifier = Modifier.height(8.dp))
                     FilledTonalButton(onClick = {
                         editingProfile = null
-                        importedDraft = null
                         importedResolvers = null
                         showEditor = true
                     }) {
@@ -193,9 +260,11 @@ fun ProfilesScreen(
                         onSettings = { onOpenSettings(profile.id) },
                         onEdit = {
                             editingProfile = profile
+                            importedResolvers = null
                             showEditor = true
                         },
-                        onDelete = { viewModel.deleteProfile(profile) }
+                        onDelete = { viewModel.deleteProfile(profile) },
+                        onExport = { exportTarget = profile }
                     )
                 }
             }
@@ -209,7 +278,8 @@ fun ProfileCard(
     onSelect: () -> Unit,
     onSettings: () -> Unit,
     onEdit: () -> Unit,
-    onDelete: () -> Unit
+    onDelete: () -> Unit,
+    onExport: () -> Unit
 ) {
     Card(
         onClick = onSelect,
@@ -238,99 +308,138 @@ fun ProfileCard(
             }
 
             Column(modifier = Modifier.weight(1f)) {
-                Text(
-                    text = profile.name,
-                    style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.SemiBold)
-                )
-                val domainsList = try {
-                    gson.fromJson<List<String>>(profile.domains, object : com.google.gson.reflect.TypeToken<List<String>>() {}.type)
-                } catch (e: Exception) {
-                    profile.domains.removePrefix("[").removeSuffix("]").split(",").map { it.trim().removeSurrounding("\"") }.filter { it.isNotEmpty() }
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Text(
+                        text = profile.name,
+                        style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.SemiBold)
+                    )
                 }
                 Text(
-                    text = domainsList.joinToString(", "),
+                    text = parseDomainList(profile.domains).joinToString(", "),
                     style = MaterialTheme.typography.bodySmall,
                     color = MdvColor.OnSurfaceVariant
                 )
+                ProfileHealthRow(profile)
             }
 
-            IconButton(onClick = onEdit, modifier = Modifier.size(48.dp)) {
-                Icon(Icons.Filled.Edit, contentDescription = stringResource(R.string.profiles_edit), modifier = Modifier.size(20.dp))
+            IconButton(onClick = onExport, modifier = Modifier.size(40.dp)) {
+                Icon(Icons.Filled.Share, contentDescription = "Export", modifier = Modifier.size(18.dp))
             }
-            IconButton(onClick = onSettings, modifier = Modifier.size(48.dp)) {
-                Icon(Icons.Filled.Settings, contentDescription = stringResource(R.string.profiles_settings), modifier = Modifier.size(20.dp))
+            IconButton(onClick = onEdit, modifier = Modifier.size(40.dp)) {
+                Icon(Icons.Filled.Edit, contentDescription = stringResource(R.string.profiles_edit), modifier = Modifier.size(18.dp))
             }
-            IconButton(onClick = onDelete, modifier = Modifier.size(48.dp)) {
-                Icon(Icons.Filled.Delete, contentDescription = stringResource(R.string.profiles_delete), modifier = Modifier.size(20.dp))
+            IconButton(onClick = onSettings, modifier = Modifier.size(40.dp)) {
+                Icon(Icons.Filled.Settings, contentDescription = stringResource(R.string.profiles_settings), modifier = Modifier.size(18.dp))
+            }
+            IconButton(onClick = onDelete, modifier = Modifier.size(40.dp)) {
+                Icon(Icons.Filled.Delete, contentDescription = stringResource(R.string.profiles_delete), modifier = Modifier.size(18.dp))
             }
         }
     }
 }
 
-@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun ProfileHealthRow(profile: ProfileEntity) {
+    val imported = ResolverAnalyzer.profileImportedResolver(profile)
+    val sourceText = if (imported != null) {
+        stringResource(R.string.profiles_source_file, imported.displayName)
+    } else {
+        stringResource(R.string.profiles_source_inline)
+    }
+    val resolverCount = imported?.stats?.uniqueUsableIps ?: ResolverAnalyzer.resolverCount(profile)
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(top = 6.dp),
+        horizontalArrangement = Arrangement.spacedBy(6.dp)
+    ) {
+        AssistChip(
+            onClick = {},
+            modifier = Modifier.weight(1f, fill = false),
+            label = {
+                Text(
+                    text = sourceText,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
+                )
+            },
+            leadingIcon = {
+                Icon(
+                    if (imported != null) Icons.Filled.Description else Icons.Filled.Edit,
+                    contentDescription = null,
+                    modifier = Modifier.size(16.dp)
+                )
+            }
+        )
+        AssistChip(
+            onClick = {},
+            label = {
+                Text(
+                    text = stringResource(R.string.profiles_resolver_count_badge, resolverCount),
+                    maxLines = 1
+                )
+            }
+        )
+    }
+}
+
+@OptIn(ExperimentalMaterial3Api::class, ExperimentalLayoutApi::class)
 @Composable
 private fun ProfileEditorDialog(
     profile: ProfileEntity?,
-    importedDraft: ImportedProfileDraft?,
-    importedResolvers: String?,
-    onImportToml: () -> Unit,
+    importedResolvers: ImportedResolverFile?,
     onImportResolvers: () -> Unit,
     onSave: (ProfileEntity) -> Unit,
-    onDismiss: () -> Unit
+    onDismiss: () -> Unit,
+    viewModel: ProfilesViewModel,
+    snackbarHostState: SnackbarHostState
 ) {
+    val context = androidx.compose.ui.platform.LocalContext.current
+    val scope = rememberCoroutineScope()
     var name by remember { mutableStateOf(profile?.name.orEmpty()) }
-    val domainList = remember {
-        androidx.compose.runtime.mutableStateListOf<String>().apply {
-            val domainsJson = profile?.domains
-            if (!domainsJson.isNullOrBlank()) {
-                val parsed = try {
-                    gson.fromJson<List<String>>(domainsJson, object : com.google.gson.reflect.TypeToken<List<String>>() {}.type)
-                } catch (e: Exception) {
-                    domainsJson.removePrefix("[").removeSuffix("]").split(",").map { it.trim().removeSurrounding("\"") }.filter { it.isNotEmpty() }
-                }
-                addAll(parsed)
-            }
-        }
+    // Multi-domain as list
+    var domainList by remember {
+        mutableStateOf(
+            if (profile != null) parseDomainList(profile.domains).toMutableList()
+            else mutableListOf("")
+        )
     }
-    var newDomainInput by remember { mutableStateOf("") }
-    var isDomainInputFocused by remember { mutableStateOf(false) }
+    var domainInput by remember { mutableStateOf("") }
     var encryptionKey by remember { mutableStateOf(profile?.encryptionKey.orEmpty()) }
     var resolvers by remember { mutableStateOf(profile?.resolvers ?: "8.8.8.8") }
+    var resolverFile by remember(profile?.id) { mutableStateOf(profile?.let { ResolverAnalyzer.profileImportedResolver(it) }) }
+    var resolverStats by remember(profile?.id) {
+        mutableStateOf(resolverFile?.stats ?: ResolverAnalyzer.analyzeText(resolvers))
+    }
     var showKey by remember { mutableStateOf(false) }
     var showResolversEditor by remember { mutableStateOf(false) }
-    val largeResolversText = resolvers.length > 6000
+    val usingResolverFile = resolverFile != null
+    val largeResolversText = !usingResolverFile && resolvers.length > 6000
 
     LaunchedEffect(profile?.id) {
         if (profile != null) {
             name = profile.name
-            domainList.clear()
-            val parsed = try {
-                gson.fromJson<List<String>>(profile.domains, object : com.google.gson.reflect.TypeToken<List<String>>() {}.type)
-            } catch (e: Exception) {
-                profile.domains.removePrefix("[").removeSuffix("]").split(",").map { it.trim().removeSurrounding("\"") }.filter { it.isNotEmpty() }
-            }
-            domainList.addAll(parsed)
+            domainList = parseDomainList(profile.domains).toMutableList()
             encryptionKey = profile.encryptionKey
             resolvers = profile.resolvers
+            resolverFile = ResolverAnalyzer.profileImportedResolver(profile)
+            resolverStats = resolverFile?.stats ?: ResolverAnalyzer.analyzeText(profile.resolvers)
             showResolversEditor = false
         }
     }
 
-    LaunchedEffect(importedDraft, importedResolvers) {
-        val importedProfile = importedDraft?.profile
-        if (importedProfile != null) {
-            if (name.isBlank()) {
-                // Keep user-entered profile name if they typed it before import.
-                name = importedProfile.name
-            }
-            domainList.clear()
-            domainList.addAll(importedDraft.domainList)
-            encryptionKey = importedProfile.encryptionKey
-            resolvers = importedProfile.resolvers
+    LaunchedEffect(importedResolvers) {
+        if (importedResolvers != null) {
+            resolverFile = importedResolvers
+            resolverStats = importedResolvers.stats
+            resolvers = ""
         }
-        if (!importedResolvers.isNullOrBlank()) {
-            resolvers = importedResolvers
-        }
+    }
+
+    LaunchedEffect(resolvers, resolverFile?.cachedPath) {
+        resolverStats = resolverFile
+            ?.let { ResolverAnalyzer.analyzeCachedFile(it.cachedPath, it.displayName) ?: it.stats }
+            ?: ResolverAnalyzer.analyzeText(resolvers)
     }
 
     AlertDialog(
@@ -346,7 +455,9 @@ private fun ProfileEditorDialog(
         },
         text = {
             Column(
-                modifier = Modifier.fillMaxWidth(),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .verticalScroll(rememberScrollState()),
                 verticalArrangement = Arrangement.spacedBy(12.dp)
             ) {
                 OutlinedTextField(
@@ -356,108 +467,71 @@ private fun ProfileEditorDialog(
                     singleLine = true,
                     modifier = Modifier.fillMaxWidth()
                 )
-                if (profile == null) {
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.spacedBy(8.dp)
-                    ) {
-                        OutlinedButton(
-                            onClick = onImportToml,
-                            modifier = Modifier.weight(1f),
-                            contentPadding = PaddingValues(vertical = 12.dp, horizontal = 4.dp)
-                        ) {
-                            Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                                Icon(Icons.Filled.UploadFile, contentDescription = null)
-                                Spacer(modifier = Modifier.height(4.dp))
-                                Text(
-                                    stringResource(R.string.action_import_toml),
-                                    textAlign = androidx.compose.ui.text.style.TextAlign.Center,
-                                    style = MaterialTheme.typography.labelMedium
-                                )
-                            }
-                        }
-                        OutlinedButton(
-                            onClick = onImportResolvers,
-                            modifier = Modifier.weight(1f),
-                            contentPadding = PaddingValues(vertical = 12.dp, horizontal = 4.dp)
-                        ) {
-                            Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                                Icon(Icons.Filled.Description, contentDescription = null)
-                                Spacer(modifier = Modifier.height(4.dp))
-                                Text(
-                                    stringResource(R.string.profiles_import_resolvers_short),
-                                    textAlign = androidx.compose.ui.text.style.TextAlign.Center,
-                                    style = MaterialTheme.typography.labelMedium
-                                )
-                            }
-                        }
-                    }
-                }
 
-                Column(modifier = Modifier.fillMaxWidth()) {
-                    if (domainList.isNotEmpty()) {
-                        @OptIn(androidx.compose.foundation.layout.ExperimentalLayoutApi::class)
-                        androidx.compose.foundation.layout.FlowRow(
-                            modifier = Modifier.fillMaxWidth().padding(bottom = 8.dp),
-                            horizontalArrangement = Arrangement.spacedBy(8.dp),
-                            verticalArrangement = Arrangement.spacedBy(8.dp)
-                        ) {
-                            domainList.forEach { domain ->
-                                InputChip(
-                                    selected = false,
-                                    onClick = { },
-                                    label = { Text(domain) },
-                                    trailingIcon = {
-                                        IconButton(
-                                            onClick = { domainList.remove(domain) },
-                                            modifier = Modifier.size(16.dp)
-                                        ) {
-                                            Icon(Icons.Filled.Close, contentDescription = "Remove")
-                                        }
-                                    }
-                                )
-                            }
-                        }
-                    }
+                // ── Multi-Domain editor ──────────────────────────────────
+                Text(
+                    stringResource(R.string.profiles_domain_hint),
+                    style = MaterialTheme.typography.labelMedium,
+                    color = MdvColor.OnSurfaceVariant
+                )
 
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        OutlinedTextField(
-                            value = newDomainInput,
-                            onValueChange = { newDomainInput = it },
-                            label = { Text(stringResource(R.string.profiles_domain_hint)) },
-                            placeholder = {
-                                if (isDomainInputFocused) {
-                                    Text("(e.g. v.example.com)")
-                                }
-                            },
-                            singleLine = true,
-                            modifier = Modifier
-                                .weight(1f)
-                                .onFocusChanged { focusState ->
-                                    isDomainInputFocused = focusState.isFocused
+                FlowRow(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(6.dp),
+                    verticalArrangement = Arrangement.spacedBy(6.dp)
+                ) {
+                    domainList.forEachIndexed { index, domain ->
+                        if (domain.isNotBlank()) {
+                            InputChip(
+                                selected = false,
+                                onClick = {
+                                    val newList = domainList.toMutableList()
+                                    newList.removeAt(index)
+                                    domainList = newList
                                 },
-                            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Uri)
-                        )
-                        Spacer(modifier = Modifier.width(12.dp))
-                        FilledIconButton(
-                            onClick = {
-                                val d = newDomainInput.trim()
-                                if (d.isNotEmpty() && !domainList.contains(d)) {
-                                    domainList.add(d)
-                                    newDomainInput = ""
+                                label = { Text(domain, style = MaterialTheme.typography.bodySmall) },
+                                trailingIcon = {
+                                    Icon(
+                                        Icons.Filled.Close,
+                                        contentDescription = "Remove",
+                                        modifier = Modifier.size(14.dp)
+                                    )
                                 }
-                            },
-                            modifier = Modifier.size(48.dp),
-                            colors = IconButtonDefaults.filledIconButtonColors(containerColor = ConnectedGreen)
-                        ) {
-                            Icon(Icons.Filled.Add, contentDescription = "Add Domain", tint = MdvColor.Background)
+                            )
                         }
                     }
                 }
 
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    OutlinedTextField(
+                        value = domainInput,
+                        onValueChange = { domainInput = it },
+                        label = { Text("Add domain") },
+                        singleLine = true,
+                        modifier = Modifier.weight(1f),
+                        placeholder = { Text("v.example.com") },
+                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Uri)
+                    )
+                    IconButton(
+                        onClick = {
+                            val d = domainInput.trim()
+                            if (d.isNotEmpty() && !domainList.contains(d)) {
+                                val newList = domainList.toMutableList()
+                                newList.add(d)
+                                domainList = newList
+                            }
+                            domainInput = ""
+                        }
+                    ) {
+                        Icon(Icons.Filled.AddCircle, contentDescription = "Add domain", tint = MdvColor.PrimaryContainer)
+                    }
+                }
+
+                // ── Encryption Key ───────────────────────────────────────
                 OutlinedTextField(
                     value = encryptionKey,
                     onValueChange = { encryptionKey = it },
@@ -479,20 +553,81 @@ private fun ProfileEditorDialog(
                     }
                 )
 
-                // Import Resolvers button for Edit mode (placed above the resolvers field)
-                if (profile != null) {
+                // ── Import Actions ───────────────────────────────────────────
+                val importTomlLauncher = rememberLauncherForActivityResult(
+                    ActivityResultContracts.OpenDocument()
+                ) { uri ->
+                    if (uri == null) return@rememberLauncherForActivityResult
+                    val text = readTextFromUri(context, uri).trim()
+                    if (text.isBlank()) {
+                        scope.launch { snackbarHostState.showSnackbar(context.getString(R.string.profiles_invalid_toml_msg)) }
+                        return@rememberLauncherForActivityResult
+                    }
+                    scope.launch {
+                        val parsed = viewModel.previewProfileFromToml(text, name.ifEmpty { "Imported" })
+                        if (parsed != null) {
+                            name = parsed.name
+                            domainList = parseDomainList(parsed.domains).toMutableList()
+                            encryptionKey = parsed.encryptionKey
+                            resolvers = parsed.resolvers
+                            snackbarHostState.showSnackbar(context.getString(R.string.profiles_toml_imported_msg))
+                        } else {
+                            snackbarHostState.showSnackbar(context.getString(R.string.profiles_invalid_toml_msg))
+                        }
+                    }
+                }
+
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    OutlinedButton(
+                        onClick = {
+                            importTomlLauncher.launch(arrayOf("application/toml", "text/x-toml", "text/plain", "application/octet-stream", "*/*"))
+                        },
+                        modifier = Modifier.weight(1f)
+                    ) {
+                        Icon(Icons.Filled.UploadFile, contentDescription = null, modifier = Modifier.size(16.dp))
+                        Spacer(modifier = Modifier.width(6.dp))
+                        Text(stringResource(R.string.action_import_toml))
+                    }
+
                     OutlinedButton(
                         onClick = onImportResolvers,
-                        modifier = Modifier.fillMaxWidth(),
-                        contentPadding = PaddingValues(vertical = 8.dp)
+                        modifier = Modifier.weight(1f)
                     ) {
-                        Icon(Icons.Filled.Description, contentDescription = null, modifier = Modifier.size(20.dp))
-                        Spacer(modifier = Modifier.width(8.dp))
+                        Icon(Icons.Filled.Description, contentDescription = null, modifier = Modifier.size(16.dp))
+                        Spacer(modifier = Modifier.width(6.dp))
                         Text(stringResource(R.string.profiles_import_resolvers_short))
                     }
                 }
 
-                if (!showResolversEditor && largeResolversText) {
+                if (usingResolverFile) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        OutlinedButton(
+                            onClick = {
+                                if (resolverFile?.cachedPath == importedResolvers?.cachedPath) {
+                                    ResolverAnalyzer.discardImportedResolver(importedResolvers)
+                                }
+                                resolverFile = null
+                                resolvers = "8.8.8.8"
+                                showResolversEditor = true
+                            },
+                            modifier = Modifier.weight(1f)
+                        ) {
+                            Icon(Icons.Filled.Edit, contentDescription = null, modifier = Modifier.size(16.dp))
+                            Spacer(modifier = Modifier.width(6.dp))
+                            Text(stringResource(R.string.profiles_use_inline_resolvers))
+                        }
+                    }
+                    ResolverStatsCard(
+                        title = stringResource(R.string.profiles_imported_resolver_file, resolverFile?.displayName.orEmpty()),
+                        stats = resolverStats
+                    )
+                } else if (!showResolversEditor && largeResolversText) {
                     Card(
                         modifier = Modifier.fillMaxWidth(),
                         colors = CardDefaults.cardColors(containerColor = MdvColor.SurfaceHigh)
@@ -514,6 +649,7 @@ private fun ProfileEditorDialog(
                         value = resolvers,
                         onValueChange = { resolvers = it },
                         label = { Text(stringResource(R.string.profiles_resolvers_label)) },
+                        supportingText = { Text(stringResource(R.string.profiles_resolvers_stats_line, resolverStats.summary())) },
                         modifier = Modifier.fillMaxWidth().height(120.dp),
                         maxLines = 6,
                         keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Uri)
@@ -524,24 +660,26 @@ private fun ProfileEditorDialog(
         confirmButton = {
             FilledTonalButton(
                 onClick = {
-                    val d = newDomainInput.trim()
-                    val finalDomainList = if (d.isNotEmpty() && !domainList.contains(d)) {
-                        domainList + d
-                    } else {
-                        domainList.toList()
+                    val baseProfile = profile ?: ProfileEntity(name = "", domains = "")
+                    val effectiveDomains = domainList.filter { it.isNotBlank() }.toMutableList()
+                    val dInput = domainInput.trim()
+                    if (dInput.isNotEmpty() && !effectiveDomains.contains(dInput)) {
+                        effectiveDomains.add(dInput)
                     }
-                    val baseProfile = profile ?: importedDraft?.profile ?: ProfileEntity(name = "", domains = "")
-                    val domainJson = gson.toJson(finalDomainList)
+                    if (effectiveDomains.isEmpty()) effectiveDomains.add("v.domain.com") // fallback
+                    val domainJson = gson.toJson(effectiveDomains)
+                    val preparedProfile = baseProfile.copy(
+                        name = name.trim().ifEmpty { "Profile" },
+                        domains = domainJson,
+                        encryptionKey = encryptionKey
+                    )
                     onSave(
-                        baseProfile.copy(
-                            name = name.trim().ifEmpty { "Profile" },
-                            domains = domainJson,
-                            encryptionKey = encryptionKey,
-                            resolvers = resolvers.trim()
-                        )
+                        resolverFile
+                            ?.let { ResolverAnalyzer.withImportedResolver(preparedProfile, it) }
+                            ?: ResolverAnalyzer.withInlineResolvers(preparedProfile, resolvers)
                     )
                 },
-                enabled = name.isNotBlank() && (domainList.isNotEmpty() || newDomainInput.isNotBlank())
+                enabled = name.isNotBlank() && (domainList.any { it.isNotBlank() } || domainInput.isNotBlank())
             ) {
                 Text(stringResource(R.string.action_save))
             }
@@ -554,7 +692,113 @@ private fun ProfileEditorDialog(
     )
 }
 
+@Composable
+private fun ResolverStatsCard(title: String, stats: ResolverStats?) {
+    Card(
+        modifier = Modifier.fillMaxWidth(),
+        colors = CardDefaults.cardColors(containerColor = MdvColor.SurfaceHigh)
+    ) {
+        Column(
+            modifier = Modifier.padding(10.dp),
+            verticalArrangement = Arrangement.spacedBy(6.dp)
+        ) {
+            Text(title, fontWeight = FontWeight.SemiBold)
+            if (stats == null) {
+                Text(
+                    stringResource(R.string.profiles_resolver_stats_unavailable),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MdvColor.OnSurfaceVariant
+                )
+            } else {
+                Text(
+                    stats.summary(),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MdvColor.OnSurfaceVariant
+                )
+                Text(
+                    stringResource(
+                        R.string.profiles_resolver_stats_detail,
+                        stats.rawLines,
+                        stats.blankLines,
+                        stats.commentLines,
+                        stats.customPorts,
+                        stats.skippedCidrs
+                    ),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MdvColor.OnSurfaceVariant
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun ExportProfileDialog(
+    profileName: String,
+    onDismiss: () -> Unit,
+    onShare: (Boolean) -> Unit,
+    onSaveToFile: (Boolean) -> Unit
+) {
+    var lockIdentity by remember { mutableStateOf(true) }
+
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text(stringResource(R.string.profiles_export_title, profileName)) },
+        text = {
+            Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Checkbox(
+                        checked = lockIdentity,
+                        onCheckedChange = { lockIdentity = it }
+                    )
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Column {
+                        Text(
+                            text = stringResource(R.string.profiles_export_lock_identity),
+                            style = MaterialTheme.typography.bodyMedium,
+                            fontWeight = FontWeight.SemiBold
+                        )
+                        Text(
+                            text = stringResource(R.string.profiles_export_lock_identity_desc),
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MdvColor.OnSurfaceVariant
+                        )
+                    }
+                }
+            }
+        },
+        confirmButton = {
+            FilledTonalButton(onClick = { onShare(lockIdentity) }) {
+                Text(stringResource(R.string.profiles_export_share))
+            }
+        },
+        dismissButton = {
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                TextButton(onClick = { onSaveToFile(lockIdentity) }) {
+                    Text(stringResource(R.string.profiles_export_save_file))
+                }
+                TextButton(onClick = onDismiss) {
+                    Text(stringResource(R.string.action_cancel))
+                }
+            }
+        }
+    )
+}
+
 private val gson = Gson()
+
+private fun parseDomainList(json: String): List<String> {
+    return try {
+        val type = com.google.gson.reflect.TypeToken.getParameterized(List::class.java, String::class.java).type
+        val list = gson.fromJson<List<String>>(json, type)
+        list?.filter { it.isNotBlank() } ?: listOf(json.trim())
+    } catch (_: Exception) {
+        listOf(json.trim().removeSurrounding("\""))
+    }
+}
 
 private fun readTextFromUri(context: Context, uri: Uri): String {
     return context.contentResolver.openInputStream(uri)?.bufferedReader()?.use { it.readText() }.orEmpty()
@@ -567,139 +811,3 @@ private fun readDisplayName(context: Context, uri: Uri): String? {
         cursor.getString(nameIndex)
     }?.substringBeforeLast(".")?.trim()?.takeIf { it.isNotEmpty() }
 }
-
-private fun parseProfileTomlForImport(fileName: String, tomlContent: String): ImportedProfileDraft? {
-    val values = mutableMapOf<String, String>()
-    var parsedDomainsList = emptyList<String>()
-    tomlContent.lineSequence().forEach { raw ->
-        val line = raw.substringBefore("#").trim()
-        if (line.isEmpty() || "=" !in line) return@forEach
-        val key = line.substringBefore("=").trim()
-        val valueRaw = line.substringAfter("=").trim()
-        if (key == "DOMAINS") {
-            parsedDomainsList = valueRaw
-                .removePrefix("[")
-                .removeSuffix("]")
-                .split(",")
-                .map { it.trim().removeSurrounding("\"") }
-                .filter { it.isNotBlank() }
-            return@forEach
-        }
-        val parsed = when {
-            valueRaw.startsWith("\"") && valueRaw.endsWith("\"") ->
-                valueRaw.removeSurrounding("\"")
-            else -> valueRaw
-        }
-        values[key] = parsed
-    }
-
-    val parsedDomain = if (parsedDomainsList.isNotEmpty()) parsedDomainsList else return null
-    val parsedKey = values["ENCRYPTION_KEY"]?.takeIf { it.isNotBlank() } ?: return null
-
-    val advanced = mutableMapOf<String, String>()
-    IMPORT_ADVANCED_KEYS.forEach { key ->
-        values[key]?.let { advanced[key] = it.trim() }
-    }
-
-    val importedProfile = ProfileEntity(
-        name = fileName,
-        domains = gson.toJson(parsedDomain),
-        encryptionMethod = values["DATA_ENCRYPTION_METHOD"]?.toIntOrNull() ?: 1,
-        encryptionKey = parsedKey,
-        protocolType = normalizeProtocol(values["PROTOCOL_TYPE"]),
-        listenPort = values["LISTEN_PORT"]?.toIntOrNull()?.coerceIn(1, 65535) ?: 18000,
-        resolverBalancingStrategy = values["RESOLVER_BALANCING_STRATEGY"]?.toIntOrNull() ?: 2,
-        packetDuplicationCount = values["PACKET_DUPLICATION_COUNT"]?.toIntOrNull() ?: 2,
-        setupPacketDuplicationCount = values["SETUP_PACKET_DUPLICATION_COUNT"]?.toIntOrNull() ?: 2,
-        uploadCompression = values["UPLOAD_COMPRESSION_TYPE"]?.toIntOrNull() ?: 0,
-        downloadCompression = values["DOWNLOAD_COMPRESSION_TYPE"]?.toIntOrNull() ?: 0,
-        logLevel = values["LOG_LEVEL"]?.trim().takeUnless { it.isNullOrBlank() } ?: "INFO",
-        resolvers = "8.8.8.8",
-        advancedJson = gson.toJson(advanced)
-    )
-
-    return ImportedProfileDraft(
-        profile = importedProfile,
-        domainList = parsedDomain
-    )
-}
-
-private fun normalizeProtocol(value: String?): String {
-    return when (value?.trim()?.uppercase()) {
-        "TCP" -> "TCP"
-        else -> "SOCKS5"
-    }
-}
-
-private val IMPORT_ADVANCED_KEYS = setOf(
-    "LISTEN_IP",
-    "SOCKS5_AUTH",
-    "SOCKS5_USER",
-    "SOCKS5_PASS",
-    "LOCAL_DNS_ENABLED",
-    "LOCAL_DNS_IP",
-    "LOCAL_DNS_PORT",
-    "LOCAL_DNS_CACHE_MAX_RECORDS",
-    "LOCAL_DNS_CACHE_TTL_SECONDS",
-    "LOCAL_DNS_PENDING_TIMEOUT_SECONDS",
-    "DNS_RESPONSE_FRAGMENT_TIMEOUT_SECONDS",
-    "LOCAL_DNS_CACHE_PERSIST_TO_FILE",
-    "LOCAL_DNS_CACHE_FLUSH_INTERVAL_SECONDS",
-    "STREAM_RESOLVER_FAILOVER_RESEND_THRESHOLD",
-    "STREAM_RESOLVER_FAILOVER_COOLDOWN",
-    "RECHECK_INACTIVE_SERVERS_ENABLED",
-    "AUTO_DISABLE_TIMEOUT_SERVERS",
-    "AUTO_DISABLE_TIMEOUT_WINDOW_SECONDS",
-    "BASE_ENCODE_DATA",
-    "COMPRESSION_MIN_SIZE",
-    "MIN_UPLOAD_MTU",
-    "MIN_DOWNLOAD_MTU",
-    "MAX_UPLOAD_MTU",
-    "MAX_DOWNLOAD_MTU",
-    "MTU_TEST_RETRIES",
-    "MTU_TEST_TIMEOUT",
-    "MTU_TEST_PARALLELISM",
-    "SAVE_MTU_SERVERS_TO_FILE",
-    "MTU_SERVERS_FILE_NAME",
-    "MTU_SERVERS_FILE_FORMAT",
-    "MTU_USING_SECTION_SEPARATOR_TEXT",
-    "MTU_REMOVED_SERVER_LOG_FORMAT",
-    "MTU_ADDED_SERVER_LOG_FORMAT",
-    "RX_TX_WORKERS",
-    "TUNNEL_PROCESS_WORKERS",
-    "TUNNEL_PACKET_TIMEOUT_SECONDS",
-    "RX_CHANNEL_SIZE",
-    "DISPATCHER_IDLE_POLL_INTERVAL_SECONDS",
-    "SOCKS_UDP_ASSOCIATE_READ_TIMEOUT_SECONDS",
-    "CLIENT_TERMINAL_STREAM_RETENTION_SECONDS",
-    "CLIENT_CANCELLED_SETUP_RETENTION_SECONDS",
-    "SESSION_INIT_RETRY_BASE_SECONDS",
-    "SESSION_INIT_RETRY_STEP_SECONDS",
-    "SESSION_INIT_RETRY_LINEAR_AFTER",
-    "SESSION_INIT_RETRY_MAX_SECONDS",
-    "SESSION_INIT_BUSY_RETRY_INTERVAL_SECONDS",
-    "SESSION_INIT_RACING_COUNT",
-    "PING_AGGRESSIVE_INTERVAL_SECONDS",
-    "PING_LAZY_INTERVAL_SECONDS",
-    "PING_COOLDOWN_INTERVAL_SECONDS",
-    "PING_COLD_INTERVAL_SECONDS",
-    "PING_WARM_THRESHOLD_SECONDS",
-    "PING_COOL_THRESHOLD_SECONDS",
-    "PING_COLD_THRESHOLD_SECONDS",
-    "MAX_PACKETS_PER_BATCH",
-    "ARQ_WINDOW_SIZE",
-    "ARQ_INITIAL_RTO_SECONDS",
-    "ARQ_MAX_RTO_SECONDS",
-    "ARQ_CONTROL_INITIAL_RTO_SECONDS",
-    "ARQ_CONTROL_MAX_RTO_SECONDS",
-    "ARQ_MAX_CONTROL_RETRIES",
-    "ARQ_MAX_DATA_RETRIES",
-    "ARQ_DATA_PACKET_TTL_SECONDS",
-    "ARQ_CONTROL_PACKET_TTL_SECONDS",
-    "ARQ_DATA_NACK_MAX_GAP",
-    "ARQ_DATA_NACK_INITIAL_DELAY_SECONDS",
-    "ARQ_DATA_NACK_REPEAT_SECONDS",
-    "ARQ_INACTIVITY_TIMEOUT_SECONDS",
-    "ARQ_TERMINAL_DRAIN_TIMEOUT_SECONDS",
-    "ARQ_TERMINAL_ACK_WAIT_TIMEOUT_SECONDS"
-)

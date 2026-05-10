@@ -57,7 +57,11 @@ import java.util.Locale
 private enum class LogFilter(val labelRes: Int) {
     ALL(R.string.logs_filter_all),
     CORE(R.string.logs_filter_core),
-    ANDROID(R.string.logs_filter_android)
+    ANDROID(R.string.logs_filter_android),
+    ERRORS(R.string.logs_filter_errors),
+    WARNINGS(R.string.logs_filter_warnings),
+    DNS(R.string.logs_filter_dns),
+    MTU(R.string.logs_filter_mtu)
 }
 
 private enum class LogSeverity {
@@ -104,6 +108,10 @@ fun LogsScreen(onBack: () -> Unit) {
             LogFilter.ALL -> logEntries
             LogFilter.CORE -> logEntries.filter { it.source == VpnManager.LogSource.CORE }
             LogFilter.ANDROID -> logEntries.filter { it.source == VpnManager.LogSource.ANDROID }
+            LogFilter.ERRORS -> logEntries.filter { inferSeverity(it.line) == LogSeverity.ERROR }
+            LogFilter.WARNINGS -> logEntries.filter { inferSeverity(it.line) == LogSeverity.WARN }
+            LogFilter.DNS -> logEntries.filter { it.line.contains("dns", ignoreCase = true) || it.line.contains("resolver", ignoreCase = true) }
+            LogFilter.MTU -> logEntries.filter { it.line.contains("mtu", ignoreCase = true) }
         }
     }
     val uiLogItems = remember(filteredLogs) { buildUiLogItems(filteredLogs) }

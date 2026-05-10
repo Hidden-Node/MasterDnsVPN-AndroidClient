@@ -72,7 +72,10 @@ import com.masterdns.vpn.ui.components.mdv.controls.MdvBackTopAppBar
 import com.masterdns.vpn.ui.components.mdv.controls.MdvTopAppBar
 import com.masterdns.vpn.ui.theme.MdvColor
 import com.masterdns.vpn.ui.theme.MdvSpace
+import com.masterdns.vpn.util.ResolverAnalyzer
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 
 private enum class FieldType { TEXT, BOOL, OPTION }
 
@@ -236,6 +239,7 @@ fun SettingsScreen(
     val scope = rememberCoroutineScope()
     val sections = remember { configFields.groupBy { it.section } }
     val sectionOrder = remember { configFields.map { it.section }.distinct() }
+    var settingsQuery by remember { mutableStateOf("") }
     val sectionExpanded = remember {
         mutableStateMapOf<String, Boolean>().apply {
             sectionOrder.forEach { put(it, it == "Identity") }
@@ -280,9 +284,19 @@ fun SettingsScreen(
     ) { uri ->
         val selected = profile
         if (uri != null && selected != null) {
-            val text = readTextFromUri(context, uri)
-            viewModel.importResolvers(selected, text)
-            scope.launch { snackbarHostState.showSnackbar(context.getString(R.string.settings_resolvers_imported_msg)) }
+            scope.launch {
+                val imported = withContext(Dispatchers.IO) {
+                    ResolverAnalyzer.importUriToCache(context, uri)
+                }
+                if (imported == null) {
+                    snackbarHostState.showSnackbar(context.getString(R.string.profiles_resolvers_empty_msg))
+                    return@launch
+                }
+                viewModel.importResolvers(selected, imported)
+                snackbarHostState.showSnackbar(
+                    context.getString(R.string.settings_resolvers_imported_stats_msg, imported.stats.summary())
+                )
+            }
         }
     }
     val pickMtuExportLauncher = rememberLauncherForActivityResult(
@@ -378,6 +392,19 @@ fun SettingsScreen(
                     }
                     return@Box
                 }
+                val normalizedQuery = settingsQuery.trim()
+                val visibleSectionOrder = if (normalizedQuery.isBlank()) {
+                    sectionOrder
+                } else {
+                    sectionOrder.filter { section ->
+                        section.contains(normalizedQuery, ignoreCase = true) ||
+                            sections[section].orEmpty().any { field ->
+                                field.key.contains(normalizedQuery, ignoreCase = true) ||
+                                    field.label.contains(normalizedQuery, ignoreCase = true) ||
+                                    field.helper.contains(normalizedQuery, ignoreCase = true)
+                            }
+                    }
+                }
 
                 LazyColumn(
                     modifier = Modifier
@@ -392,6 +419,14 @@ fun SettingsScreen(
                             text = stringResource(R.string.settings_editing_profile, selected.name),
                             style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.SemiBold),
                             color = MdvColor.OnSurface
+                        )
+                        Spacer(modifier = Modifier.height(MdvSpace.S1))
+                        OutlinedTextField(
+                            value = settingsQuery,
+                            onValueChange = { settingsQuery = it },
+                            label = { Text(stringResource(R.string.settings_search_label)) },
+                            singleLine = true,
+                            modifier = Modifier.fillMaxWidth()
                         )
                         Spacer(modifier = Modifier.height(MdvSpace.S1))
                         Row(horizontalArrangement = Arrangement.spacedBy(MdvSpace.S2)) {
@@ -430,9 +465,28 @@ fun SettingsScreen(
                         Spacer(modifier = Modifier.height(MdvSpace.S1))
                         MdvPrimaryActionButton(
                             text = stringResource(R.string.action_import_resolvers),
-                            onClick = { importResolversLauncher.launch(arrayOf("text/*")) },
+                            onClick = {
+                                importResolversLauncher.launch(
+                                    arrayOf("text/plain", "application/octet-stream", "*/*")
+                                )
+                            },
                             icon = Icons.Filled.UploadFile
                         )
+                        ResolverAnalyzer.profileImportedResolver(selected)?.let { imported ->
+                            Spacer(modifier = Modifier.height(MdvSpace.S1))
+                            ResolverStatsCard(
+                                title = stringResource(R.string.profiles_imported_resolver_file, imported.displayName),
+                                summary = imported.stats.summary(),
+                                detail = stringResource(
+                                    R.string.profiles_resolver_stats_detail,
+                                    imported.stats.rawLines,
+                                    imported.stats.blankLines,
+                                    imported.stats.commentLines,
+                                    imported.stats.customPorts,
+                                    imported.stats.skippedCidrs
+                                )
+                            )
+                        }
                         Spacer(modifier = Modifier.height(MdvSpace.S1))
                         MdvPrimaryActionButton(
                             text = stringResource(R.string.action_pick_mtu_destination),
@@ -445,8 +499,8 @@ fun SettingsScreen(
                     }
 
                     val socksAuthEnabled = fieldsState["SOCKS5_AUTH"].equals("true", ignoreCase = true)
-                    items(sectionOrder, key = { "section_$it" }) { section ->
-                        val expanded = sectionExpanded[section] ?: false
+                    items(visibleSectionOrder, key = { "section_$it" }) { section ->
+                        val expanded = if (normalizedQuery.isBlank()) sectionExpanded[section] ?: false else true
                         MdvSectionCard(
                             title = section,
                             expanded = expanded,
@@ -479,7 +533,15 @@ fun SettingsScreen(
                                 Spacer(modifier = Modifier.height(MdvSpace.S2))
                             }
                         }
-                        sections[section].orEmpty().forEach { field ->
+                        sections[section].orEmpty()
+                            .filter { field ->
+                                normalizedQuery.isBlank() ||
+                                    section.contains(normalizedQuery, ignoreCase = true) ||
+                                    field.key.contains(normalizedQuery, ignoreCase = true) ||
+                                    field.label.contains(normalizedQuery, ignoreCase = true) ||
+                                    field.helper.contains(normalizedQuery, ignoreCase = true)
+                            }
+                            .forEach { field ->
                             if ((field.key == "SOCKS5_USER" || field.key == "SOCKS5_PASS") && !socksAuthEnabled) {
                                 return@forEach
                             }
@@ -506,6 +568,39 @@ fun SettingsScreen(
                     }
                 }
             }
+        }
+    }
+}
+
+@Composable
+private fun ResolverStatsCard(
+    title: String,
+    summary: String,
+    detail: String
+) {
+    Card(
+        modifier = Modifier.fillMaxWidth(),
+        colors = CardDefaults.cardColors(containerColor = MdvColor.SurfaceHigh)
+    ) {
+        Column(
+            modifier = Modifier.padding(12.dp),
+            verticalArrangement = Arrangement.spacedBy(4.dp)
+        ) {
+            Text(
+                text = title,
+                style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.SemiBold),
+                color = MdvColor.OnSurface
+            )
+            Text(
+                text = summary,
+                style = MaterialTheme.typography.bodySmall,
+                color = MdvColor.OnSurfaceVariant
+            )
+            Text(
+                text = detail,
+                style = MaterialTheme.typography.bodySmall,
+                color = MdvColor.OnSurfaceVariant
+            )
         }
     }
 }
