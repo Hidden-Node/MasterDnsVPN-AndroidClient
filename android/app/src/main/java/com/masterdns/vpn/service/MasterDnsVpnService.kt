@@ -281,6 +281,7 @@ class MasterDnsVpnService : VpnService() {
                     .setMtu(1500)
                     .addAddress(if (globalSettings.fakeDnsEnabled) "172.19.0.1" else "10.0.0.2", if (globalSettings.fakeDnsEnabled) 30 else 32)
                     .addRoute("0.0.0.0", 0)
+                VpnManager.appendLog("IPv4 route enabled: 0.0.0.0/0. IPv6 is not routed by this Android VPN path.")
                 vpnDnsServers.forEach { builder.addDnsServer(it) }
                 if (globalSettings.fakeDnsEnabled) {
                     builder.addRoute("198.18.0.0", 16)
@@ -382,29 +383,39 @@ class MasterDnsVpnService : VpnService() {
         serviceScope.launch {
             try {
                 connectJob?.cancel()
-                VpnManager.appendLog("Stopping VPN...")
+                VpnManager.appendLog("VPN stop requested")
 
                 // Close TUN interface FIRST to unblock any pending I/O in Go tunBridge/tun
+                VpnManager.appendLog("Closing TUN interface...")
                 runCatching { vpnInterface?.close() }
+                    .onSuccess { VpnManager.appendLog("TUN interface closed") }
+                    .onFailure { VpnManager.appendLog("TUN interface close failed: ${it.message}") }
                 vpnInterface = null
 
                 if (tunBridgeActive) {
+                    VpnManager.appendLog("Stopping DNS-aware TUN bridge...")
                     runCatching { mobile.Mobile.stopTunBridge() }
+                        .onSuccess { VpnManager.appendLog("DNS-aware TUN bridge stopped") }
+                        .onFailure { VpnManager.appendLog("DNS-aware TUN bridge stop failed: ${it.message}") }
                     tunBridgeActive = false
                 }
 
                 // Stop Go client and Tun bridge
+                VpnManager.appendLog("Stopping Go core...")
                 runCatching {
                     if (mobile.Mobile.isRunning()) {
                         mobile.Mobile.stopClient()
+                        VpnManager.appendLog("Go core stop requested")
                     } else {
                         VpnManager.appendLog("Go core already stopped")
                     }
                 }.onFailure { e ->
                     Log.e(TAG, "Error stopping Go core", e)
+                    VpnManager.appendLog("Go core stop failed: ${e.message}")
                 }
 
                 // Cancel coroutines
+                VpnManager.appendLog("Stopping Android session jobs...")
                 goClientJob?.cancel()
                 httpProxyJob?.cancel()
                 sharingSocksJob?.cancel()
@@ -413,6 +424,7 @@ class MasterDnsVpnService : VpnService() {
                 sharingSocksServer = null
                 runCatching { sharingHttpServer?.close() }
                 sharingHttpServer = null
+                VpnManager.appendLog("Android session jobs stopped")
 
                 VpnManager.updateState(VpnManager.VpnState.DISCONNECTED)
                 VpnManager.stopTrafficMonitor()
@@ -427,8 +439,10 @@ class MasterDnsVpnService : VpnService() {
                         @Suppress("DEPRECATION")
                         stopForeground(true)
                     }
+                    VpnManager.appendLog("Foreground notification stopped")
                 }.onFailure {
                     Log.w(TAG, "Failed to stop foreground cleanly", it)
+                    VpnManager.appendLog("Foreground notification stop failed: ${it.message}")
                 }
 
                 // Delay to allow UI to update before stopping service
