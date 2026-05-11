@@ -78,6 +78,72 @@ object VpnManager {
     private var trafficMonitorJob: Job? = null
 
     private const val MAX_LOG_LINES = 500
+    private val INDEXED_PROGRESS_REGEX = Regex(
+        "(?:scan|scanning|resolver|resolvers|mtu|accepted|rejected).{0,40}?(\\d+)\\s*/\\s*(\\d+)",
+        setOf(RegexOption.IGNORE_CASE, RegexOption.DOT_MATCHES_ALL)
+    )
+    private val TOTAL_CANDIDATES_REGEX = Regex(
+        "(?:valid\\s+resolvers|resolvers\\s+for\\s+scan|scan\\s+pool|resolver\\s+pool|total\\s+resolvers).{0,20}?(\\d+)",
+        RegexOption.IGNORE_CASE
+    )
+    private val SCAN_TOTALS_REGEX = Regex(
+        "via\\s+([^\\s|]+)\\s*\\|.*totals:\\s*valid=(\\d+),\\s*rejected=(\\d+)",
+        RegexOption.IGNORE_CASE
+    )
+    private val ACTIVE_RESOLVERS_REGEX = Regex(
+        "Active Resolvers\\s*[:=]\\s*[^\\d-]*(\\d+)",
+        RegexOption.IGNORE_CASE
+    )
+    private val TOTAL_ACTIVE_REGEX = Regex(
+        "total\\s+active\\s*[:=]\\s*[^\\d-]*(\\d+)",
+        RegexOption.IGNORE_CASE
+    )
+    private val REMAINING_REGEX = Regex(
+        "remaining\\s*[:=]\\s*[^\\d-]*(\\d+)",
+        RegexOption.IGNORE_CASE
+    )
+    private val SYNCED_MTU_REGEX = Regex(
+        "Selected Synced Upload MTU:\\s*(\\d+)\\s*\\|\\s*Selected Synced Download MTU:\\s*(\\d+)",
+        RegexOption.IGNORE_CASE
+    )
+    private val TIMESTAMP_CANDIDATES = listOf(
+        // Example: 2026-04-05T10:20:30.123Z
+        TimestampCandidate(
+            Regex("^(\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}\\.\\d{3}Z)(.*)$"),
+            "yyyy-MM-dd'T'HH:mm:ss.SSS'Z'",
+            "yyyy-MM-dd HH:mm:ss.SSS"
+        ),
+        // Example: 2026-04-05T10:20:30Z
+        TimestampCandidate(
+            Regex("^(\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}Z)(.*)$"),
+            "yyyy-MM-dd'T'HH:mm:ss'Z'",
+            "yyyy-MM-dd HH:mm:ss"
+        ),
+        // Example: 2026-04-05 10:20:30 UTC (check UTC variant first)
+        TimestampCandidate(
+            Regex("^(\\d{4}-\\d{2}-\\d{2} \\d{2}:\\d{2}:\\d{2})\\s+UTC(.*)$"),
+            "yyyy-MM-dd HH:mm:ss",
+            "yyyy-MM-dd HH:mm:ss"
+        ),
+        // Example: 2026-04-05 10:20:30 (from mtu_logging.go, no UTC)
+        TimestampCandidate(
+            Regex("^(\\d{4}-\\d{2}-\\d{2} \\d{2}:\\d{2}:\\d{2})\\s(.*)$"),
+            "yyyy-MM-dd HH:mm:ss",
+            "yyyy-MM-dd HH:mm:ss"
+        ),
+        // Example: 2026/04/05 10:20:30 (from logger.go)
+        TimestampCandidate(
+            Regex("^(\\d{4}/\\d{2}/\\d{2} \\d{2}:\\d{2}:\\d{2})(.*)$"),
+            "yyyy/MM/dd HH:mm:ss",
+            "yyyy/MM/dd HH:mm:ss"
+        )
+    )
+
+    private data class TimestampCandidate(
+        val regex: Regex,
+        val inputPattern: String,
+        val outputPattern: String
+    )
 
     fun updateState(newState: VpnState) {
         _state.value = newState
@@ -208,10 +274,7 @@ object VpnManager {
     }
 
     private fun parseScanLine(line: String) {
-        val indexedProgressMatch = Regex(
-            "(?:scan|scanning|resolver|resolvers|mtu|accepted|rejected).{0,40}?(\\d+)\\s*/\\s*(\\d+)",
-            setOf(RegexOption.IGNORE_CASE, RegexOption.DOT_MATCHES_ALL)
-        ).find(line)
+        val indexedProgressMatch = INDEXED_PROGRESS_REGEX.find(line)
         if (indexedProgressMatch != null) {
             val total = indexedProgressMatch.groupValues[2].toIntOrNull()
             if (total != null && total > 0) {
@@ -219,10 +282,7 @@ object VpnManager {
             }
         }
 
-        val totalCandidatesMatch = Regex(
-            "(?:valid\\s+resolvers|resolvers\\s+for\\s+scan|scan\\s+pool|resolver\\s+pool|total\\s+resolvers).{0,20}?(\\d+)",
-            RegexOption.IGNORE_CASE
-        ).find(line)
+        val totalCandidatesMatch = TOTAL_CANDIDATES_REGEX.find(line)
         if (totalCandidatesMatch != null) {
             val total = totalCandidatesMatch.groupValues[1].toIntOrNull()
             if (total != null && total > 0) {
@@ -230,10 +290,7 @@ object VpnManager {
             }
         }
 
-        val scanMatch = Regex(
-            "via\\s+([^\\s|]+)\\s*\\|.*totals:\\s*valid=(\\d+),\\s*rejected=(\\d+)",
-            RegexOption.IGNORE_CASE
-        ).find(line)
+        val scanMatch = SCAN_TOTALS_REGEX.find(line)
         if (scanMatch != null) {
             val resolver = scanMatch.groupValues[1]
             val valid = scanMatch.groupValues[2].toIntOrNull() ?: _scanStatus.value.validCount
@@ -253,10 +310,7 @@ object VpnManager {
             return
         }
 
-        val activeResolversMatch = Regex(
-            "Active Resolvers\\s*[:=]\\s*[^\\d-]*(\\d+)",
-            RegexOption.IGNORE_CASE
-        ).find(line)
+        val activeResolversMatch = ACTIVE_RESOLVERS_REGEX.find(line)
         if (activeResolversMatch != null) {
             _scanStatus.value = _scanStatus.value.copy(
                 activeResolvers = activeResolversMatch.groupValues[1].toIntOrNull() ?: _scanStatus.value.activeResolvers
@@ -264,10 +318,7 @@ object VpnManager {
             return
         }
 
-        val totalActiveMatch = Regex(
-            "total\\s+active\\s*[:=]\\s*[^\\d-]*(\\d+)",
-            RegexOption.IGNORE_CASE
-        ).find(line)
+        val totalActiveMatch = TOTAL_ACTIVE_REGEX.find(line)
         if (totalActiveMatch != null) {
             _scanStatus.value = _scanStatus.value.copy(
                 activeResolvers = totalActiveMatch.groupValues[1].toIntOrNull() ?: _scanStatus.value.activeResolvers
@@ -275,10 +326,7 @@ object VpnManager {
             return
         }
 
-        val remainingMatch = Regex(
-            "remaining\\s*[:=]\\s*[^\\d-]*(\\d+)",
-            RegexOption.IGNORE_CASE
-        ).find(line)
+        val remainingMatch = REMAINING_REGEX.find(line)
         if (remainingMatch != null) {
             _scanStatus.value = _scanStatus.value.copy(
                 activeResolvers = remainingMatch.groupValues[1].toIntOrNull() ?: _scanStatus.value.activeResolvers
@@ -286,10 +334,7 @@ object VpnManager {
             return
         }
 
-        val syncedMatch = Regex(
-            "Selected Synced Upload MTU:\\s*(\\d+)\\s*\\|\\s*Selected Synced Download MTU:\\s*(\\d+)",
-            RegexOption.IGNORE_CASE
-        ).find(line)
+        val syncedMatch = SYNCED_MTU_REGEX.find(line)
         if (syncedMatch != null) {
             _scanStatus.value = _scanStatus.value.copy(
                 syncedUploadMtu = syncedMatch.groupValues[1].toIntOrNull() ?: 0,
@@ -311,47 +356,22 @@ object VpnManager {
     }
 
     private fun normalizeLogTimestampToLocal(line: String): String {
-        val candidates = listOf(
-            // Example: 2026-04-05T10:20:30.123Z
-            Triple(
-                Regex("^(\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}\\.\\d{3}Z)(.*)$"),
-                "yyyy-MM-dd'T'HH:mm:ss.SSS'Z'",
-                "yyyy-MM-dd HH:mm:ss.SSS"
-            ),
-            // Example: 2026-04-05T10:20:30Z
-            Triple(
-                Regex("^(\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}Z)(.*)$"),
-                "yyyy-MM-dd'T'HH:mm:ss'Z'",
-                "yyyy-MM-dd HH:mm:ss"
-            ),
-            // Example: 2026-04-05 10:20:30 UTC (check UTC variant first)
-            Triple(
-                Regex("^(\\d{4}-\\d{2}-\\d{2} \\d{2}:\\d{2}:\\d{2})\\s+UTC(.*)$"),
-                "yyyy-MM-dd HH:mm:ss",
-                "yyyy-MM-dd HH:mm:ss"
-            ),
-            // Example: 2026-04-05 10:20:30 (from mtu_logging.go, no UTC)
-            Triple(
-                Regex("^(\\d{4}-\\d{2}-\\d{2} \\d{2}:\\d{2}:\\d{2})\\s(.*)$"),
-                "yyyy-MM-dd HH:mm:ss",
-                "yyyy-MM-dd HH:mm:ss"
-            ),
-            // Example: 2026/04/05 10:20:30 (from logger.go)
-            Triple(
-                Regex("^(\\d{4}/\\d{2}/\\d{2} \\d{2}:\\d{2}:\\d{2})(.*)$"),
-                "yyyy/MM/dd HH:mm:ss",
-                "yyyy/MM/dd HH:mm:ss"
-            )
-        )
+        if (!startsWithTimestamp(line)) return line
 
-        for ((regex, inputFormat, outputFormat) in candidates) {
-            val match = regex.find(line) ?: continue
+        for (candidate in TIMESTAMP_CANDIDATES) {
+            val match = candidate.regex.find(line) ?: continue
             val utcStamp = match.groupValues[1]
             val suffix = match.groupValues[2]
-            val localStamp = convertUtcToLocal(utcStamp, inputFormat, outputFormat) ?: continue
+            val localStamp = convertUtcToLocal(utcStamp, candidate.inputPattern, candidate.outputPattern) ?: continue
             return "$localStamp$suffix"
         }
         return line
+    }
+
+    private fun startsWithTimestamp(line: String): Boolean {
+        if (line.length < 19) return false
+        if (!line[0].isDigit() || !line[1].isDigit() || !line[2].isDigit() || !line[3].isDigit()) return false
+        return (line[4] == '-' && line[7] == '-') || (line[4] == '/' && line[7] == '/')
     }
 
     private fun convertUtcToLocal(
