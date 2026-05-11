@@ -50,6 +50,7 @@ fun ProfilesScreen(
     var editingProfile by remember { mutableStateOf<ProfileEntity?>(null) }
     var importedDraft by remember { mutableStateOf<ImportedProfileDraft?>(null) }
     var importedResolvers by remember { mutableStateOf<String?>(null) }
+    var profilePendingDelete by remember { mutableStateOf<ProfileEntity?>(null) }
     val context = androidx.compose.ui.platform.LocalContext.current
     val snackbarHostState = remember { SnackbarHostState() }
     val scope = rememberCoroutineScope()
@@ -195,11 +196,41 @@ fun ProfilesScreen(
                             editingProfile = profile
                             showEditor = true
                         },
-                        onDelete = { viewModel.deleteProfile(profile) }
+                        onDelete = { profilePendingDelete = profile }
                     )
                 }
             }
         }
+    }
+
+    profilePendingDelete?.let { profile ->
+        AlertDialog(
+            onDismissRequest = { profilePendingDelete = null },
+            title = { Text(stringResource(R.string.profiles_delete_confirm_title)) },
+            text = {
+                Text(
+                    stringResource(
+                        R.string.profiles_delete_confirm_message,
+                        profile.name.ifBlank { stringResource(R.string.profiles_dialog_new_title) }
+                    )
+                )
+            },
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        viewModel.deleteProfile(profile)
+                        profilePendingDelete = null
+                    }
+                ) {
+                    Text(stringResource(R.string.profiles_delete))
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { profilePendingDelete = null }) {
+                    Text(stringResource(R.string.action_cancel))
+                }
+            }
+        )
     }
 }
 
