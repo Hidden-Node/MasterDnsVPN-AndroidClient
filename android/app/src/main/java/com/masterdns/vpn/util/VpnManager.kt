@@ -74,10 +74,14 @@ object VpnManager {
     private val _scanStatus = MutableStateFlow(ScanStatus())
     val scanStatus: StateFlow<ScanStatus> = _scanStatus.asStateFlow()
 
+    private const val MAX_LOG_LINES = 500
+    private const val LOG_EMIT_DELAY_MS = 150L
     private val monitorScope = CoroutineScope(Dispatchers.Default)
     private var trafficMonitorJob: Job? = null
-
-    private const val MAX_LOG_LINES = 500
+    private var logEmitJob: Job? = null
+    private val logBufferLock = Any()
+    private val logBuffer = ArrayDeque<LogEntry>(MAX_LOG_LINES)
+    private var logBufferVersion = 0L
 
     fun updateState(newState: VpnState) {
         _state.value = newState
@@ -117,21 +121,54 @@ object VpnManager {
             errors = _logCounters.value.errors + if (isError) 1 else 0,
             warnings = _logCounters.value.warnings + if (isWarn) 1 else 0
         )
-        val current = _logEntries.value.toMutableList()
-        current.add(LogEntry(normalizedLine, source))
-        if (current.size > MAX_LOG_LINES) {
-            current.removeAt(0)
+        synchronized(logBufferLock) {
+            if (logBuffer.size == MAX_LOG_LINES) {
+                logBuffer.removeFirst()
+            }
+            logBuffer.addLast(LogEntry(normalizedLine, source))
+            logBufferVersion++
         }
-        _logEntries.value = current
-        _logs.value = current.map { it.line }
+        scheduleLogEmission()
         parseScanLine(normalizedLine)
     }
 
     fun clearLogs() {
+        synchronized(logBufferLock) {
+            logBuffer.clear()
+            logBufferVersion++
+        }
+        logEmitJob?.cancel()
+        logEmitJob = null
         _logEntries.value = emptyList()
         _logs.value = emptyList()
         _logCounters.value = LogCounters()
         _scanStatus.value = ScanStatus()
+    }
+
+    private fun scheduleLogEmission() {
+        if (logEmitJob?.isActive == true) return
+        logEmitJob = monitorScope.launch {
+            while (isActive) {
+                delay(LOG_EMIT_DELAY_MS)
+                val emittedVersion = emitLogs()
+                val currentVersion = synchronized(logBufferLock) {
+                    logBufferVersion
+                }
+                if (currentVersion == emittedVersion) break
+            }
+        }
+    }
+
+    private fun emitLogs(): Long {
+        val snapshot: List<LogEntry>
+        val version: Long
+        synchronized(logBufferLock) {
+            snapshot = logBuffer.toList()
+            version = logBufferVersion
+        }
+        _logEntries.value = snapshot
+        _logs.value = snapshot.map { it.line }
+        return version
     }
 
     fun startTrafficMonitor(context: Context) {
