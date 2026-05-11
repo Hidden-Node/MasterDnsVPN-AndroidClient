@@ -57,7 +57,9 @@ android {
             isMinifyEnabled = true
             isShrinkResources = true
             val signingEnabled = System.getenv("ANDROID_SIGNING_ENABLED") == "true"
-            signingConfig = if (signingEnabled) signingConfigs.getByName("release") else signingConfigs.getByName("debug")
+            if (signingEnabled) {
+                signingConfig = signingConfigs.getByName("release")
+            }
             proguardFiles(
                 getDefaultProguardFile("proguard-android-optimize.txt"),
                 "proguard-rules.pro"
@@ -92,6 +94,17 @@ android {
         resources {
             excludes += "/META-INF/{AL2.0,LGPL2.1}"
         }
+    }
+}
+
+gradle.taskGraph.whenReady {
+    val releaseTaskRequested = allTasks.any { task ->
+        task.path.startsWith(":app:") && task.name.contains("Release")
+    }
+    if (releaseTaskRequested && System.getenv("ANDROID_SIGNING_ENABLED") != "true") {
+        throw org.gradle.api.GradleException(
+            "Release builds require ANDROID_SIGNING_ENABLED=true and Android signing environment variables."
+        )
     }
 }
 
