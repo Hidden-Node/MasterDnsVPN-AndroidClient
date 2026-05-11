@@ -23,6 +23,8 @@
     <string name="global_settings_saved_msg">Global settings saved and applied</string>
     <string name="global_settings_ports_required_msg">Please enter both SOCKS5 and HTTP ports.</string>
     <string name="global_settings_ports_range_msg">Ports must be between 1025 and 65535.</string>
+    <string name="global_custom_dns_invalid_msg">Invalid custom DNS server: %1$s</string>
+    <string name="global_sharing_credentials_required_msg">Internet sharing requires both username and password.</string>
     <string name="global_settings_save_button">Save Global Settings</string>
     <string name="split_tunnel_apps_title">Split Tunnel Apps</string>
     <string name="split_tunnel_apps_selected_count">%1$d selected apps - tap to choose</string>
@@ -123,6 +125,7 @@
     <string name="global_http_port_required">HTTP port is required.</string>
     <string name="global_username">Username</string>
     <string name="global_password">Password</string>
+    <string name="global_sharing_lan_warning">Sharing listens on your local network. Use a username and password before enabling it.</string>
     <string name="global_sharing_help">Use these endpoints to share your VPN connection with other devices or apps on the same network.</string>
     <string name="info_app_name_title">MasterDnsVPN</string>
     <string name="info_overview_subtitle">Project overview and build details</string>

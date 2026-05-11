@@ -81,6 +81,7 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import androidx.compose.runtime.LaunchedEffect
+import java.net.InetAddress
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -125,13 +126,35 @@ fun GlobalSettingsScreen(vm: GlobalSettingsViewModel = viewModel()) {
             }
             return
         }
+        val customDnsServers = parseCsv(draft.customDnsServers)
+        val invalidDnsServers = customDnsServers.filterNot(::isValidIpLiteral)
+        if (invalidDnsServers.isNotEmpty()) {
+            scope.launch {
+                snackbarHostState.showSnackbar(
+                    context.getString(R.string.global_custom_dns_invalid_msg, invalidDnsServers.joinToString(", "))
+                )
+            }
+            return
+        }
+        if (draft.internetSharingEnabled &&
+            (draft.internetSharingUser.isBlank() || draft.internetSharingPass.isBlank())
+        ) {
+            scope.launch {
+                snackbarHostState.showSnackbar(context.getString(R.string.global_sharing_credentials_required_msg))
+            }
+            return
+        }
         val safeSocksPort = socksPortValue ?: return
         val safeHttpPort = httpPortValue ?: return
-        draft = draft.copy(
+        val sanitized = draft.copy(
             internetSharingSocksPort = safeSocksPort,
-            internetSharingHttpPort = safeHttpPort
+            internetSharingHttpPort = safeHttpPort,
+            customDnsServers = customDnsServers.joinToString(","),
+            internetSharingUser = draft.internetSharingUser.trim(),
+            internetSharingPass = draft.internetSharingPass.trim()
         )
-        vm.save(normalize(draft))
+        draft = sanitized
+        vm.save(normalize(sanitized))
         scope.launch { snackbarHostState.showSnackbar(context.getString(R.string.global_settings_saved_msg)) }
     }
 
@@ -319,6 +342,11 @@ fun GlobalSettingsScreen(vm: GlobalSettingsViewModel = viewModel()) {
                                     color = MdvColor.PrimaryContainer
                                 )
                             }
+                            Text(
+                                stringResource(R.string.global_sharing_lan_warning),
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MdvColor.Error
+                            )
 
                             Row(
                                 modifier = Modifier.fillMaxWidth(),
@@ -676,6 +704,9 @@ private fun parseCsv(value: String): Set<String> {
 private fun normalize(settings: GlobalSettings): GlobalSettings {
     return settings.copy(
         connectionMode = settings.connectionMode.uppercase(),
+        customDnsServers = parseCsv(settings.customDnsServers).joinToString(","),
+        internetSharingUser = settings.internetSharingUser.trim(),
+        internetSharingPass = settings.internetSharingPass.trim(),
         splitPackagesCsv = settings.splitPackagesCsv
             .split(",")
             .map { it.trim() }
@@ -683,6 +714,18 @@ private fun normalize(settings: GlobalSettings): GlobalSettings {
             .distinct()
             .joinToString(",")
     )
+}
+
+private fun isValidIpLiteral(value: String): Boolean {
+    val text = value.trim()
+    if (text.isBlank()) return false
+    val numericCandidate = when {
+        "." in text && ":" !in text -> text.matches(Regex("\\d{1,3}(\\.\\d{1,3}){3}"))
+        ":" in text -> text.matches(Regex("[0-9A-Fa-f:.]+"))
+        else -> false
+    }
+    if (!numericCandidate) return false
+    return runCatching { InetAddress.getByName(text) }.isSuccess
 }
 
 private fun getSystemLocalIp(): String? {
