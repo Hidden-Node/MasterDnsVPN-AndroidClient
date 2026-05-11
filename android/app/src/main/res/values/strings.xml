@@ -68,6 +68,7 @@
     <string name="home_socks_auth_title">SOCKS5 authentication</string>
     <string name="home_socks_username">Username: %1$s</string>
     <string name="home_socks_password">Password: %1$s</string>
+    <string name="home_socks_password_hidden">Password: hidden</string>
     <string name="home_profile_title">PROFILE</string>
     <string name="home_connect">Connect</string>
     <string name="home_disconnect">Disconnect</string>

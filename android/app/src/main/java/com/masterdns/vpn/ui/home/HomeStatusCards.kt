@@ -157,7 +157,7 @@ fun MdvConnectionTelemetryCard(
                 }
                 if (socksPass.isNotBlank()) {
                     Text(
-                        text = stringResource(R.string.home_socks_password, socksPass),
+                        text = stringResource(R.string.home_socks_password_hidden),
                         style = MaterialTheme.typography.bodySmall,
                         color = MdvColor.OnSurfaceVariant
                     )
