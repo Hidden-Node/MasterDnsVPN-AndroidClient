@@ -42,6 +42,7 @@ cd "$BUILD_DIR"
 # dependency only in the temporary build tree so the real go.mod/go.sum stay
 # untouched for upstream/core merge safety.
 GO111MODULE=on go get "golang.org/x/mobile@${MOBILE_TOOLS_VERSION}"
+GO111MODULE=on go mod download
 
 gomobile bind \
   -v \

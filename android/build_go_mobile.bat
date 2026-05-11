@@ -80,6 +80,15 @@ if errorlevel 1 (
     exit /b 1
 )
 
+GO111MODULE=on go mod download
+if errorlevel 1 (
+    echo ERROR: Failed to download temporary gomobile module dependencies
+    cd /d "%SOURCE_ROOT%"
+    rmdir /s /q "%BUILD_ROOT%"
+    pause
+    exit /b 1
+)
+
 gomobile bind -v -target=android/arm64,android/arm,android/amd64,android/386 -androidapi 21 -o "%SOURCE_ROOT%\android\app\libs\masterdnsvpn.aar" ./mobile/
 
 if errorlevel 1 (
