@@ -78,6 +78,13 @@ object VpnManager {
     private var trafficMonitorJob: Job? = null
 
     private const val MAX_LOG_LINES = 500
+    private const val REDACTED_VALUE = "<redacted>"
+    private val SENSITIVE_ASSIGNMENT_REGEX = Regex(
+        "(?i)\\b(ENCRYPTION_KEY|SOCKS5_PASS|SOCKS5_USER|PASSWORD|PASS|TOKEN|SECRET)\\b\\s*[:=]\\s*(\"[^\"]*\"|'[^']*'|[^\\s,;]+)"
+    )
+    private val ANDROID_APP_PATH_REGEX = Regex(
+        "(?:/data/(?:user|data)/\\d*/?[^\\s,;]+|/data/data/[^\\s,;]+|[A-Za-z]:\\\\Users\\\\[^\\s,;]+)"
+    )
 
     fun updateState(newState: VpnState) {
         _state.value = newState
@@ -108,7 +115,7 @@ object VpnManager {
     }
 
     private fun appendLogInternal(line: String, source: LogSource) {
-        val normalizedLine = normalizeLogTimestampToLocal(line)
+        val normalizedLine = redactSensitiveLogContent(normalizeLogTimestampToLocal(line))
         val upper = normalizedLine.uppercase()
         val isError = upper.contains("[ERROR]") || upper.contains(" ERROR ")
         val isWarn = upper.contains("[WARN]") || upper.contains(" WARNING ") || upper.contains(" WARN ")
@@ -125,6 +132,14 @@ object VpnManager {
         _logEntries.value = current
         _logs.value = current.map { it.line }
         parseScanLine(normalizedLine)
+    }
+
+    private fun redactSensitiveLogContent(line: String): String {
+        return line
+            .replace(SENSITIVE_ASSIGNMENT_REGEX) { match ->
+                "${match.groupValues[1]}=$REDACTED_VALUE"
+            }
+            .replace(ANDROID_APP_PATH_REGEX, "<app-path>")
     }
 
     fun clearLogs() {
