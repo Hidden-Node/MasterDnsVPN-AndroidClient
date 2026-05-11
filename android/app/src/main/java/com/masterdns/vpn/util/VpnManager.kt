@@ -3,6 +3,7 @@ package com.masterdns.vpn.util
 import android.content.Context
 import android.content.Intent
 import android.net.TrafficStats
+import androidx.core.content.ContextCompat
 import com.masterdns.vpn.data.local.ProfileEntity
 import com.masterdns.vpn.service.MasterDnsVpnService
 import kotlinx.coroutines.CoroutineScope
@@ -179,7 +180,7 @@ object VpnManager {
             putExtra(MasterDnsVpnService.EXTRA_PROFILE_ID, profile.id)
         }
 
-        runCatching { context.startService(intent) }
+        runCatching { ContextCompat.startForegroundService(context, intent) }
             .onFailure {
                 setError("Failed to start VPN service: ${it.message}")
                 appendLog("Failed to start VPN service: ${it.message}")

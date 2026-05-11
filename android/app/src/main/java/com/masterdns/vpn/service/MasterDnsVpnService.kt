@@ -41,6 +41,7 @@ class MasterDnsVpnService : VpnService() {
         private const val DEFAULT_SOCKS_PORT = 18000
         private const val SOCKS_STARTUP_TIMEOUT_MS = 30 * 60 * 1000L
         private const val SOCKS_POLL_INTERVAL_MS = 500L
+        private const val WAKE_LOCK_TIMEOUT_MS = SOCKS_STARTUP_TIMEOUT_MS + 5 * 60 * 1000L
 
         // Base companions many apps need for network functionality.
         private val BASE_COMPANION_PACKAGES = setOf(
@@ -90,6 +91,7 @@ class MasterDnsVpnService : VpnService() {
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         when (intent?.action) {
             ACTION_CONNECT -> {
+                startForeground(NOTIFICATION_ID, buildNotification(getString(R.string.notification_connecting)))
                 val profileId = intent.getLongExtra(EXTRA_PROFILE_ID, -1)
                 if (profileId > 0) {
                     startVpn(profileId)
@@ -111,8 +113,6 @@ class MasterDnsVpnService : VpnService() {
                 socksAuthWarningShown = false
                 sessionBusyWarningShown = false
 
-                // Show foreground notification
-                startForeground(NOTIFICATION_ID, buildNotification(getString(R.string.notification_connecting)))
                 acquireWakeLock()
 
                 // Load profile from DB
@@ -712,7 +712,7 @@ class MasterDnsVpnService : VpnService() {
         val pm = getSystemService(POWER_SERVICE) as? PowerManager ?: return
         wakeLock = pm.newWakeLock(PowerManager.PARTIAL_WAKE_LOCK, "$TAG:runtime").apply {
             setReferenceCounted(false)
-            acquire()
+            acquire(WAKE_LOCK_TIMEOUT_MS)
         }
     }
 
