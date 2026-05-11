@@ -23,7 +23,15 @@ class ProfileRepository @Inject constructor(
 
     suspend fun updateProfile(profile: ProfileEntity) = profileDao.updateProfile(profile)
 
-    suspend fun deleteProfile(profile: ProfileEntity) = profileDao.deleteProfile(profile)
+    suspend fun deleteProfile(profile: ProfileEntity) {
+        val wasSelected = profile.isSelected
+        profileDao.deleteProfile(profile)
+        if (wasSelected) {
+            profileDao.getNewestProfile()?.let { remaining ->
+                profileDao.setSelectedProfile(remaining.id)
+            }
+        }
+    }
 
     suspend fun setSelectedProfile(id: Long) = profileDao.setSelectedProfile(id)
 }
