@@ -30,6 +30,7 @@ mkdir -p android/app/libs
 
 BUILD_DIR="$(mktemp -d)"
 cleanup() {
+  cd "$ROOT_DIR"
   rm -rf "$BUILD_DIR"
   check_go_modules_clean
 }
