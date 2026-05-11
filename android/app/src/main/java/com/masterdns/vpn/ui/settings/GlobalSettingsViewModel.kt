@@ -9,6 +9,7 @@ import androidx.lifecycle.viewModelScope
 import com.masterdns.vpn.util.GlobalSettings
 import com.masterdns.vpn.util.GlobalSettingsStore
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -28,10 +29,8 @@ class GlobalSettingsViewModel(app: Application) : AndroidViewModel(app) {
 
     private val _installedApps = MutableStateFlow<List<AppEntry>>(emptyList())
     val installedApps: StateFlow<List<AppEntry>> = _installedApps
-
-    init {
-        loadInstalledApps()
-    }
+    private var installedAppsJob: Job? = null
+    private var installedAppsLoaded = false
 
     fun save(settings: GlobalSettings) {
         viewModelScope.launch {
@@ -39,8 +38,9 @@ class GlobalSettingsViewModel(app: Application) : AndroidViewModel(app) {
         }
     }
 
-    private fun loadInstalledApps() {
-        viewModelScope.launch {
+    fun loadInstalledAppsIfNeeded() {
+        if (installedAppsLoaded || installedAppsJob?.isActive == true) return
+        installedAppsJob = viewModelScope.launch {
             val appList = withContext(Dispatchers.IO) {
                 val packageManager = getApplication<Application>().packageManager
                 val launcherIntent = Intent(Intent.ACTION_MAIN).addCategory(Intent.CATEGORY_LAUNCHER)
@@ -69,6 +69,7 @@ class GlobalSettingsViewModel(app: Application) : AndroidViewModel(app) {
                     .toList()
             }
             _installedApps.value = appList
+            installedAppsLoaded = true
         }
     }
 }
