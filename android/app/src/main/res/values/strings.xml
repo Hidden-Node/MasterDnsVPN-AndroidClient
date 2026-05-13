@@ -78,6 +78,8 @@
     <string name="profiles_edit">Edit</string>
     <string name="profiles_settings">Settings</string>
     <string name="profiles_delete">Delete</string>
+    <string name="profiles_delete_confirm_title">Delete profile?</string>
+    <string name="profiles_delete_confirm_message">Delete "%1$s"? This cannot be undone.</string>
     <string name="profiles_dialog_edit_title">Edit Profile</string>
     <string name="profiles_dialog_new_title">New Profile</string>
     <string name="profiles_name">Profile Name</string>
