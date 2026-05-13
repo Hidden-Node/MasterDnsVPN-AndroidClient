@@ -95,6 +95,10 @@
     <string name="profiles_toml_imported_msg">TOML imported into profile form</string>
     <string name="profiles_resolvers_empty_msg">Resolvers file is empty</string>
     <string name="profiles_resolvers_imported_msg">Resolvers imported into profile form</string>
+    <string name="profiles_name_required_msg">Profile name is required.</string>
+    <string name="profiles_domain_required_msg">Add at least one domain before saving.</string>
+    <string name="profiles_encryption_key_required_msg">Encryption key is required.</string>
+    <string name="profiles_resolvers_required_msg">Add at least one resolver before saving.</string>
     <string name="profiles_imported_profile_default">Imported Profile</string>
     <string name="logs_share">Share Logs</string>
     <string name="logs_auto">Auto</string>

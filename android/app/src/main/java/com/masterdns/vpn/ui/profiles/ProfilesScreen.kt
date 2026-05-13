@@ -295,10 +295,15 @@ private fun ProfileEditorDialog(
     var newDomainInput by remember { mutableStateOf("") }
     var isDomainInputFocused by remember { mutableStateOf(false) }
     var encryptionKey by remember { mutableStateOf(profile?.encryptionKey.orEmpty()) }
-    var resolvers by remember { mutableStateOf(profile?.resolvers ?: "8.8.8.8") }
+    var resolvers by remember { mutableStateOf(profile?.resolvers.orEmpty()) }
+    var validationMessage by remember { mutableStateOf<String?>(null) }
     var showKey by remember { mutableStateOf(false) }
     var showResolversEditor by remember { mutableStateOf(false) }
     val largeResolversText = resolvers.length > 6000
+    val nameRequiredMsg = stringResource(R.string.profiles_name_required_msg)
+    val domainRequiredMsg = stringResource(R.string.profiles_domain_required_msg)
+    val keyRequiredMsg = stringResource(R.string.profiles_encryption_key_required_msg)
+    val resolverRequiredMsg = stringResource(R.string.profiles_resolvers_required_msg)
 
     LaunchedEffect(profile?.id) {
         if (profile != null) {
@@ -312,6 +317,7 @@ private fun ProfileEditorDialog(
             domainList.addAll(parsed)
             encryptionKey = profile.encryptionKey
             resolvers = profile.resolvers
+            validationMessage = null
             showResolversEditor = false
         }
     }
@@ -331,6 +337,7 @@ private fun ProfileEditorDialog(
         if (!importedResolvers.isNullOrBlank()) {
             resolvers = importedResolvers
         }
+        validationMessage = null
     }
 
     AlertDialog(
@@ -351,8 +358,12 @@ private fun ProfileEditorDialog(
             ) {
                 OutlinedTextField(
                     value = name,
-                    onValueChange = { name = it },
+                    onValueChange = {
+                        name = it
+                        validationMessage = null
+                    },
                     label = { Text(stringResource(R.string.profiles_name)) },
+                    isError = validationMessage == nameRequiredMsg,
                     singleLine = true,
                     modifier = Modifier.fillMaxWidth()
                 )
@@ -426,8 +437,12 @@ private fun ProfileEditorDialog(
                     ) {
                         OutlinedTextField(
                             value = newDomainInput,
-                            onValueChange = { newDomainInput = it },
+                            onValueChange = {
+                                newDomainInput = it
+                                validationMessage = null
+                            },
                             label = { Text(stringResource(R.string.profiles_domain_hint)) },
+                            isError = validationMessage == domainRequiredMsg,
                             placeholder = {
                                 if (isDomainInputFocused) {
                                     Text("(e.g. v.example.com)")
@@ -460,8 +475,12 @@ private fun ProfileEditorDialog(
 
                 OutlinedTextField(
                     value = encryptionKey,
-                    onValueChange = { encryptionKey = it },
+                    onValueChange = {
+                        encryptionKey = it
+                        validationMessage = null
+                    },
                     label = { Text(stringResource(R.string.profiles_encryption_key)) },
+                    isError = validationMessage == keyRequiredMsg,
                     singleLine = true,
                     modifier = Modifier.fillMaxWidth(),
                     visualTransformation = if (showKey) VisualTransformation.None else PasswordVisualTransformation(),
@@ -512,11 +531,22 @@ private fun ProfileEditorDialog(
                 } else {
                     OutlinedTextField(
                         value = resolvers,
-                        onValueChange = { resolvers = it },
+                        onValueChange = {
+                            resolvers = it
+                            validationMessage = null
+                        },
                         label = { Text(stringResource(R.string.profiles_resolvers_label)) },
+                        isError = validationMessage == resolverRequiredMsg,
                         modifier = Modifier.fillMaxWidth().height(120.dp),
                         maxLines = 6,
                         keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Uri)
+                    )
+                }
+                validationMessage?.let { message ->
+                    Text(
+                        text = message,
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.error
                     )
                 }
             }
@@ -530,18 +560,27 @@ private fun ProfileEditorDialog(
                     } else {
                         domainList.toList()
                     }
+                    validationMessage = when {
+                        name.isBlank() -> nameRequiredMsg
+                        finalDomainList.isEmpty() -> domainRequiredMsg
+                        encryptionKey.isBlank() -> keyRequiredMsg
+                        resolvers.isBlank() -> resolverRequiredMsg
+                        else -> null
+                    }
+                    if (validationMessage != null) {
+                        return@FilledTonalButton
+                    }
                     val baseProfile = profile ?: importedDraft?.profile ?: ProfileEntity(name = "", domains = "")
                     val domainJson = gson.toJson(finalDomainList)
                     onSave(
                         baseProfile.copy(
-                            name = name.trim().ifEmpty { "Profile" },
+                            name = name.trim(),
                             domains = domainJson,
-                            encryptionKey = encryptionKey,
+                            encryptionKey = encryptionKey.trim(),
                             resolvers = resolvers.trim()
                         )
                     )
-                },
-                enabled = name.isNotBlank() && (domainList.isNotEmpty() || newDomainInput.isNotBlank())
+                }
             ) {
                 Text(stringResource(R.string.action_save))
             }
@@ -614,7 +653,7 @@ private fun parseProfileTomlForImport(fileName: String, tomlContent: String): Im
         uploadCompression = values["UPLOAD_COMPRESSION_TYPE"]?.toIntOrNull() ?: 0,
         downloadCompression = values["DOWNLOAD_COMPRESSION_TYPE"]?.toIntOrNull() ?: 0,
         logLevel = values["LOG_LEVEL"]?.trim().takeUnless { it.isNullOrBlank() } ?: "INFO",
-        resolvers = "8.8.8.8",
+        resolvers = "",
         advancedJson = gson.toJson(advanced)
     )
 
