@@ -20,6 +20,9 @@ interface ProfileDao {
     @Query("SELECT * FROM profiles WHERE isSelected = 1 LIMIT 1")
     fun getSelectedProfileFlow(): Flow<ProfileEntity?>
 
+    @Query("SELECT * FROM profiles ORDER BY createdAt DESC LIMIT 1")
+    suspend fun getNewestProfile(): ProfileEntity?
+
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun insertProfile(profile: ProfileEntity): Long
 

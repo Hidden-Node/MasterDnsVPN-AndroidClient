@@ -18,6 +18,7 @@ import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
 import java.util.TimeZone
+import java.util.ArrayDeque
 
 /**
  * Singleton bridge between Kotlin UI and Go core.
@@ -74,10 +75,15 @@ object VpnManager {
     private val _scanStatus = MutableStateFlow(ScanStatus())
     val scanStatus: StateFlow<ScanStatus> = _scanStatus.asStateFlow()
 
+    private const val MAX_LOG_LINES = 500
+    private const val LOG_EMIT_DELAY_MS = 150L
     private val monitorScope = CoroutineScope(Dispatchers.Default)
     private var trafficMonitorJob: Job? = null
+    private var logEmitJob: Job? = null
+    private val logBufferLock = Any()
+    private val logBuffer = ArrayDeque<LogEntry>(MAX_LOG_LINES)
+    private var logBufferVersion = 0L
 
-    private const val MAX_LOG_LINES = 500
     private val INDEXED_PROGRESS_REGEX = Regex(
         "(?:scan|scanning|resolver|resolvers|mtu|accepted|rejected).{0,40}?(\\d+)\\s*/\\s*(\\d+)",
         setOf(RegexOption.IGNORE_CASE, RegexOption.DOT_MATCHES_ALL)
@@ -107,31 +113,26 @@ object VpnManager {
         RegexOption.IGNORE_CASE
     )
     private val TIMESTAMP_CANDIDATES = listOf(
-        // Example: 2026-04-05T10:20:30.123Z
         TimestampCandidate(
             Regex("^(\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}\\.\\d{3}Z)(.*)$"),
             "yyyy-MM-dd'T'HH:mm:ss.SSS'Z'",
             "yyyy-MM-dd HH:mm:ss.SSS"
         ),
-        // Example: 2026-04-05T10:20:30Z
         TimestampCandidate(
             Regex("^(\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}Z)(.*)$"),
             "yyyy-MM-dd'T'HH:mm:ss'Z'",
             "yyyy-MM-dd HH:mm:ss"
         ),
-        // Example: 2026-04-05 10:20:30 UTC (check UTC variant first)
         TimestampCandidate(
             Regex("^(\\d{4}-\\d{2}-\\d{2} \\d{2}:\\d{2}:\\d{2})\\s+UTC(.*)$"),
             "yyyy-MM-dd HH:mm:ss",
             "yyyy-MM-dd HH:mm:ss"
         ),
-        // Example: 2026-04-05 10:20:30 (from mtu_logging.go, no UTC)
         TimestampCandidate(
             Regex("^(\\d{4}-\\d{2}-\\d{2} \\d{2}:\\d{2}:\\d{2})\\s(.*)$"),
             "yyyy-MM-dd HH:mm:ss",
             "yyyy-MM-dd HH:mm:ss"
         ),
-        // Example: 2026/04/05 10:20:30 (from logger.go)
         TimestampCandidate(
             Regex("^(\\d{4}/\\d{2}/\\d{2} \\d{2}:\\d{2}:\\d{2})(.*)$"),
             "yyyy/MM/dd HH:mm:ss",
@@ -183,21 +184,54 @@ object VpnManager {
             errors = _logCounters.value.errors + if (isError) 1 else 0,
             warnings = _logCounters.value.warnings + if (isWarn) 1 else 0
         )
-        val current = _logEntries.value.toMutableList()
-        current.add(LogEntry(normalizedLine, source))
-        if (current.size > MAX_LOG_LINES) {
-            current.removeAt(0)
+        synchronized(logBufferLock) {
+            if (logBuffer.size == MAX_LOG_LINES) {
+                logBuffer.removeFirst()
+            }
+            logBuffer.addLast(LogEntry(normalizedLine, source))
+            logBufferVersion++
         }
-        _logEntries.value = current
-        _logs.value = current.map { it.line }
+        scheduleLogEmission()
         parseScanLine(normalizedLine)
     }
 
     fun clearLogs() {
+        synchronized(logBufferLock) {
+            logBuffer.clear()
+            logBufferVersion++
+        }
+        logEmitJob?.cancel()
+        logEmitJob = null
         _logEntries.value = emptyList()
         _logs.value = emptyList()
         _logCounters.value = LogCounters()
         _scanStatus.value = ScanStatus()
+    }
+
+    private fun scheduleLogEmission() {
+        if (logEmitJob?.isActive == true) return
+        logEmitJob = monitorScope.launch {
+            while (isActive) {
+                delay(LOG_EMIT_DELAY_MS)
+                val emittedVersion = emitLogs()
+                val currentVersion = synchronized(logBufferLock) {
+                    logBufferVersion
+                }
+                if (currentVersion == emittedVersion) break
+            }
+        }
+    }
+
+    private fun emitLogs(): Long {
+        val snapshot: List<LogEntry>
+        val version: Long
+        synchronized(logBufferLock) {
+            snapshot = logBuffer.toList()
+            version = logBufferVersion
+        }
+        _logEntries.value = snapshot
+        _logs.value = snapshot.map { it.line }
+        return version
     }
 
     fun startTrafficMonitor(context: Context) {
@@ -274,27 +308,24 @@ object VpnManager {
     }
 
     private fun parseScanLine(line: String) {
-        val indexedProgressMatch = INDEXED_PROGRESS_REGEX.find(line)
-        if (indexedProgressMatch != null) {
-            val total = indexedProgressMatch.groupValues[2].toIntOrNull()
+        INDEXED_PROGRESS_REGEX.find(line)?.let { match ->
+            val total = match.groupValues[2].toIntOrNull()
             if (total != null && total > 0) {
                 _scanStatus.value = _scanStatus.value.copy(scanTotalFromCore = total)
             }
         }
 
-        val totalCandidatesMatch = TOTAL_CANDIDATES_REGEX.find(line)
-        if (totalCandidatesMatch != null) {
-            val total = totalCandidatesMatch.groupValues[1].toIntOrNull()
+        TOTAL_CANDIDATES_REGEX.find(line)?.let { match ->
+            val total = match.groupValues[1].toIntOrNull()
             if (total != null && total > 0) {
                 _scanStatus.value = _scanStatus.value.copy(scanTotalFromCore = total)
             }
         }
 
-        val scanMatch = SCAN_TOTALS_REGEX.find(line)
-        if (scanMatch != null) {
-            val resolver = scanMatch.groupValues[1]
-            val valid = scanMatch.groupValues[2].toIntOrNull() ?: _scanStatus.value.validCount
-            val rejected = scanMatch.groupValues[3].toIntOrNull() ?: _scanStatus.value.rejectedCount
+        SCAN_TOTALS_REGEX.find(line)?.let { match ->
+            val resolver = match.groupValues[1]
+            val valid = match.groupValues[2].toIntOrNull() ?: _scanStatus.value.validCount
+            val rejected = match.groupValues[3].toIntOrNull() ?: _scanStatus.value.rejectedCount
             val decision = when {
                 line.contains("Accepted", ignoreCase = true) -> "Accepted"
                 line.contains("Rejected", ignoreCase = true) -> "Rejected"
@@ -310,35 +341,31 @@ object VpnManager {
             return
         }
 
-        val activeResolversMatch = ACTIVE_RESOLVERS_REGEX.find(line)
-        if (activeResolversMatch != null) {
+        ACTIVE_RESOLVERS_REGEX.find(line)?.let { match ->
             _scanStatus.value = _scanStatus.value.copy(
-                activeResolvers = activeResolversMatch.groupValues[1].toIntOrNull() ?: _scanStatus.value.activeResolvers
+                activeResolvers = match.groupValues[1].toIntOrNull() ?: _scanStatus.value.activeResolvers
             )
             return
         }
 
-        val totalActiveMatch = TOTAL_ACTIVE_REGEX.find(line)
-        if (totalActiveMatch != null) {
+        TOTAL_ACTIVE_REGEX.find(line)?.let { match ->
             _scanStatus.value = _scanStatus.value.copy(
-                activeResolvers = totalActiveMatch.groupValues[1].toIntOrNull() ?: _scanStatus.value.activeResolvers
+                activeResolvers = match.groupValues[1].toIntOrNull() ?: _scanStatus.value.activeResolvers
             )
             return
         }
 
-        val remainingMatch = REMAINING_REGEX.find(line)
-        if (remainingMatch != null) {
+        REMAINING_REGEX.find(line)?.let { match ->
             _scanStatus.value = _scanStatus.value.copy(
-                activeResolvers = remainingMatch.groupValues[1].toIntOrNull() ?: _scanStatus.value.activeResolvers
+                activeResolvers = match.groupValues[1].toIntOrNull() ?: _scanStatus.value.activeResolvers
             )
             return
         }
 
-        val syncedMatch = SYNCED_MTU_REGEX.find(line)
-        if (syncedMatch != null) {
+        SYNCED_MTU_REGEX.find(line)?.let { match ->
             _scanStatus.value = _scanStatus.value.copy(
-                syncedUploadMtu = syncedMatch.groupValues[1].toIntOrNull() ?: 0,
-                syncedDownloadMtu = syncedMatch.groupValues[2].toIntOrNull() ?: 0
+                syncedUploadMtu = match.groupValues[1].toIntOrNull() ?: 0,
+                syncedDownloadMtu = match.groupValues[2].toIntOrNull() ?: 0
             )
             return
         }
