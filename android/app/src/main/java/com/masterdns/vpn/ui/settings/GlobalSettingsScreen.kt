@@ -262,6 +262,7 @@ fun GlobalSettingsScreen(vm: GlobalSettingsViewModel = viewModel()) {
                                     availableQuery = ""
                                     selectedQuery = ""
                                     activeTab = "AVAILABLE"
+                                    vm.loadInstalledAppsIfNeeded()
                                     showAppPicker = true
                                 },
                                 modifier = Modifier.fillMaxWidth()
