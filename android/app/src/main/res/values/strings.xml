@@ -66,6 +66,8 @@
     <string name="home_synced_mtu">Synced MTU: UP %1$d / DOWN %2$d</string>
     <string name="home_active_resolvers">Active Resolvers: %1$d</string>
     <string name="home_speed_row">Download: %1$s   Upload: %2$s</string>
+    <string name="home_traffic_totals">Total: down %1$s / up %2$s</string>
+    <string name="home_session_duration">Session: %1$s</string>
     <string name="home_socks_address">SOCKS5: %1$s:%2$d</string>
     <string name="home_socks_auth_title">SOCKS5 authentication</string>
     <string name="home_socks_username">Username: %1$s</string>

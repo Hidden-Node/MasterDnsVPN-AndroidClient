@@ -60,6 +60,12 @@ object VpnManager {
     val uploadSpeedBps: StateFlow<Long> = _uploadSpeedBps.asStateFlow()
     private val _downloadSpeedBps = MutableStateFlow(0L)
     val downloadSpeedBps: StateFlow<Long> = _downloadSpeedBps.asStateFlow()
+    private val _uploadTotalBytes = MutableStateFlow(0L)
+    val uploadTotalBytes: StateFlow<Long> = _uploadTotalBytes.asStateFlow()
+    private val _downloadTotalBytes = MutableStateFlow(0L)
+    val downloadTotalBytes: StateFlow<Long> = _downloadTotalBytes.asStateFlow()
+    private val _connectedDurationSeconds = MutableStateFlow(0L)
+    val connectedDurationSeconds: StateFlow<Long> = _connectedDurationSeconds.asStateFlow()
 
     data class ScanStatus(
         val scanning: Boolean = false,
@@ -243,14 +249,23 @@ object VpnManager {
             var prevTx = TrafficStats.getUidTxBytes(uid).coerceAtLeast(0L)
             var prevRx = TrafficStats.getUidRxBytes(uid).coerceAtLeast(0L)
             var prevTime = System.currentTimeMillis()
+            val startedAt = prevTime
+            _uploadTotalBytes.value = 0L
+            _downloadTotalBytes.value = 0L
+            _connectedDurationSeconds.value = 0L
             while (isActive) {
                 delay(1000L)
                 val now = System.currentTimeMillis()
                 val tx = TrafficStats.getUidTxBytes(uid).coerceAtLeast(0L)
                 val rx = TrafficStats.getUidRxBytes(uid).coerceAtLeast(0L)
                 val dt = (now - prevTime).coerceAtLeast(1L)
-                _uploadSpeedBps.value = ((tx - prevTx).coerceAtLeast(0L) * 1000L) / dt
-                _downloadSpeedBps.value = ((rx - prevRx).coerceAtLeast(0L) * 1000L) / dt
+                val uploadDelta = (tx - prevTx).coerceAtLeast(0L)
+                val downloadDelta = (rx - prevRx).coerceAtLeast(0L)
+                _uploadSpeedBps.value = (uploadDelta * 1000L) / dt
+                _downloadSpeedBps.value = (downloadDelta * 1000L) / dt
+                _uploadTotalBytes.value = _uploadTotalBytes.value + uploadDelta
+                _downloadTotalBytes.value = _downloadTotalBytes.value + downloadDelta
+                _connectedDurationSeconds.value = ((now - startedAt) / 1000L).coerceAtLeast(0L)
                 prevTx = tx
                 prevRx = rx
                 prevTime = now
