@@ -8,6 +8,8 @@ import com.google.gson.reflect.TypeToken
 import com.masterdns.vpn.data.local.ProfileEntity
 import com.masterdns.vpn.data.repository.ProfileRepository
 import com.masterdns.vpn.util.ConfigGenerator
+import com.masterdns.vpn.util.ResolverAnalyzer
+import com.masterdns.vpn.util.ResolverImportResult
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
@@ -73,9 +75,10 @@ class SettingsViewModel @Inject constructor(
         return result
     }
 
-    fun importResolvers(profile: ProfileEntity, resolversText: String) {
+    fun importResolvers(profile: ProfileEntity, result: ResolverImportResult) {
         viewModelScope.launch {
-            profileRepository.updateProfile(profile.copy(resolvers = resolversText.trim()))
+            val updated = profile.copy(resolvers = result.normalizedText.trim())
+            profileRepository.updateProfile(ResolverAnalyzer.withImportStats(updated, result.stats))
         }
     }
 

@@ -31,7 +31,12 @@ import com.masterdns.vpn.ui.components.mdv.controls.MdvBackTopAppBar
 import com.masterdns.vpn.ui.theme.ConnectedGreen
 import com.masterdns.vpn.ui.theme.MdvColor
 import com.masterdns.vpn.ui.theme.MdvSpace
+import com.masterdns.vpn.util.ResolverAnalyzer
+import com.masterdns.vpn.util.ResolverImportResult
+import com.masterdns.vpn.util.ResolverImportStats
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 
 private data class ImportedProfileDraft(
     val profile: ProfileEntity,
@@ -49,7 +54,7 @@ fun ProfilesScreen(
     var showEditor by remember { mutableStateOf(false) }
     var editingProfile by remember { mutableStateOf<ProfileEntity?>(null) }
     var importedDraft by remember { mutableStateOf<ImportedProfileDraft?>(null) }
-    var importedResolvers by remember { mutableStateOf<String?>(null) }
+    var importedResolvers by remember { mutableStateOf<ResolverImportResult?>(null) }
     var profilePendingDelete by remember { mutableStateOf<ProfileEntity?>(null) }
     val context = androidx.compose.ui.platform.LocalContext.current
     val snackbarHostState = remember { SnackbarHostState() }
@@ -76,15 +81,23 @@ fun ProfilesScreen(
         ActivityResultContracts.OpenDocument()
     ) { uri ->
         if (uri == null) return@rememberLauncherForActivityResult
-        val text = readTextFromUri(context, uri).trim()
-        if (text.isBlank()) {
-            scope.launch { snackbarHostState.showSnackbar(context.getString(R.string.profiles_resolvers_empty_msg)) }
-            return@rememberLauncherForActivityResult
+        scope.launch {
+            val fileName = readDisplayName(context, uri) ?: "client_resolvers.txt"
+            val text = withContext(Dispatchers.IO) { readTextFromUri(context, uri) }
+            val result = withContext(Dispatchers.Default) {
+                ResolverAnalyzer.analyzeAndNormalize(text, fileName)
+            }
+            if (result == null || result.normalizedText.isBlank()) {
+                snackbarHostState.showSnackbar(context.getString(R.string.profiles_resolvers_empty_msg))
+                return@launch
+            }
+            importedResolvers = result
+            editingProfile = null
+            showEditor = true
+            snackbarHostState.showSnackbar(
+                context.getString(R.string.profiles_resolvers_imported_stats_msg, result.stats.summary())
+            )
         }
-        importedResolvers = text
-        editingProfile = null
-        showEditor = true
-        scope.launch { snackbarHostState.showSnackbar(context.getString(R.string.profiles_resolvers_imported_msg)) }
     }
 
     Scaffold(
@@ -303,7 +316,7 @@ fun ProfileCard(
 private fun ProfileEditorDialog(
     profile: ProfileEntity?,
     importedDraft: ImportedProfileDraft?,
-    importedResolvers: String?,
+    importedResolvers: ResolverImportResult?,
     onImportToml: () -> Unit,
     onImportResolvers: () -> Unit,
     onSave: (ProfileEntity) -> Unit,
@@ -365,8 +378,8 @@ private fun ProfileEditorDialog(
             encryptionKey = importedProfile.encryptionKey
             resolvers = importedProfile.resolvers
         }
-        if (!importedResolvers.isNullOrBlank()) {
-            resolvers = importedResolvers
+        if (importedResolvers != null) {
+            resolvers = importedResolvers.normalizedText
         }
         validationMessage = null
     }
@@ -573,6 +586,9 @@ private fun ProfileEditorDialog(
                         keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Uri)
                     )
                 }
+                importedResolvers?.stats?.let { stats ->
+                    ResolverImportStatsCard(stats)
+                }
                 validationMessage?.let { message ->
                     Text(
                         text = message,
@@ -603,13 +619,18 @@ private fun ProfileEditorDialog(
                     }
                     val baseProfile = profile ?: importedDraft?.profile ?: ProfileEntity(name = "", domains = "")
                     val domainJson = gson.toJson(finalDomainList)
+                    val updatedProfile = baseProfile.copy(
+                        name = name.trim(),
+                        domains = domainJson,
+                        encryptionKey = encryptionKey.trim(),
+                        resolvers = resolvers.trim()
+                    )
                     onSave(
-                        baseProfile.copy(
-                            name = name.trim(),
-                            domains = domainJson,
-                            encryptionKey = encryptionKey.trim(),
-                            resolvers = resolvers.trim()
-                        )
+                        if (importedResolvers != null) {
+                            ResolverAnalyzer.withImportStats(updatedProfile, importedResolvers.stats)
+                        } else {
+                            updatedProfile
+                        }
                     )
                 }
             ) {
@@ -622,6 +643,46 @@ private fun ProfileEditorDialog(
             }
         }
     )
+}
+
+@Composable
+private fun ResolverImportStatsCard(stats: ResolverImportStats) {
+    Card(
+        modifier = Modifier.fillMaxWidth(),
+        colors = CardDefaults.cardColors(containerColor = MdvColor.SurfaceHigh)
+    ) {
+        Column(
+            modifier = Modifier.padding(10.dp),
+            verticalArrangement = Arrangement.spacedBy(4.dp)
+        ) {
+            Text(
+                stringResource(R.string.profiles_resolvers_import_preview_title),
+                style = MaterialTheme.typography.labelLarge,
+                fontWeight = FontWeight.SemiBold
+            )
+            Text(
+                stringResource(
+                    R.string.profiles_resolvers_import_preview_body,
+                    stats.uniqueResolvers,
+                    stats.duplicateResolvers,
+                    stats.invalidLines,
+                    stats.cidrRanges
+                ),
+                style = MaterialTheme.typography.bodySmall,
+                color = MdvColor.OnSurfaceVariant
+            )
+            if (stats.truncated || stats.skippedCidrRanges > 0) {
+                Text(
+                    stringResource(
+                        R.string.profiles_resolvers_import_preview_limits,
+                        stats.skippedCidrRanges
+                    ),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.error
+                )
+            }
+        }
+    }
 }
 
 private val gson = Gson()
