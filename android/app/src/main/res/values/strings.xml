@@ -18,6 +18,8 @@
     <string name="settings_toml_exported_msg">TOML exported</string>
     <string name="settings_toml_imported_msg">TOML imported to form</string>
     <string name="settings_resolvers_imported_msg">Resolvers imported into profile</string>
+    <string name="settings_resolvers_imported_stats_msg">Resolvers imported: %1$s</string>
+    <string name="settings_resolvers_empty_msg">No usable resolvers found in that file</string>
     <string name="settings_mtu_destination_msg">MTU export destination selected</string>
     <string name="settings_dns_root_warning">⚠ Port %1$d requires root access on Android. The app will automatically use port 5353 instead.</string>
     <string name="global_settings_saved_msg">Global settings saved and applied</string>
@@ -99,6 +101,10 @@
     <string name="profiles_toml_imported_msg">TOML imported into profile form</string>
     <string name="profiles_resolvers_empty_msg">Resolvers file is empty</string>
     <string name="profiles_resolvers_imported_msg">Resolvers imported into profile form</string>
+    <string name="profiles_resolvers_imported_stats_msg">Resolvers imported: %1$s</string>
+    <string name="profiles_resolvers_import_preview_title">Resolver import preview</string>
+    <string name="profiles_resolvers_import_preview_body">%1$d usable, %2$d duplicate, %3$d invalid, %4$d CIDR ranges</string>
+    <string name="profiles_resolvers_import_preview_limits">Large CIDR ranges skipped: %1$d. Import may be capped for stability.</string>
     <string name="profiles_name_required_msg">Profile name is required.</string>
     <string name="profiles_domain_required_msg">Add at least one domain before saving.</string>
     <string name="profiles_encryption_key_required_msg">Encryption key is required.</string>

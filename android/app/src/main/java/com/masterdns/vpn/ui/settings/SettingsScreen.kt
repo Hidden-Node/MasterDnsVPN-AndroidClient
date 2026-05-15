@@ -3,6 +3,7 @@ package com.masterdns.vpn.ui.settings
 import android.content.Context
 import android.content.Intent
 import android.net.Uri
+import android.provider.OpenableColumns
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.Arrangement
@@ -72,7 +73,10 @@ import com.masterdns.vpn.ui.components.mdv.controls.MdvBackTopAppBar
 import com.masterdns.vpn.ui.components.mdv.controls.MdvTopAppBar
 import com.masterdns.vpn.ui.theme.MdvColor
 import com.masterdns.vpn.ui.theme.MdvSpace
+import com.masterdns.vpn.util.ResolverAnalyzer
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 
 private enum class FieldType { TEXT, BOOL, OPTION }
 
@@ -281,8 +285,20 @@ fun SettingsScreen(
         val selected = profile
         if (uri != null && selected != null) {
             val text = readTextFromUri(context, uri)
-            viewModel.importResolvers(selected, text)
-            scope.launch { snackbarHostState.showSnackbar(context.getString(R.string.settings_resolvers_imported_msg)) }
+            val fileName = readDisplayName(context, uri) ?: "client_resolvers.txt"
+            scope.launch {
+                val result = withContext(Dispatchers.Default) {
+                    ResolverAnalyzer.analyzeAndNormalize(text, fileName)
+                }
+                if (result == null || result.normalizedText.isBlank()) {
+                    snackbarHostState.showSnackbar(context.getString(R.string.settings_resolvers_empty_msg))
+                    return@launch
+                }
+                viewModel.importResolvers(selected, result)
+                snackbarHostState.showSnackbar(
+                    context.getString(R.string.settings_resolvers_imported_stats_msg, result.stats.summary())
+                )
+            }
         }
     }
     val pickMtuExportLauncher = rememberLauncherForActivityResult(
@@ -601,6 +617,14 @@ private fun readTextFromUri(context: Context, uri: Uri): String {
         val stream = context.contentResolver.openInputStream(uri)
         stream?.bufferedReader()?.use { it.readText() } ?: ""
     }.getOrDefault("")
+}
+
+private fun readDisplayName(context: Context, uri: Uri): String? {
+    return context.contentResolver.query(uri, null, null, null, null)?.use { cursor ->
+        val nameIndex = cursor.getColumnIndex(OpenableColumns.DISPLAY_NAME)
+        if (nameIndex < 0 || !cursor.moveToFirst()) return@use null
+        cursor.getString(nameIndex)
+    }?.trim()?.takeIf { it.isNotEmpty() }
 }
 
 private fun writeTextToUri(context: Context, uri: Uri, content: String) {
