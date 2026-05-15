@@ -176,7 +176,7 @@ object VpnManager {
     }
 
     private fun appendLogInternal(line: String, source: LogSource) {
-        val normalizedLine = normalizeLogTimestampToLocal(line)
+        val normalizedLine = SecretRedactor.redact(normalizeLogTimestampToLocal(line))
         val upper = normalizedLine.uppercase()
         val isError = upper.contains("[ERROR]") || upper.contains(" ERROR ")
         val isWarn = upper.contains("[WARN]") || upper.contains(" WARNING ") || upper.contains(" WARN ")
