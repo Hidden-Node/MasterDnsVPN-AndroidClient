@@ -1,5 +1,6 @@
 package com.masterdns.vpn.ui.settings
 
+import android.util.Base64
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.rememberScrollState
@@ -25,6 +26,8 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ArrowDropDown
+import androidx.compose.material.icons.filled.Key
+import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Save
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
@@ -82,6 +85,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import androidx.compose.runtime.LaunchedEffect
 import java.net.InetAddress
+import java.security.SecureRandom
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -113,6 +117,20 @@ fun GlobalSettingsScreen(vm: GlobalSettingsViewModel = viewModel()) {
     val splitPackagesCount by remember(draft.splitPackagesCsv) {
         derivedStateOf { parseCsv(draft.splitPackagesCsv).size }
     }
+    fun rotateSharingPassword() {
+        draft = draft.copy(
+            internetSharingUser = draft.internetSharingUser.ifBlank { "masterdns" },
+            internetSharingPass = generateSharingPassword()
+        )
+    }
+
+    fun generateSharingCredentials() {
+        draft = draft.copy(
+            internetSharingUser = "masterdns",
+            internetSharingPass = generateSharingPassword()
+        )
+    }
+
     fun saveGlobalSettings() {
         if (socksPortMissing || httpPortMissing) {
             scope.launch {
@@ -342,6 +360,24 @@ fun GlobalSettingsScreen(vm: GlobalSettingsViewModel = viewModel()) {
                                     fontWeight = FontWeight.Medium,
                                     color = MdvColor.PrimaryContainer
                                 )
+                                Text(
+                                    stringResource(
+                                        R.string.global_sharing_socks_endpoint,
+                                        localIp,
+                                        sharingSocksPortText.ifBlank { "?" }
+                                    ),
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = MdvColor.OnSurfaceVariant
+                                )
+                                Text(
+                                    stringResource(
+                                        R.string.global_sharing_http_endpoint,
+                                        localIp,
+                                        sharingHttpPortText.ifBlank { "?" }
+                                    ),
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = MdvColor.OnSurfaceVariant
+                                )
                             }
                             Text(
                                 stringResource(R.string.global_sharing_lan_warning),
@@ -415,6 +451,28 @@ fun GlobalSettingsScreen(vm: GlobalSettingsViewModel = viewModel()) {
                                 visualTransformation = PasswordVisualTransformation(),
                                 modifier = Modifier.fillMaxWidth()
                             )
+
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.spacedBy(8.dp)
+                            ) {
+                                OutlinedButton(
+                                    onClick = ::generateSharingCredentials,
+                                    modifier = Modifier.weight(1f)
+                                ) {
+                                    Icon(Icons.Filled.Key, contentDescription = null, modifier = Modifier.size(18.dp))
+                                    Spacer(modifier = Modifier.width(8.dp))
+                                    Text(stringResource(R.string.global_generate_credentials))
+                                }
+                                OutlinedButton(
+                                    onClick = ::rotateSharingPassword,
+                                    modifier = Modifier.weight(1f)
+                                ) {
+                                    Icon(Icons.Filled.Refresh, contentDescription = null, modifier = Modifier.size(18.dp))
+                                    Spacer(modifier = Modifier.width(8.dp))
+                                    Text(stringResource(R.string.global_rotate_password))
+                                }
+                            }
 
                             Text(
                                 stringResource(R.string.global_sharing_help),
@@ -727,6 +785,12 @@ private fun isValidIpLiteral(value: String): Boolean {
     }
     if (!numericCandidate) return false
     return runCatching { InetAddress.getByName(text) }.isSuccess
+}
+
+private fun generateSharingPassword(): String {
+    val bytes = ByteArray(18)
+    SecureRandom().nextBytes(bytes)
+    return Base64.encodeToString(bytes, Base64.URL_SAFE or Base64.NO_WRAP or Base64.NO_PADDING)
 }
 
 private fun getSystemLocalIp(): String? {

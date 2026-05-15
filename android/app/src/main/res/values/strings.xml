@@ -144,6 +144,10 @@
     <string name="global_http_port_required">HTTP port is required.</string>
     <string name="global_username">Username</string>
     <string name="global_password">Password</string>
+    <string name="global_generate_credentials">Generate</string>
+    <string name="global_rotate_password">Rotate</string>
+    <string name="global_sharing_socks_endpoint">SOCKS5: %1$s:%2$s</string>
+    <string name="global_sharing_http_endpoint">HTTP: %1$s:%2$s</string>
     <string name="global_sharing_lan_warning">Sharing listens on your local network. Use a username and password before enabling it.</string>
     <string name="global_sharing_help">Use these endpoints to share your VPN connection with other devices or apps on the same network.</string>
     <string name="info_app_name_title">MasterDnsVPN</string>
