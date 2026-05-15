@@ -61,6 +61,7 @@
     <string name="home_connection_running">Connected and running</string>
     <string name="home_connection_preparing">Preparing tunnel (tap again to cancel)</string>
     <string name="home_connection_error_check_logs">Error - check logs</string>
+    <string name="home_ipv6_limit_warning">Android VPN mode currently routes IPv4 only. IPv6 traffic is not routed by this app path.</string>
     <string name="home_resolver_row">Resolver: %1$s  %2$s</string>
     <string name="home_valid_prefix">Valid: </string>
     <string name="home_rejected_prefix">   Rejected: </string>

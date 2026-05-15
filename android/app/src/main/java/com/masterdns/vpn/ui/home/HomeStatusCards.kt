@@ -67,6 +67,14 @@ fun MdvConnectionTelemetryCard(
                 style = MaterialTheme.typography.bodyMedium,
                 color = MdvColor.OnSurface
             )
+            if (vpnState == VpnManager.VpnState.CONNECTED || vpnState == VpnManager.VpnState.CONNECTING) {
+                androidx.compose.foundation.layout.Spacer(modifier = Modifier.height(MdvSpace.S1))
+                Text(
+                    text = stringResource(R.string.home_ipv6_limit_warning),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MdvColor.Error
+                )
+            }
 
             if (scanStatus.lastResolver.isNotBlank()) {
                 androidx.compose.foundation.layout.Spacer(modifier = Modifier.height(MdvSpace.S1))
