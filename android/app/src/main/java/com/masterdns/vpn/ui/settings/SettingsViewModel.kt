@@ -17,6 +17,10 @@ import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import javax.inject.Inject
 
+private const val MAX_DOMAIN_LENGTH = 253
+private const val MAX_ENCRYPTION_KEY_LENGTH = 4096
+private const val MAX_ADVANCED_VALUE_LENGTH = 4096
+
 @HiltViewModel
 class SettingsViewModel @Inject constructor(
     private val profileRepository: ProfileRepository,
@@ -64,12 +68,15 @@ class SettingsViewModel @Inject constructor(
                     .removeSuffix("]")
                     .split(",")
                     .map { it.trim().removeSurrounding("\"") }
-                    .filter { it.isNotBlank() }
+                    .filter { it.isNotBlank() && it.length <= MAX_DOMAIN_LENGTH }
                     .joinToString(", ")
                 valueRaw.startsWith("\"") && valueRaw.endsWith("\"") ->
                     valueRaw.removeSurrounding("\"")
                 else -> valueRaw
             }
+            if (parsed.isBlank()) return@forEach
+            if (key == "ENCRYPTION_KEY" && parsed.length > MAX_ENCRYPTION_KEY_LENGTH) return@forEach
+            if (key in ADVANCED_SETTING_KEYS && parsed.length > MAX_ADVANCED_VALUE_LENGTH) return@forEach
             result[key] = parsed
         }
         return result

@@ -77,8 +77,12 @@ import com.masterdns.vpn.util.ResolverAnalyzer
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import java.io.IOException
 
 private enum class FieldType { TEXT, BOOL, OPTION }
+
+private const val MAX_TOML_IMPORT_CHARS = 256 * 1024
+private const val MAX_RESOLVER_IMPORT_CHARS = ResolverAnalyzer.MAX_IMPORT_BYTES
 
 private data class SettingField(
     val section: String,
@@ -271,7 +275,12 @@ fun SettingsScreen(
         ActivityResultContracts.OpenDocument()
     ) { uri ->
         if (uri != null) {
-            val text = readTextFromUri(context, uri)
+            val text = try {
+                readTextFromUri(context, uri, MAX_TOML_IMPORT_CHARS)
+            } catch (_: IOException) {
+                scope.launch { snackbarHostState.showSnackbar(context.getString(R.string.profiles_toml_too_large_msg)) }
+                return@rememberLauncherForActivityResult
+            }
             val updated = viewModel.importTomlValues(text, fieldsState.toMap())
             fieldsState.clear()
             fieldsState.putAll(updated)
@@ -284,9 +293,16 @@ fun SettingsScreen(
     ) { uri ->
         val selected = profile
         if (uri != null && selected != null) {
-            val text = readTextFromUri(context, uri)
-            val fileName = readDisplayName(context, uri) ?: "client_resolvers.txt"
             scope.launch {
+                val text = try {
+                    withContext(Dispatchers.IO) {
+                        readTextFromUri(context, uri, MAX_RESOLVER_IMPORT_CHARS)
+                    }
+                } catch (_: IOException) {
+                    snackbarHostState.showSnackbar(context.getString(R.string.profiles_resolvers_too_large_msg))
+                    return@launch
+                }
+                val fileName = readDisplayName(context, uri) ?: "client_resolvers.txt"
                 val result = withContext(Dispatchers.Default) {
                     ResolverAnalyzer.analyzeAndNormalize(text, fileName)
                 }
@@ -612,11 +628,25 @@ private fun ConfigFieldCard(
     }
 }
 
-private fun readTextFromUri(context: Context, uri: Uri): String {
+private fun readTextFromUri(context: Context, uri: Uri, maxChars: Int): String {
     return runCatching {
-        val stream = context.contentResolver.openInputStream(uri)
-        stream?.bufferedReader()?.use { it.readText() } ?: ""
-    }.getOrDefault("")
+        context.contentResolver.openInputStream(uri)?.bufferedReader()?.use { reader ->
+            val buffer = CharArray(8192)
+            val out = StringBuilder()
+            while (true) {
+                val read = reader.read(buffer)
+                if (read == -1) break
+                if (out.length + read > maxChars) {
+                    throw IOException("Import file is too large")
+                }
+                out.append(buffer, 0, read)
+            }
+            out.toString()
+        } ?: ""
+    }.getOrElse { error ->
+        if (error is IOException) throw error
+        ""
+    }
 }
 
 private fun readDisplayName(context: Context, uri: Uri): String? {

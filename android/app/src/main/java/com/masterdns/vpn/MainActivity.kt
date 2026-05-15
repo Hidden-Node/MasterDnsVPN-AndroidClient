@@ -19,7 +19,14 @@ import com.masterdns.vpn.ui.navigation.AppNavigation
 import com.masterdns.vpn.ui.theme.MasterDnsVPNTheme
 import dagger.hilt.android.AndroidEntryPoint
 import kotlinx.coroutines.launch
+import java.io.IOException
 import javax.inject.Inject
+
+private const val MAX_TOML_IMPORT_CHARS = 256 * 1024
+private const val MAX_PROFILE_NAME_LENGTH = 80
+private const val MAX_DOMAIN_LENGTH = 253
+private const val MAX_ENCRYPTION_KEY_LENGTH = 4096
+private const val MAX_ADVANCED_VALUE_LENGTH = 4096
 
 @AndroidEntryPoint
 class MainActivity : ComponentActivity() {
@@ -74,7 +81,16 @@ class MainActivity : ComponentActivity() {
         }
 
         lifecycleScope.launch {
-            val content = readTextFromUri(uri)
+            val content = try {
+                readTextFromUri(uri, MAX_TOML_IMPORT_CHARS)
+            } catch (_: IOException) {
+                Toast.makeText(
+                    this@MainActivity,
+                    getString(R.string.profiles_toml_too_large_msg),
+                    Toast.LENGTH_LONG
+                ).show()
+                return@launch
+            }
             if (content.isBlank()) {
                 Toast.makeText(
                     this@MainActivity,
@@ -103,25 +119,48 @@ class MainActivity : ComponentActivity() {
         }
     }
 
-    private fun readTextFromUri(uri: Uri): String {
+    private fun readTextFromUri(uri: Uri, maxChars: Int): String {
         return contentResolver.openInputStream(uri)?.use { stream ->
-            stream.bufferedReader(Charsets.UTF_8).use { it.readText() }
+            stream.bufferedReader(Charsets.UTF_8).use { reader ->
+                val buffer = CharArray(8192)
+                val out = StringBuilder()
+                while (true) {
+                    val read = reader.read(buffer)
+                    if (read == -1) break
+                    if (out.length + read > maxChars) {
+                        throw IOException("Import file is too large")
+                    }
+                    out.append(buffer, 0, read)
+                }
+                out.toString()
+            }
         }.orEmpty()
     }
 
     private fun parseImportedProfile(uri: Uri, tomlContent: String): ProfileEntity? {
         val values = parseTomlValues(tomlContent)
         val parsedDomain = values["DOMAINS"]?.takeIf { it.isNotBlank() } ?: values["DOMAIN"]?.takeIf { it.isNotBlank() } ?: return null
-        val parsedKey = values["ENCRYPTION_KEY"]?.takeIf { it.isNotBlank() } ?: return null
-        val domainList = parsedDomain.split(",").map { it.trim() }.filter { it.isNotEmpty() }
+        val parsedKey = values["ENCRYPTION_KEY"]
+            ?.trim()
+            ?.takeIf { it.isNotBlank() && it.length <= MAX_ENCRYPTION_KEY_LENGTH }
+            ?: return null
+        val domainList = parsedDomain
+            .split(",")
+            .map { it.trim() }
+            .filter { it.isNotEmpty() && it.length <= MAX_DOMAIN_LENGTH }
         if (domainList.isEmpty()) return null
 
         val advanced = mutableMapOf<String, String>()
         IMPORT_ADVANCED_KEYS.forEach { key ->
-            values[key]?.let { advanced[key] = it.trim() }
+            values[key]
+                ?.trim()
+                ?.takeIf { it.length <= MAX_ADVANCED_VALUE_LENGTH }
+                ?.let { advanced[key] = it }
         }
 
-        val fileName = readDisplayName(uri) ?: "Imported Profile"
+        val fileName = readDisplayName(uri)
+            ?.take(MAX_PROFILE_NAME_LENGTH)
+            ?: "Imported Profile"
 
         return ProfileEntity(
             name = fileName,

@@ -37,6 +37,14 @@ import com.masterdns.vpn.util.ResolverImportStats
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import java.io.IOException
+
+private const val MAX_TOML_IMPORT_CHARS = 256 * 1024
+private const val MAX_RESOLVER_IMPORT_CHARS = ResolverAnalyzer.MAX_IMPORT_BYTES
+private const val MAX_PROFILE_NAME_LENGTH = 80
+private const val MAX_DOMAIN_LENGTH = 253
+private const val MAX_ENCRYPTION_KEY_LENGTH = 4096
+private const val MAX_ADVANCED_VALUE_LENGTH = 4096
 
 private data class ImportedProfileDraft(
     val profile: ProfileEntity,
@@ -63,7 +71,12 @@ fun ProfilesScreen(
         ActivityResultContracts.OpenDocument()
     ) { uri ->
         if (uri == null) return@rememberLauncherForActivityResult
-        val text = readTextFromUri(context, uri)
+        val text = try {
+            readTextFromUri(context, uri, MAX_TOML_IMPORT_CHARS)
+        } catch (_: IOException) {
+            scope.launch { snackbarHostState.showSnackbar(context.getString(R.string.profiles_toml_too_large_msg)) }
+            return@rememberLauncherForActivityResult
+        }
         val draft = parseProfileTomlForImport(
             fileName = readDisplayName(context, uri) ?: context.getString(R.string.profiles_imported_profile_default),
             tomlContent = text
@@ -83,7 +96,14 @@ fun ProfilesScreen(
         if (uri == null) return@rememberLauncherForActivityResult
         scope.launch {
             val fileName = readDisplayName(context, uri) ?: "client_resolvers.txt"
-            val text = withContext(Dispatchers.IO) { readTextFromUri(context, uri) }
+            val text = try {
+                withContext(Dispatchers.IO) {
+                    readTextFromUri(context, uri, MAX_RESOLVER_IMPORT_CHARS)
+                }
+            } catch (_: IOException) {
+                snackbarHostState.showSnackbar(context.getString(R.string.profiles_resolvers_too_large_msg))
+                return@launch
+            }
             val result = withContext(Dispatchers.Default) {
                 ResolverAnalyzer.analyzeAndNormalize(text, fileName)
             }
@@ -687,8 +707,20 @@ private fun ResolverImportStatsCard(stats: ResolverImportStats) {
 
 private val gson = Gson()
 
-private fun readTextFromUri(context: Context, uri: Uri): String {
-    return context.contentResolver.openInputStream(uri)?.bufferedReader()?.use { it.readText() }.orEmpty()
+private fun readTextFromUri(context: Context, uri: Uri, maxChars: Int): String {
+    return context.contentResolver.openInputStream(uri)?.bufferedReader()?.use { reader ->
+        val buffer = CharArray(8192)
+        val out = StringBuilder()
+        while (true) {
+            val read = reader.read(buffer)
+            if (read == -1) break
+            if (out.length + read > maxChars) {
+                throw IOException("Import file is too large")
+            }
+            out.append(buffer, 0, read)
+        }
+        out.toString()
+    }.orEmpty()
 }
 
 private fun readDisplayName(context: Context, uri: Uri): String? {
@@ -724,16 +756,29 @@ private fun parseProfileTomlForImport(fileName: String, tomlContent: String): Im
         values[key] = parsed
     }
 
-    val parsedDomain = if (parsedDomainsList.isNotEmpty()) parsedDomainsList else return null
-    val parsedKey = values["ENCRYPTION_KEY"]?.takeIf { it.isNotBlank() } ?: return null
+    val parsedDomain = if (parsedDomainsList.isNotEmpty()) {
+        parsedDomainsList
+            .map { it.trim() }
+            .filter { it.isNotBlank() && it.length <= MAX_DOMAIN_LENGTH }
+    } else {
+        return null
+    }
+    if (parsedDomain.isEmpty()) return null
+    val parsedKey = values["ENCRYPTION_KEY"]
+        ?.trim()
+        ?.takeIf { it.isNotBlank() && it.length <= MAX_ENCRYPTION_KEY_LENGTH }
+        ?: return null
 
     val advanced = mutableMapOf<String, String>()
     IMPORT_ADVANCED_KEYS.forEach { key ->
-        values[key]?.let { advanced[key] = it.trim() }
+        values[key]
+            ?.trim()
+            ?.takeIf { it.length <= MAX_ADVANCED_VALUE_LENGTH }
+            ?.let { advanced[key] = it }
     }
 
     val importedProfile = ProfileEntity(
-        name = fileName,
+        name = fileName.take(MAX_PROFILE_NAME_LENGTH),
         domains = gson.toJson(parsedDomain),
         encryptionMethod = values["DATA_ENCRYPTION_METHOD"]?.toIntOrNull() ?: 1,
         encryptionKey = parsedKey,
