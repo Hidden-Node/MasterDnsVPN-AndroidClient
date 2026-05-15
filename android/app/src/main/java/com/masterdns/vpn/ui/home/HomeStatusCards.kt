@@ -38,6 +38,9 @@ fun MdvConnectionTelemetryCard(
     scanProgress: Float,
     downBps: Long,
     upBps: Long,
+    downloadTotalBytes: Long,
+    uploadTotalBytes: Long,
+    connectedDurationSeconds: Long,
     proxyHost: String,
     proxyPort: Int,
     socksAuthEnabled: Boolean,
@@ -145,6 +148,26 @@ fun MdvConnectionTelemetryCard(
                 style = MaterialTheme.typography.bodySmall,
                 color = MdvColor.OnSurfaceVariant
             )
+            if (downloadTotalBytes > 0 || uploadTotalBytes > 0 || connectedDurationSeconds > 0) {
+                androidx.compose.foundation.layout.Spacer(modifier = Modifier.height(2.dp))
+                Text(
+                    text = stringResource(
+                        R.string.home_traffic_totals,
+                        formatBytes(downloadTotalBytes),
+                        formatBytes(uploadTotalBytes)
+                    ),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MdvColor.OnSurfaceVariant
+                )
+                Text(
+                    text = stringResource(
+                        R.string.home_session_duration,
+                        formatDuration(connectedDurationSeconds)
+                    ),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MdvColor.OnSurfaceVariant
+                )
+            }
             androidx.compose.foundation.layout.Spacer(modifier = Modifier.height(MdvSpace.S2))
             Text(
                 text = stringResource(R.string.home_socks_address, proxyHost, proxyPort),
@@ -287,5 +310,29 @@ private fun formatSpeed(bps: Long): String {
         bps >= mb -> String.format("%.2f MB/s", bps / mb)
         bps >= kb -> String.format("%.1f KB/s", bps / kb)
         else -> "${bps} B/s"
+    }
+}
+
+private fun formatBytes(bytes: Long): String {
+    val kb = 1024.0
+    val mb = kb * 1024.0
+    val gb = mb * 1024.0
+    return when {
+        bytes >= gb -> String.format("%.2f GB", bytes / gb)
+        bytes >= mb -> String.format("%.2f MB", bytes / mb)
+        bytes >= kb -> String.format("%.1f KB", bytes / kb)
+        else -> "$bytes B"
+    }
+}
+
+private fun formatDuration(seconds: Long): String {
+    val safeSeconds = seconds.coerceAtLeast(0L)
+    val hours = safeSeconds / 3600L
+    val minutes = (safeSeconds % 3600L) / 60L
+    val secs = safeSeconds % 60L
+    return if (hours > 0) {
+        "%d:%02d:%02d".format(hours, minutes, secs)
+    } else {
+        "%02d:%02d".format(minutes, secs)
     }
 }
