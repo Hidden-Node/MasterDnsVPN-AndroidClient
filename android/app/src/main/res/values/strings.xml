@@ -65,6 +65,11 @@
     <string name="home_dns_scan_progress">DNS Scan Progress: %1$d / %2$d</string>
     <string name="home_synced_mtu">Synced MTU: UP %1$d / DOWN %2$d</string>
     <string name="home_active_resolvers">Active Resolvers: %1$d</string>
+    <string name="home_resolver_diagnostics_title">Resolver diagnostics</string>
+    <string name="home_resolver_diagnostics_counts">Configured lines: %1$d   Core scan total: %2$d</string>
+    <string name="home_resolver_no_configured_warning">No inline resolvers are configured for this profile.</string>
+    <string name="home_resolver_waiting_core_scan">Waiting for core resolver scan totals from runtime logs.</string>
+    <string name="home_resolver_all_rejected_warning">No accepted resolver yet. Check resolver format, network reachability, and profile settings.</string>
     <string name="home_speed_row">Download: %1$s   Upload: %2$s</string>
     <string name="home_socks_address">SOCKS5: %1$s:%2$d</string>
     <string name="home_socks_auth_title">SOCKS5 authentication</string>
