@@ -340,6 +340,7 @@ private fun ProfileEditorDialog(
     var isDomainInputFocused by remember { mutableStateOf(false) }
     var encryptionKey by remember { mutableStateOf(profile?.encryptionKey.orEmpty()) }
     var resolvers by remember { mutableStateOf(profile?.resolvers.orEmpty()) }
+    var liveStats by remember { mutableStateOf<ResolverImportStats?>(null) }
     var validationMessage by remember { mutableStateOf<String?>(null) }
     var showKey by remember { mutableStateOf(false) }
     var showResolversEditor by remember { mutableStateOf(false) }
@@ -364,6 +365,18 @@ private fun ProfileEditorDialog(
             validationMessage = null
             showResolversEditor = false
         }
+    }
+
+    LaunchedEffect(resolvers) {
+        if (resolvers.isBlank()) {
+            liveStats = null
+            return@LaunchedEffect
+        }
+        kotlinx.coroutines.delay(300)
+        val result = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Default) {
+            ResolverAnalyzer.analyzeAndNormalize(resolvers, "manual_input")
+        }
+        liveStats = result?.stats
     }
 
     LaunchedEffect(importedDraft, importedResolvers) {
@@ -586,7 +599,7 @@ private fun ProfileEditorDialog(
                         keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Uri)
                     )
                 }
-                importedResolvers?.stats?.let { stats ->
+                liveStats?.let { stats ->
                     ResolverImportStatsCard(stats)
                 }
                 validationMessage?.let { message ->
@@ -626,8 +639,8 @@ private fun ProfileEditorDialog(
                         resolvers = resolvers.trim()
                     )
                     onSave(
-                        if (importedResolvers != null) {
-                            ResolverAnalyzer.withImportStats(updatedProfile, importedResolvers.stats)
+                        if (liveStats != null) {
+                            ResolverAnalyzer.withImportStats(updatedProfile, liveStats!!)
                         } else {
                             updatedProfile
                         }
