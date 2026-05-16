@@ -48,142 +48,235 @@ fun MdvConnectionTelemetryCard(
     isConnecting: Boolean
 ) {
     MdvCardLow(modifier = Modifier.fillMaxWidth()) {
-        Column(modifier = Modifier.fillMaxWidth().padding(MdvSpace.S3)) {
-            Text(
-                text = stringResource(R.string.home_connection_status_title),
-                style = MaterialTheme.typography.labelSmall,
-                color = MdvColor.PrimaryDim
-            )
-            androidx.compose.foundation.layout.Spacer(modifier = Modifier.height(MdvSpace.S1))
-            Text(
-                text = when (vpnState) {
-                    VpnManager.VpnState.CONNECTED -> stringResource(R.string.home_connection_running)
-                    VpnManager.VpnState.CONNECTING -> stringResource(R.string.home_connection_preparing)
-                    VpnManager.VpnState.DISCONNECTING -> stringResource(R.string.home_state_disconnecting)
-                    VpnManager.VpnState.ERROR -> stringResource(R.string.home_connection_error_check_logs)
-                    else -> stringResource(R.string.home_state_disconnected)
-                },
-                style = MaterialTheme.typography.bodyMedium,
-                color = MdvColor.OnSurface
-            )
-
-            if (scanStatus.lastResolver.isNotBlank()) {
-                androidx.compose.foundation.layout.Spacer(modifier = Modifier.height(MdvSpace.S1))
-                Text(
-                    text = stringResource(
-                        R.string.home_resolver_row,
-                        scanStatus.lastResolver,
-                        scanStatus.lastDecision
-                    ),
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MdvColor.OnSurfaceVariant
-                )
-            }
-            if (scanStatus.validCount > 0 || scanStatus.rejectedCount > 0) {
-                androidx.compose.foundation.layout.Spacer(modifier = Modifier.height(2.dp))
-                Text(
-                    text = buildAnnotatedString {
-                        append(stringResource(R.string.home_valid_prefix))
-                        pushStyle(SpanStyle(color = ConnectedGreen, fontWeight = FontWeight.Bold))
-                        append(scanStatus.validCount.toString())
-                        pop()
-                        append(stringResource(R.string.home_rejected_prefix))
-                        pushStyle(SpanStyle(color = DisconnectedRed, fontWeight = FontWeight.Bold))
-                        append(scanStatus.rejectedCount.toString())
-                        pop()
-                    },
-                    style = MaterialTheme.typography.bodySmall
-                )
-            }
-            if (scanStatus.scanning || isConnecting) {
-                androidx.compose.foundation.layout.Spacer(modifier = Modifier.height(MdvSpace.S2))
-                Text(
-                    text = stringResource(R.string.home_dns_scan_progress, scannedCount, totalResolvers),
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MdvColor.OnSurfaceVariant
-                )
-                androidx.compose.foundation.layout.Spacer(modifier = Modifier.height(MdvSpace.S1))
-                LinearProgressIndicator(
-                    progress = { scanProgress },
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .height(8.dp),
-                    color = MdvColor.PrimaryContainer,
-                    trackColor = MdvColor.SurfaceBright
-                )
-            }
-            if (scanStatus.syncedUploadMtu > 0 || scanStatus.syncedDownloadMtu > 0) {
-                androidx.compose.foundation.layout.Spacer(modifier = Modifier.height(2.dp))
-                Text(
-                    text = stringResource(
-                        R.string.home_synced_mtu,
-                        scanStatus.syncedUploadMtu,
-                        scanStatus.syncedDownloadMtu
-                    ),
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MdvColor.OnSurfaceVariant
-                )
-            }
-            if (scanStatus.activeResolvers > 0) {
-                androidx.compose.foundation.layout.Spacer(modifier = Modifier.height(2.dp))
-                Text(
-                    text = stringResource(R.string.home_active_resolvers, scanStatus.activeResolvers),
-                    style = MaterialTheme.typography.bodySmall.copy(fontWeight = FontWeight.SemiBold),
-                    color = MdvColor.OnSurface
-                )
-            }
-            androidx.compose.foundation.layout.Spacer(modifier = Modifier.height(MdvSpace.S1))
-            Text(
-                text = stringResource(R.string.home_speed_row, formatSpeed(downBps), formatSpeed(upBps)),
-                style = MaterialTheme.typography.bodySmall,
-                color = MdvColor.OnSurfaceVariant
-            )
-            if (downloadTotalBytes > 0 || uploadTotalBytes > 0 || connectedDurationSeconds > 0) {
-                androidx.compose.foundation.layout.Spacer(modifier = Modifier.height(2.dp))
-                Text(
-                    text = stringResource(
-                        R.string.home_traffic_totals,
-                        formatBytes(downloadTotalBytes),
-                        formatBytes(uploadTotalBytes)
-                    ),
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MdvColor.OnSurfaceVariant
-                )
-                Text(
-                    text = stringResource(
-                        R.string.home_session_duration,
-                        formatDuration(connectedDurationSeconds)
-                    ),
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MdvColor.OnSurfaceVariant
-                )
-            }
-            androidx.compose.foundation.layout.Spacer(modifier = Modifier.height(MdvSpace.S2))
-            Text(
-                text = stringResource(R.string.home_socks_address, proxyHost, proxyPort),
-                style = MaterialTheme.typography.bodySmall.copy(fontWeight = FontWeight.SemiBold),
-                color = MdvColor.OnSurface
-            )
-            if (socksAuthEnabled) {
-                androidx.compose.foundation.layout.Spacer(modifier = Modifier.height(MdvSpace.S1))
-                Text(
-                    text = stringResource(R.string.home_socks_auth_title),
-                    style = MaterialTheme.typography.bodySmall.copy(fontWeight = FontWeight.SemiBold),
-                    color = MdvColor.OnSurface
-                )
-                if (socksUser.isNotBlank()) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(MdvSpace.S4),
+            verticalArrangement = Arrangement.spacedBy(MdvSpace.S3)
+        ) {
+            // Header Row: Status and Duration
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Column {
                     Text(
-                        text = stringResource(R.string.home_socks_username, socksUser),
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MdvColor.OnSurfaceVariant
+                        text = stringResource(R.string.home_connection_status_title).uppercase(),
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MdvColor.PrimaryDim,
+                        fontWeight = FontWeight.Bold
+                    )
+                    val statusText = when (vpnState) {
+                        VpnManager.VpnState.CONNECTED -> stringResource(R.string.home_connection_running)
+                        VpnManager.VpnState.CONNECTING -> stringResource(R.string.home_connection_preparing)
+                        VpnManager.VpnState.DISCONNECTING -> stringResource(R.string.home_state_disconnecting)
+                        VpnManager.VpnState.ERROR -> stringResource(R.string.home_connection_error_check_logs)
+                        else -> stringResource(R.string.home_state_disconnected)
+                    }
+                    val statusColor = when (vpnState) {
+                        VpnManager.VpnState.CONNECTED -> ConnectedGreen
+                        VpnManager.VpnState.ERROR -> DisconnectedRed
+                        else -> MdvColor.OnSurface
+                    }
+                    Text(
+                        text = statusText,
+                        style = MaterialTheme.typography.titleMedium,
+                        color = statusColor,
+                        fontWeight = FontWeight.Bold
                     )
                 }
-                if (socksPass.isNotBlank()) {
-                    Text(
-                        text = stringResource(R.string.home_socks_password, socksPass),
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MdvColor.OnSurfaceVariant
-                    )
+
+                if (connectedDurationSeconds > 0) {
+                    Column(horizontalAlignment = Alignment.End) {
+                        Text(
+                            text = "SESSION",
+                            style = MaterialTheme.typography.labelSmall,
+                            color = MdvColor.OnSurfaceVariant,
+                            fontWeight = FontWeight.Bold
+                        )
+                        Text(
+                            text = formatDuration(connectedDurationSeconds),
+                            style = MaterialTheme.typography.titleMedium,
+                            color = MdvColor.OnSurface,
+                            fontWeight = FontWeight.Bold
+                        )
+                    }
+                }
+            }
+
+            // Scanning Progress Section
+            if (scanStatus.scanning || isConnecting) {
+                androidx.compose.material3.Surface(
+                    shape = androidx.compose.foundation.shape.RoundedCornerShape(12.dp),
+                    color = MdvColor.SurfaceHigh,
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Column(
+                        modifier = Modifier.padding(MdvSpace.S3),
+                        verticalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceBetween
+                        ) {
+                            Text(
+                                text = "DNS Scan",
+                                style = MaterialTheme.typography.labelMedium,
+                                color = MdvColor.OnSurfaceVariant
+                            )
+                            Text(
+                                text = "$scannedCount / $totalResolvers",
+                                style = MaterialTheme.typography.labelMedium,
+                                color = MdvColor.PrimaryContainer,
+                                fontWeight = FontWeight.Bold
+                            )
+                        }
+                        LinearProgressIndicator(
+                            progress = { scanProgress },
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .height(6.dp),
+                            color = MdvColor.PrimaryContainer,
+                            trackColor = MdvColor.SurfaceBright,
+                            strokeCap = androidx.compose.ui.graphics.StrokeCap.Round
+                        )
+                        if (scanStatus.validCount > 0 || scanStatus.rejectedCount > 0) {
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.SpaceBetween
+                            ) {
+                                Text(
+                                    text = buildAnnotatedString {
+                                        append("Valid: ")
+                                        pushStyle(SpanStyle(color = ConnectedGreen, fontWeight = FontWeight.Bold))
+                                        append(scanStatus.validCount.toString())
+                                        pop()
+                                    },
+                                    style = MaterialTheme.typography.bodySmall
+                                )
+                                Text(
+                                    text = buildAnnotatedString {
+                                        append("Rejected: ")
+                                        pushStyle(SpanStyle(color = DisconnectedRed, fontWeight = FontWeight.Bold))
+                                        append(scanStatus.rejectedCount.toString())
+                                        pop()
+                                    },
+                                    style = MaterialTheme.typography.bodySmall
+                                )
+                            }
+                        }
+                        if (scanStatus.lastResolver.isNotBlank()) {
+                            Text(
+                                text = "${scanStatus.lastResolver} • ${scanStatus.lastDecision}",
+                                style = MaterialTheme.typography.labelSmall,
+                                color = MdvColor.OnSurfaceVariant,
+                                maxLines = 1,
+                                overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis
+                            )
+                        }
+                    }
+                }
+            }
+
+            // Network Traffic Grid
+            if (downloadTotalBytes > 0 || uploadTotalBytes > 0 || downBps > 0 || upBps > 0) {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(MdvSpace.S3)
+                ) {
+                    // Download Column
+                    androidx.compose.material3.Surface(
+                        modifier = Modifier.weight(1f),
+                        shape = androidx.compose.foundation.shape.RoundedCornerShape(12.dp),
+                        color = MdvColor.SurfaceHigh
+                    ) {
+                        Column(
+                            modifier = Modifier.padding(MdvSpace.S3),
+                            horizontalAlignment = Alignment.CenterHorizontally
+                        ) {
+                            Text(
+                                text = "↓ DOWNLOAD",
+                                style = MaterialTheme.typography.labelSmall,
+                                color = ConnectedGreen,
+                                fontWeight = FontWeight.Bold
+                            )
+                            androidx.compose.foundation.layout.Spacer(modifier = Modifier.height(4.dp))
+                            Text(
+                                text = formatSpeed(downBps),
+                                style = MaterialTheme.typography.titleMedium,
+                                color = MdvColor.OnSurface,
+                                fontWeight = FontWeight.Bold
+                            )
+                            Text(
+                                text = formatBytes(downloadTotalBytes),
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MdvColor.OnSurfaceVariant
+                            )
+                        }
+                    }
+
+                    // Upload Column
+                    androidx.compose.material3.Surface(
+                        modifier = Modifier.weight(1f),
+                        shape = androidx.compose.foundation.shape.RoundedCornerShape(12.dp),
+                        color = MdvColor.SurfaceHigh
+                    ) {
+                        Column(
+                            modifier = Modifier.padding(MdvSpace.S3),
+                            horizontalAlignment = Alignment.CenterHorizontally
+                        ) {
+                            Text(
+                                text = "↑ UPLOAD",
+                                style = MaterialTheme.typography.labelSmall,
+                                color = MdvColor.PrimaryContainer,
+                                fontWeight = FontWeight.Bold
+                            )
+                            androidx.compose.foundation.layout.Spacer(modifier = Modifier.height(4.dp))
+                            Text(
+                                text = formatSpeed(upBps),
+                                style = MaterialTheme.typography.titleMedium,
+                                color = MdvColor.OnSurface,
+                                fontWeight = FontWeight.Bold
+                            )
+                            Text(
+                                text = formatBytes(uploadTotalBytes),
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MdvColor.OnSurfaceVariant
+                            )
+                        }
+                    }
+                }
+            }
+
+            // Extra Info (MTU, Active Resolvers, SOCKS)
+            if (vpnState == VpnManager.VpnState.CONNECTED) {
+                Column(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalArrangement = Arrangement.spacedBy(4.dp)
+                ) {
+                    if (scanStatus.activeResolvers > 0) {
+                        Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+                            Text("Active Resolvers", style = MaterialTheme.typography.bodySmall, color = MdvColor.OnSurfaceVariant)
+                            Text(scanStatus.activeResolvers.toString(), style = MaterialTheme.typography.bodySmall, color = MdvColor.OnSurface, fontWeight = FontWeight.Bold)
+                        }
+                    }
+                    if (scanStatus.syncedUploadMtu > 0 || scanStatus.syncedDownloadMtu > 0) {
+                        Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+                            Text("Synced MTU (Up/Down)", style = MaterialTheme.typography.bodySmall, color = MdvColor.OnSurfaceVariant)
+                            Text("${scanStatus.syncedUploadMtu} / ${scanStatus.syncedDownloadMtu}", style = MaterialTheme.typography.bodySmall, color = MdvColor.OnSurface, fontWeight = FontWeight.Bold)
+                        }
+                    }
+                    Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+                        Text("SOCKS5 Proxy", style = MaterialTheme.typography.bodySmall, color = MdvColor.OnSurfaceVariant)
+                        Text("$proxyHost:$proxyPort", style = MaterialTheme.typography.bodySmall, color = MdvColor.OnSurface, fontWeight = FontWeight.Bold)
+                    }
+                    if (socksAuthEnabled && socksUser.isNotBlank()) {
+                        Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+                            Text("SOCKS5 Auth", style = MaterialTheme.typography.bodySmall, color = MdvColor.OnSurfaceVariant)
+                            Text("Enabled ($socksUser)", style = MaterialTheme.typography.bodySmall, color = MdvColor.OnSurface, fontWeight = FontWeight.Bold)
+                        }
+                    }
                 }
             }
         }
