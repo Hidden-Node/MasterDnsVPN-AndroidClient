@@ -56,6 +56,9 @@ object VpnManager {
     private val _errorMessage = MutableStateFlow<String?>(null)
     val errorMessage: StateFlow<String?> = _errorMessage.asStateFlow()
 
+    private val _activeResolvers = MutableStateFlow<List<String>>(emptyList())
+    val activeResolvers: StateFlow<List<String>> = _activeResolvers.asStateFlow()
+
     private val _uploadSpeedBps = MutableStateFlow(0L)
     val uploadSpeedBps: StateFlow<Long> = _uploadSpeedBps.asStateFlow()
     private val _downloadSpeedBps = MutableStateFlow(0L)
@@ -117,6 +120,14 @@ object VpnManager {
     )
     private val SYNCED_MTU_REGEX = Regex(
         "Selected Synced Upload MTU:\\s*(\\d+)\\s*\\|\\s*Selected Synced Download MTU:\\s*(\\d+)",
+        RegexOption.IGNORE_CASE
+    )
+    private val RESOLVER_ADDED_REGEX = Regex(
+        "(?:✅ Accepted|🔄 DNS Resolver Reactivated).*?(\\d+\\.\\d+\\.\\d+\\.\\d+:\\d+|\\[[a-fA-F0-9:]+\\]:\\d+)",
+        RegexOption.IGNORE_CASE
+    )
+    private val RESOLVER_REMOVED_REGEX = Regex(
+        "DNS Resolver disabled.*?(\\d+\\.\\d+\\.\\d+\\.\\d+:\\d+|\\[[a-fA-F0-9:]+\\]:\\d+)",
         RegexOption.IGNORE_CASE
     )
     private val TIMESTAMP_CANDIDATES = listOf(
@@ -289,6 +300,7 @@ object VpnManager {
         updateState(VpnState.CONNECTING)
         clearError()
         _scanStatus.value = ScanStatus(scanning = true)
+        _activeResolvers.value = emptyList()
 
         val intent = Intent(context, MasterDnsVpnService::class.java).apply {
             action = MasterDnsVpnService.ACTION_CONNECT
@@ -324,6 +336,20 @@ object VpnManager {
     }
 
     private fun parseScanLine(line: String) {
+        RESOLVER_ADDED_REGEX.find(line)?.let { match ->
+            val res = match.groupValues[1]
+            val current = _activeResolvers.value.toMutableSet()
+            current.add(res)
+            _activeResolvers.value = current.toList()
+        }
+
+        RESOLVER_REMOVED_REGEX.find(line)?.let { match ->
+            val res = match.groupValues[1]
+            val current = _activeResolvers.value.toMutableSet()
+            current.remove(res)
+            _activeResolvers.value = current.toList()
+        }
+
         INDEXED_PROGRESS_REGEX.find(line)?.let { match ->
             val total = match.groupValues[2].toIntOrNull()
             if (total != null && total > 0) {

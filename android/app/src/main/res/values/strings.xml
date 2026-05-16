@@ -45,6 +45,7 @@
     <string name="action_cancel">Cancel</string>
     <string name="action_apply">Apply</string>
     <string name="title_profiles">Profiles</string>
+    <string name="title_resolvers">Resolvers</string>
     <string name="title_logs">Logs</string>
     <string name="title_info">Info</string>
     <string name="title_home">Home</string>

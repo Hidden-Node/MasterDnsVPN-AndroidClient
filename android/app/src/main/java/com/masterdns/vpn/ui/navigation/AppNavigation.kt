@@ -32,6 +32,7 @@ import com.masterdns.vpn.ui.theme.MdvColor
 sealed class Screen(val route: String, @StringRes val titleRes: Int) {
     data object Home : Screen("home", R.string.title_home)
     data object Profiles : Screen("profiles", R.string.title_profiles)
+    data object Resolvers : Screen("resolvers", R.string.title_resolvers)
     data object Logs : Screen("logs", R.string.title_logs)
     data object Settings : Screen("settings", R.string.settings_title)
     data object Info : Screen("info", R.string.title_info)
@@ -44,7 +45,7 @@ fun AppNavigation() {
     val navBackStackEntry by navController.currentBackStackEntryAsState()
     val currentDestination = navBackStackEntry?.destination
 
-    val bottomBarScreens = listOf(Screen.Home, Screen.Profiles, Screen.Logs, Screen.Settings)
+    val bottomBarScreens = listOf(Screen.Home, Screen.Profiles, Screen.Resolvers, Screen.Logs, Screen.Settings)
     fun navigateToRoot(screen: Screen) {
         val currentRoute = currentDestination?.route
         if (currentRoute == screen.route) {
@@ -61,6 +62,7 @@ fun AppNavigation() {
     val icons = mapOf(
         Screen.Home.route to Icons.Filled.Home,
         Screen.Profiles.route to Icons.Filled.Person,
+        Screen.Resolvers.route to Icons.Filled.Dns,
         Screen.Logs.route to Icons.Filled.Terminal,
         Screen.Settings.route to Icons.Filled.Settings
     )
@@ -127,6 +129,9 @@ fun AppNavigation() {
                         navController.navigate("profile_settings/$profileId")
                     }
                 )
+            }
+            composable(Screen.Resolvers.route) {
+                com.masterdns.vpn.ui.resolvers.ResolversScreen()
             }
             composable(Screen.Logs.route) {
                 LogsScreen(
