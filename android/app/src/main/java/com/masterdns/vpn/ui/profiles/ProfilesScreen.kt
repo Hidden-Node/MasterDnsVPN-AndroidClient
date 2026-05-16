@@ -92,7 +92,6 @@ fun ProfilesScreen(
                 return@launch
             }
             importedResolvers = result
-            editingProfile = null
             showEditor = true
             snackbarHostState.showSnackbar(
                 context.getString(R.string.profiles_resolvers_imported_stats_msg, result.stats.summary())
