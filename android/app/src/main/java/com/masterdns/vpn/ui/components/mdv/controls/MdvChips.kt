@@ -21,14 +21,7 @@ fun MdvFilterChip(
     FilterChip(
         selected = selected,
         onClick = onClick,
-        label = { 
-            Text(
-                text = label,
-                textAlign = androidx.compose.ui.text.style.TextAlign.Center,
-                modifier = Modifier.fillMaxWidth(),
-                style = MaterialTheme.typography.labelMedium
-            ) 
-        },
+        label = { Text(label) },
         modifier = modifier,
         colors = FilterChipDefaults.filterChipColors(
             selectedContainerColor = MdvColor.PrimaryContainer.copy(alpha = 0.16f),
