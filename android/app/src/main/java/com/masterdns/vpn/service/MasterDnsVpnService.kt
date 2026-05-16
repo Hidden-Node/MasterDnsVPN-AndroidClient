@@ -398,33 +398,44 @@ class MasterDnsVpnService : VpnService() {
                 connectJob?.cancel()
                 VpnManager.appendLog("VPN stop requested")
 
-                // Close TUN interface FIRST to unblock any pending I/O in Go tunBridge/tun
-                VpnManager.appendLog("Closing TUN interface...")
-                runCatching { vpnInterface?.close() }
-                    .onSuccess { VpnManager.appendLog("TUN interface closed") }
-                    .onFailure { VpnManager.appendLog("TUN interface close failed: ${it.message}") }
-                vpnInterface = null
-
+                // Dynamic Teardown:
+                // - Fake DNS ON (tunBridgeActive): Close TUN first to unblock Go read loops, then stop Go core.
+                // - Fake DNS OFF (tun2socks): Stop Go core first (to avoid native crash from reading a closed fd), then close TUN.
+                
                 if (tunBridgeActive) {
+                    VpnManager.appendLog("Closing TUN interface to unblock tunBridge...")
+                    runCatching { vpnInterface?.close() }
+                    vpnInterface = null
+
                     VpnManager.appendLog("Stopping DNS-aware TUN bridge...")
-                    runCatching { mobile.Mobile.stopTunBridge() }
+                    runCatching { 
+                        kotlinx.coroutines.withTimeout(3000L) { mobile.Mobile.stopTunBridge() }
+                    }
                         .onSuccess { VpnManager.appendLog("DNS-aware TUN bridge stopped") }
-                        .onFailure { VpnManager.appendLog("DNS-aware TUN bridge stop failed: ${it.message}") }
+                        .onFailure { VpnManager.appendLog("DNS-aware TUN bridge stop failed or timed out: ${it.message}") }
                     tunBridgeActive = false
                 }
 
-                // Stop Go client and Tun bridge
                 VpnManager.appendLog("Stopping Go core...")
                 runCatching {
                     if (mobile.Mobile.isRunning()) {
-                        mobile.Mobile.stopClient()
+                        kotlinx.coroutines.withTimeout(5000L) { mobile.Mobile.stopClient() }
                         VpnManager.appendLog("Go core stop requested")
                     } else {
                         VpnManager.appendLog("Go core already stopped")
                     }
                 }.onFailure { e ->
                     Log.e(TAG, "Error stopping Go core", e)
-                    VpnManager.appendLog("Go core stop failed: ${e.message}")
+                    VpnManager.appendLog("Go core stop failed or timed out: ${e.message}")
+                }
+
+                // If TUN wasn't closed above (Fake DNS OFF), close it safely now.
+                if (vpnInterface != null) {
+                    VpnManager.appendLog("Closing TUN interface...")
+                    runCatching { vpnInterface?.close() }
+                        .onSuccess { VpnManager.appendLog("TUN interface closed") }
+                        .onFailure { VpnManager.appendLog("TUN interface close failed: ${it.message}") }
+                    vpnInterface = null
                 }
 
                 // Cancel coroutines
@@ -442,7 +453,9 @@ class MasterDnsVpnService : VpnService() {
                 VpnManager.updateState(VpnManager.VpnState.DISCONNECTED)
                 VpnManager.stopTrafficMonitor()
                 VpnManager.appendLog("VPN disconnected")
-                exportMtuResultsIfNeeded()
+                kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
+                    exportMtuResultsIfNeeded()
+                }
                 releaseWakeLock()
 
                 runCatching {
