@@ -32,7 +32,6 @@ import com.masterdns.vpn.util.VpnManager
 fun MdvConnectionTelemetryCard(
     vpnState: VpnManager.VpnState,
     scanStatus: VpnManager.ScanStatus,
-    configuredResolverCount: Int,
     scannedCount: Int,
     totalResolvers: Int,
     scanProgress: Float,
@@ -133,15 +132,6 @@ fun MdvConnectionTelemetryCard(
                     color = MdvColor.OnSurface
                 )
             }
-            ResolverTroubleshootingBlock(
-                configuredResolverCount = configuredResolverCount,
-                coreTotalResolvers = totalResolvers,
-                scannedCount = scannedCount,
-                validCount = scanStatus.validCount,
-                rejectedCount = scanStatus.rejectedCount,
-                isConnecting = isConnecting,
-                isError = vpnState == VpnManager.VpnState.ERROR
-            )
             androidx.compose.foundation.layout.Spacer(modifier = Modifier.height(MdvSpace.S1))
             Text(
                 text = stringResource(R.string.home_speed_row, formatSpeed(downBps), formatSpeed(upBps)),
@@ -197,58 +187,6 @@ fun MdvConnectionTelemetryCard(
                 }
             }
         }
-    }
-}
-
-@Composable
-private fun ResolverTroubleshootingBlock(
-    configuredResolverCount: Int,
-    coreTotalResolvers: Int,
-    scannedCount: Int,
-    validCount: Int,
-    rejectedCount: Int,
-    isConnecting: Boolean,
-    isError: Boolean
-) {
-    val shouldShow = configuredResolverCount > 0 ||
-        coreTotalResolvers > 0 ||
-        scannedCount > 0 ||
-        isConnecting ||
-        isError
-    if (!shouldShow) return
-
-    androidx.compose.foundation.layout.Spacer(modifier = Modifier.height(MdvSpace.S2))
-    Text(
-        text = stringResource(R.string.home_resolver_diagnostics_title),
-        style = MaterialTheme.typography.bodySmall.copy(fontWeight = FontWeight.SemiBold),
-        color = MdvColor.OnSurface
-    )
-    androidx.compose.foundation.layout.Spacer(modifier = Modifier.height(2.dp))
-    Text(
-        text = stringResource(
-            R.string.home_resolver_diagnostics_counts,
-            configuredResolverCount,
-            coreTotalResolvers
-        ),
-        style = MaterialTheme.typography.bodySmall,
-        color = MdvColor.OnSurfaceVariant
-    )
-
-    val warningText = when {
-        configuredResolverCount == 0 -> stringResource(R.string.home_resolver_no_configured_warning)
-        isConnecting && coreTotalResolvers == 0 -> stringResource(R.string.home_resolver_waiting_core_scan)
-        scannedCount > 0 && validCount == 0 && rejectedCount > 0 ->
-            stringResource(R.string.home_resolver_all_rejected_warning)
-        else -> null
-    }
-
-    warningText?.let {
-        androidx.compose.foundation.layout.Spacer(modifier = Modifier.height(2.dp))
-        Text(
-            text = it,
-            style = MaterialTheme.typography.bodySmall,
-            color = if (validCount == 0 && rejectedCount > 0) DisconnectedRed else MdvColor.OnSurfaceVariant
-        )
     }
 }
 

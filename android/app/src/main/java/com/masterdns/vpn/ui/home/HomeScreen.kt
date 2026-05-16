@@ -81,9 +81,6 @@ fun HomeScreen(
     val socksAuthEnabled = advanced["SOCKS5_AUTH"].equals("true", ignoreCase = true)
     val socksUser = advanced["SOCKS5_USER"]?.trim().orEmpty()
     val socksPass = advanced["SOCKS5_PASS"]?.trim().orEmpty()
-    val configuredResolverCount = remember(selectedProfile?.resolvers) {
-        countConfiguredResolvers(selectedProfile?.resolvers.orEmpty())
-    }
 
     val vpnPermissionLauncher = rememberLauncherForActivityResult(
         ActivityResultContracts.StartActivityForResult()
@@ -229,7 +226,6 @@ fun HomeScreen(
                         MdvConnectionTelemetryCard(
                             vpnState = vpnState,
                             scanStatus = scanStatus,
-                            configuredResolverCount = configuredResolverCount,
                             scannedCount = scannedCount,
                             totalResolvers = totalResolvers,
                             scanProgress = scanProgress,
@@ -302,7 +298,6 @@ fun HomeScreen(
                 MdvConnectionTelemetryCard(
                     vpnState = vpnState,
                     scanStatus = scanStatus,
-                    configuredResolverCount = configuredResolverCount,
                     scannedCount = scannedCount,
                     totalResolvers = totalResolvers,
                     scanProgress = scanProgress,
@@ -333,13 +328,6 @@ fun HomeScreen(
             }
         }
     }
-}
-
-private fun countConfiguredResolvers(resolvers: String): Int {
-    return resolvers
-        .lineSequence()
-        .map { it.substringBefore("#").trim() }
-        .count { it.isNotEmpty() }
 }
 
 private fun parseAdvanced(json: String): Map<String, String> {
