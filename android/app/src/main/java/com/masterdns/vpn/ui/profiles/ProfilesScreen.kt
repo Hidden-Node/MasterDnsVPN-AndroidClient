@@ -409,7 +409,9 @@ private fun ProfileEditorDialog(
         },
         text = {
             Column(
-                modifier = Modifier.fillMaxWidth(),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .verticalScroll(androidx.compose.foundation.rememberScrollState()),
                 verticalArrangement = Arrangement.spacedBy(12.dp)
             ) {
                 OutlinedTextField(
