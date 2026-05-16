@@ -241,18 +241,22 @@ fun GlobalSettingsScreen(vm: GlobalSettingsViewModel = viewModel()) {
 
                         if (draft.splitTunnelingEnabled) {
                             Row(
-                                modifier = Modifier.fillMaxWidth().padding(horizontal = MdvSpace.S3),
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(horizontal = MdvSpace.S3),
                                 horizontalArrangement = Arrangement.spacedBy(MdvSpace.S2)
                             ) {
                                 MdvFilterChip(
                                     selected = draft.splitTunnelMode == SplitTunnelMode.INCLUDE,
                                     onClick = { draft = draft.copy(splitTunnelMode = SplitTunnelMode.INCLUDE) },
-                                    label = "Proxy Selected Apps"
+                                    label = "Proxy Only",
+                                    modifier = Modifier.weight(1f)
                                 )
                                 MdvFilterChip(
                                     selected = draft.splitTunnelMode == SplitTunnelMode.EXCLUDE,
                                     onClick = { draft = draft.copy(splitTunnelMode = SplitTunnelMode.EXCLUDE) },
-                                    label = "Bypass Selected Apps"
+                                    label = "Bypass Only",
+                                    modifier = Modifier.weight(1f)
                                 )
                             }
                             androidx.compose.foundation.layout.Spacer(modifier = Modifier.height(MdvSpace.S2))

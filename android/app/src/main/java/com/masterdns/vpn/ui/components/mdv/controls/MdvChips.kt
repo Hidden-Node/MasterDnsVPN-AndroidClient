@@ -11,12 +11,21 @@ import com.masterdns.vpn.ui.theme.MdvColor
 fun MdvFilterChip(
     selected: Boolean,
     label: String,
+    modifier: Modifier = Modifier,
     onClick: () -> Unit
 ) {
     FilterChip(
         selected = selected,
         onClick = onClick,
-        label = { Text(label) },
+        label = { 
+            Text(
+                text = label,
+                textAlign = androidx.compose.ui.text.style.TextAlign.Center,
+                modifier = Modifier.fillMaxWidth(),
+                style = MaterialTheme.typography.labelMedium
+            ) 
+        },
+        modifier = modifier,
         colors = FilterChipDefaults.filterChipColors(
             selectedContainerColor = MdvColor.PrimaryContainer.copy(alpha = 0.16f),
             selectedLabelColor = MdvColor.Primary,
