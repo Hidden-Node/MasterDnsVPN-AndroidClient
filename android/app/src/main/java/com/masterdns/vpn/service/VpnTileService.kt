@@ -30,7 +30,7 @@ class VpnTileService : TileService() {
         super.onClick()
         val state = VpnManager.state.value
         when (state) {
-            VpnManager.VpnState.CONNECTED -> VpnManager.disconnect(this)
+            VpnManager.VpnState.CONNECTED, VpnManager.VpnState.CONNECTING -> VpnManager.disconnect(this)
             VpnManager.VpnState.DISCONNECTED -> connectFromTileIfReady()
             else -> Unit
         }
