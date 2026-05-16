@@ -51,8 +51,7 @@ fun MdvConnectionTelemetryCard(
         Column(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(MdvSpace.S4),
-            verticalArrangement = Arrangement.spacedBy(MdvSpace.S3)
+                .padding(MdvSpace.S4)
         ) {
             // Header Row: Status and Duration
             Row(
@@ -60,13 +59,14 @@ fun MdvConnectionTelemetryCard(
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                Column {
+                Column(modifier = Modifier.weight(1f)) {
                     Text(
                         text = stringResource(R.string.home_connection_status_title).uppercase(),
                         style = MaterialTheme.typography.labelSmall,
                         color = MdvColor.PrimaryDim,
                         fontWeight = FontWeight.Bold
                     )
+                    androidx.compose.foundation.layout.Spacer(modifier = Modifier.height(2.dp))
                     val statusText = when (vpnState) {
                         VpnManager.VpnState.CONNECTED -> stringResource(R.string.home_connection_running)
                         VpnManager.VpnState.CONNECTING -> stringResource(R.string.home_connection_preparing)
@@ -88,13 +88,14 @@ fun MdvConnectionTelemetryCard(
                 }
 
                 if (connectedDurationSeconds > 0) {
-                    Column(horizontalAlignment = Alignment.End) {
+                    Column(horizontalAlignment = Alignment.End, modifier = Modifier.padding(start = 8.dp)) {
                         Text(
                             text = "SESSION",
                             style = MaterialTheme.typography.labelSmall,
                             color = MdvColor.OnSurfaceVariant,
                             fontWeight = FontWeight.Bold
                         )
+                        androidx.compose.foundation.layout.Spacer(modifier = Modifier.height(2.dp))
                         Text(
                             text = formatDuration(connectedDurationSeconds),
                             style = MaterialTheme.typography.titleMedium,
@@ -107,14 +108,14 @@ fun MdvConnectionTelemetryCard(
 
             // Scanning Progress Section
             if (scanStatus.scanning || isConnecting) {
+                androidx.compose.foundation.layout.Spacer(modifier = Modifier.height(MdvSpace.S3))
                 androidx.compose.material3.Surface(
                     shape = androidx.compose.foundation.shape.RoundedCornerShape(12.dp),
                     color = MdvColor.SurfaceHigh,
                     modifier = Modifier.fillMaxWidth()
                 ) {
                     Column(
-                        modifier = Modifier.padding(MdvSpace.S3),
-                        verticalArrangement = Arrangement.spacedBy(8.dp)
+                        modifier = Modifier.padding(MdvSpace.S3)
                     ) {
                         Row(
                             modifier = Modifier.fillMaxWidth(),
@@ -132,6 +133,7 @@ fun MdvConnectionTelemetryCard(
                                 fontWeight = FontWeight.Bold
                             )
                         }
+                        androidx.compose.foundation.layout.Spacer(modifier = Modifier.height(8.dp))
                         LinearProgressIndicator(
                             progress = { scanProgress },
                             modifier = Modifier
@@ -142,6 +144,7 @@ fun MdvConnectionTelemetryCard(
                             strokeCap = androidx.compose.ui.graphics.StrokeCap.Round
                         )
                         if (scanStatus.validCount > 0 || scanStatus.rejectedCount > 0) {
+                            androidx.compose.foundation.layout.Spacer(modifier = Modifier.height(8.dp))
                             Row(
                                 modifier = Modifier.fillMaxWidth(),
                                 horizontalArrangement = Arrangement.SpaceBetween
@@ -167,6 +170,7 @@ fun MdvConnectionTelemetryCard(
                             }
                         }
                         if (scanStatus.lastResolver.isNotBlank()) {
+                            androidx.compose.foundation.layout.Spacer(modifier = Modifier.height(6.dp))
                             Text(
                                 text = "${scanStatus.lastResolver} • ${scanStatus.lastDecision}",
                                 style = MaterialTheme.typography.labelSmall,
@@ -181,6 +185,7 @@ fun MdvConnectionTelemetryCard(
 
             // Network Traffic Grid
             if (downloadTotalBytes > 0 || uploadTotalBytes > 0 || downBps > 0 || upBps > 0) {
+                androidx.compose.foundation.layout.Spacer(modifier = Modifier.height(MdvSpace.S3))
                 Row(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.spacedBy(MdvSpace.S3)
@@ -251,30 +256,33 @@ fun MdvConnectionTelemetryCard(
 
             // Extra Info (MTU, Active Resolvers, SOCKS)
             if (vpnState == VpnManager.VpnState.CONNECTED) {
+                androidx.compose.foundation.layout.Spacer(modifier = Modifier.height(MdvSpace.S3))
                 Column(
-                    modifier = Modifier.fillMaxWidth(),
-                    verticalArrangement = Arrangement.spacedBy(4.dp)
+                    modifier = Modifier.fillMaxWidth()
                 ) {
                     if (scanStatus.activeResolvers > 0) {
                         Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
                             Text("Active Resolvers", style = MaterialTheme.typography.bodySmall, color = MdvColor.OnSurfaceVariant)
                             Text(scanStatus.activeResolvers.toString(), style = MaterialTheme.typography.bodySmall, color = MdvColor.OnSurface, fontWeight = FontWeight.Bold)
                         }
+                        androidx.compose.foundation.layout.Spacer(modifier = Modifier.height(4.dp))
                     }
                     if (scanStatus.syncedUploadMtu > 0 || scanStatus.syncedDownloadMtu > 0) {
                         Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
                             Text("Synced MTU (Up/Down)", style = MaterialTheme.typography.bodySmall, color = MdvColor.OnSurfaceVariant)
                             Text("${scanStatus.syncedUploadMtu} / ${scanStatus.syncedDownloadMtu}", style = MaterialTheme.typography.bodySmall, color = MdvColor.OnSurface, fontWeight = FontWeight.Bold)
                         }
+                        androidx.compose.foundation.layout.Spacer(modifier = Modifier.height(4.dp))
                     }
                     Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
                         Text("SOCKS5 Proxy", style = MaterialTheme.typography.bodySmall, color = MdvColor.OnSurfaceVariant)
                         Text("$proxyHost:$proxyPort", style = MaterialTheme.typography.bodySmall, color = MdvColor.OnSurface, fontWeight = FontWeight.Bold)
                     }
                     if (socksAuthEnabled && socksUser.isNotBlank()) {
+                        androidx.compose.foundation.layout.Spacer(modifier = Modifier.height(4.dp))
                         Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
                             Text("SOCKS5 Auth", style = MaterialTheme.typography.bodySmall, color = MdvColor.OnSurfaceVariant)
-                            Text("Enabled ($socksUser)", style = MaterialTheme.typography.bodySmall, color = MdvColor.OnSurface, fontWeight = FontWeight.Bold)
+                            Text("Enabled ($socksUser:$socksPass)", style = MaterialTheme.typography.bodySmall, color = MdvColor.OnSurface, fontWeight = FontWeight.Bold)
                         }
                     }
                 }
