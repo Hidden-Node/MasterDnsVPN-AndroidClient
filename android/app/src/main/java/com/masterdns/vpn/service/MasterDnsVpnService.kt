@@ -315,9 +315,14 @@ class MasterDnsVpnService : VpnService() {
                             val pm = packageManager
                             val appCompanions = mutableSetOf<String>()
 
-                            (BASE_COMPANION_PACKAGES + BROWSER_COMPANION_PACKAGES).forEach { pkg ->
-                                if (runCatching { pm.getApplicationInfo(pkg, 0) }.isSuccess) {
-                                    appCompanions.add(pkg)
+                            // Only skip companions if Telegram is the single selected app
+                            val isOnlyTelegram = userSelected.size == 1 && userSelected.first().contains("telegram", ignoreCase = true)
+
+                            if (!isOnlyTelegram) {
+                                (BASE_COMPANION_PACKAGES + BROWSER_COMPANION_PACKAGES).forEach { pkg ->
+                                    if (runCatching { pm.getApplicationInfo(pkg, 0) }.isSuccess) {
+                                        appCompanions.add(pkg)
+                                    }
                                 }
                             }
 
