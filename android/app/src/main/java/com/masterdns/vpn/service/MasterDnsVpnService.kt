@@ -94,6 +94,8 @@ class MasterDnsVpnService : VpnService() {
         Log.i(TAG, "VPN Service created")
     }
 
+    private var networkCallback: android.net.ConnectivityManager.NetworkCallback? = null
+
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         when (intent?.action) {
             ACTION_CONNECT -> {
@@ -285,10 +287,21 @@ class MasterDnsVpnService : VpnService() {
                 val builder = Builder()
                     .setSession(getString(R.string.app_name))
                     .setMtu(1500)
+                    .setBlocking(true)
                     .addAddress(if (globalSettings.fakeDnsEnabled) "172.19.0.1" else "10.0.0.2", if (globalSettings.fakeDnsEnabled) 30 else 32)
                     .addRoute("0.0.0.0", 0)
 
-                VpnManager.appendLog("IPv4 route enabled: 0.0.0.0/0.")
+                // Prevent IPv6 DNS leaks: if we don't route IPv6 and provide an IPv6 DNS,
+                // Android may leak DNS requests to the cellular network's IPv6 DNS server,
+                // resulting in hijacked IPs like 10.10.34.36 from the ISP.
+                try {
+                    builder.addAddress("fc00::1", 128)
+                    builder.addRoute("::", 0)
+                    // We don't add fc00::1 to dns servers here because Android sometimes rejects it,
+                    // but routing ::/0 forces all IPv6 traffic (including DNS) into the TUN.
+                } catch (e: Exception) {
+                    VpnManager.appendLog("IPv6 routing skipped: ${e.message}")
+                }
 
                 vpnDnsServers.forEach { builder.addDnsServer(it) }
                 if (globalSettings.fakeDnsEnabled) {
@@ -361,6 +374,34 @@ class MasterDnsVpnService : VpnService() {
                 } else {
                     VpnManager.appendLog("Starting tun2socks bridge: TUN fd -> socks5://127.0.0.1:$socksPort")
                     mobile.Mobile.startTun(vpnInterface!!.fd.toLong(), "127.0.0.1:$socksPort")
+                }
+
+                // Register Network Change detection to bounce TUN bridge
+                val cm = getSystemService(android.content.Context.CONNECTIVITY_SERVICE) as android.net.ConnectivityManager
+                networkCallback?.let { cm.unregisterNetworkCallback(it) }
+                networkCallback = object : android.net.ConnectivityManager.NetworkCallback() {
+                    override fun onAvailable(network: android.net.Network) {
+                        val caps = cm.getNetworkCapabilities(network)
+                        if (caps == null || caps.hasTransport(android.net.NetworkCapabilities.TRANSPORT_VPN)) return
+                        if (isStopping) return
+                        
+                        VpnManager.appendLog("Underlying network changed, bouncing TUN bridge...")
+                        if (tunBridgeActive) {
+                            runCatching { mobile.Mobile.stopTunBridge() }
+                            runCatching { mobile.Mobile.startTunBridge(vpnInterface!!.fd.toLong(), 1500L, "127.0.0.1:$socksPort") }
+                        } else {
+                            runCatching { mobile.Mobile.stopTun() }
+                            runCatching { mobile.Mobile.startTun(vpnInterface!!.fd.toLong(), "127.0.0.1:$socksPort") }
+                        }
+                    }
+                }
+                try {
+                    val request = android.net.NetworkRequest.Builder()
+                        .addCapability(android.net.NetworkCapabilities.NET_CAPABILITY_INTERNET)
+                        .build()
+                    cm.registerNetworkCallback(request, networkCallback!!)
+                } catch (e: Exception) {
+                    VpnManager.appendLog("Failed to register network callback: ${e.message}")
                 }
 
                 // Update state
@@ -448,6 +489,15 @@ class MasterDnsVpnService : VpnService() {
                 httpProxyJob?.cancel()
                 sharingSocksJob?.cancel()
                 logTailJob?.cancel()
+
+                networkCallback?.let {
+                    runCatching {
+                        val cm = getSystemService(android.content.Context.CONNECTIVITY_SERVICE) as android.net.ConnectivityManager
+                        cm.unregisterNetworkCallback(it)
+                    }
+                    networkCallback = null
+                }
+
                 runCatching { sharingSocksServer?.close() }
                 sharingSocksServer = null
                 runCatching { sharingHttpServer?.close() }
