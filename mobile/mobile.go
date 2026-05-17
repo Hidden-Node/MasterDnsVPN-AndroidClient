@@ -148,19 +148,34 @@ func GetListenAddress() string {
 	return ""
 }
 
-// StartTunBridge starts the TUN bridge with DNS interception.
+// StartTunBridge starts the TUN bridge with DNS interception using FakeDNS proxy.
 func StartTunBridge(tunFd int64, mtu int64, socksAddr string) error {
-	return tun.StartTunBridge(int32(tunFd), int32(mtu), socksAddr)
+	proxyAddr, err := tun.StartFakeDNSProxy(socksAddr)
+	if err != nil {
+		return err
+	}
+	
+	key := &engine.Key{
+		Proxy:  "socks5://" + proxyAddr,
+		Device: fmt.Sprintf("fd://%d", tunFd),
+		MTU:    int(mtu),
+	}
+
+	engine.Insert(key)
+	engine.Start()
+	
+	return nil
 }
 
 // StopTunBridge stops the DNS-aware TUN bridge.
 func StopTunBridge() {
-	tun.StopTunBridge()
+	engine.Stop()
+	tun.StopFakeDNSProxy()
 }
 
 // IsTunBridgeRunning returns true if the DNS-aware TUN bridge is active.
 func IsTunBridgeRunning() bool {
-	return tun.IsTunBridgeRunning()
+	return tun.IsFakeDNSProxyRunning()
 }
 
 // GetTunBandwidth returns upload/download counters from the TUN bridge.
