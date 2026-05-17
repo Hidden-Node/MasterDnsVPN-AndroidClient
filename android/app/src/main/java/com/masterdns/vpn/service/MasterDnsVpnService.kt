@@ -28,7 +28,6 @@ import java.net.InetAddress
 import java.net.InetSocketAddress
 import java.net.ServerSocket
 import java.net.Socket
-import java.util.concurrent.Semaphore
 import kotlin.coroutines.coroutineContext
 
 class MasterDnsVpnService : VpnService() {
@@ -43,10 +42,6 @@ class MasterDnsVpnService : VpnService() {
         private const val SOCKS_STARTUP_TIMEOUT_MS = 30 * 60 * 1000L
         private const val SOCKS_POLL_INTERVAL_MS = 500L
         private const val WAKE_LOCK_TIMEOUT_MS = SOCKS_STARTUP_TIMEOUT_MS + 5 * 60 * 1000L
-        private const val MAX_SHARING_CLIENTS = 64
-        private const val MAX_HTTP_HEADER_BYTES = 64 * 1024
-        private const val MAX_CONNECT_HOST_LENGTH = 253
-        private const val SHARING_SOCKET_TIMEOUT_MS = 30_000
 
         // Base companions many apps need for network functionality.
         private val BASE_COMPANION_PACKAGES = setOf(
@@ -73,7 +68,6 @@ class MasterDnsVpnService : VpnService() {
     private var sharingSocksJob: Job? = null
     private var sharingSocksServer: java.net.ServerSocket? = null
     private var sharingHttpServer: java.net.ServerSocket? = null
-    private val sharingClientSlots = Semaphore(MAX_SHARING_CLIENTS, true)
     private var logTailJob: Job? = null
     private var wakeLock: PowerManager.WakeLock? = null
     private var mtuExportTargetUri: String? = null
@@ -832,18 +826,8 @@ class MasterDnsVpnService : VpnService() {
                 VpnManager.appendLog("Sharing SOCKS5 proxy ready on 0.0.0.0:$socksPort")
                 while (isActive) {
                     val client = server.accept() ?: continue
-                    if (!sharingClientSlots.tryAcquire()) {
-                        VpnManager.appendLog("Sharing SOCKS5 client rejected: connection limit reached")
-                        runCatching { client.close() }
-                        continue
-                    }
-                    client.soTimeout = SHARING_SOCKET_TIMEOUT_MS
                     launch(Dispatchers.IO) {
-                        try {
-                            handleSharingSocksClient(client)
-                        } finally {
-                            sharingClientSlots.release()
-                        }
+                        handleSharingSocksClient(client)
                     }
                 }
             } catch (e: Exception) {
@@ -863,18 +847,8 @@ class MasterDnsVpnService : VpnService() {
                 VpnManager.appendLog("HTTP proxy ready on 0.0.0.0:$httpPort")
                 while (isActive) {
                     val client = server.accept() ?: continue
-                    if (!sharingClientSlots.tryAcquire()) {
-                        VpnManager.appendLog("HTTP proxy client rejected: connection limit reached")
-                        runCatching { client.close() }
-                        continue
-                    }
-                    client.soTimeout = SHARING_SOCKET_TIMEOUT_MS
                     launch(Dispatchers.IO) {
-                        try {
-                            handleHttpProxyClient(client, socksPort, username, password)
-                        } finally {
-                            sharingClientSlots.release()
-                        }
+                        handleHttpProxyClient(client, socksPort, username, password)
                     }
                 }
             } catch (e: Exception) {
@@ -899,27 +873,22 @@ class MasterDnsVpnService : VpnService() {
 
 private suspend fun handleHttpProxyClient(client: java.net.Socket, upstreamSocksPort: Int, username: String, password: String) {
         try {
-            val input = client.getInputStream()
+            val input = client.getInputStream().bufferedReader()
             val output = client.getOutputStream().bufferedWriter()
 
-            var headerBudget = MAX_HTTP_HEADER_BYTES
-            val request = readHttpHeaderLine(input, headerBudget) ?: return
-            headerBudget -= request.bytesRead
-            val requestLine = request.text
-            val parts = requestLine.split(" ", limit = 3)
+            val requestLine = input.readLine() ?: return
+            val parts = requestLine.split(" ")
             if (parts.size < 2) {
-                writeHttpError(output, "400 Bad Request")
+                client.close()
                 return
             }
 
-            val method = parts[0].uppercase()
+            val method = parts[0]
             val url = parts[1]
 
             var authHeader: String? = null
             while (true) {
-                val header = readHttpHeaderLine(input, headerBudget) ?: break
-                headerBudget -= header.bytesRead
-                val line = header.text
+                val line = input.readLine() ?: break
                 if (line.isBlank()) break
                 val idx = line.indexOf(':')
                 if (idx <= 0) continue
@@ -942,99 +911,23 @@ private suspend fun handleHttpProxyClient(client: java.net.Socket, upstreamSocks
             }
 
             if (method == "CONNECT") {
-                val target = parseConnectTarget(url)
+                val hostPort = url.split(":")
+                val host = hostPort[0]
+                val port = hostPort.getOrElse(1) { "80" }.toIntOrNull() ?: 80
 
                 output.write("HTTP/1.1 200 Connection Established\r\n\r\n")
                 output.flush()
 
-                val upstream = createSocks5Tunnel(upstreamSocksPort, target.host, target.port)
-                upstream.soTimeout = SHARING_SOCKET_TIMEOUT_MS
+                val upstream = createSocks5Tunnel(upstreamSocksPort, host, port)
+                upstream.soTimeout = 30000
 
                 bridgeBidirectional(client, upstream)
             } else {
                 output.write("HTTP/1.1 405 Method Not Allowed\r\n\r\n")
                 output.flush()
             }
-        } catch (e: IllegalArgumentException) {
-            VpnManager.appendLog("HTTP proxy rejected request: ${e.message}")
-        } catch (_: Exception) {}
+} catch (_: Exception) {}
         runCatching { client.close() }
-    }
-
-    private data class HttpHeaderLine(
-        val text: String,
-        val bytesRead: Int
-    )
-
-    private data class ConnectTarget(
-        val host: String,
-        val port: Int
-    )
-
-    private fun readHttpHeaderLine(input: java.io.InputStream, maxBytes: Int): HttpHeaderLine? {
-        if (maxBytes <= 0) throw IllegalArgumentException("HTTP headers are too large")
-
-        val bytes = ArrayList<Byte>()
-        var consumed = 0
-        var sawNewLine = false
-        while (consumed < maxBytes) {
-            val next = input.read()
-            if (next < 0) {
-                if (bytes.isEmpty()) return null
-                break
-            }
-
-            consumed++
-            if (next == '\n'.code) {
-                sawNewLine = true
-                break
-            }
-            if (next != '\r'.code) {
-                bytes.add(next.toByte())
-            }
-        }
-
-        if (!sawNewLine && consumed >= maxBytes) {
-            throw IllegalArgumentException("HTTP headers are too large")
-        }
-
-        return HttpHeaderLine(String(bytes.toByteArray(), Charsets.ISO_8859_1), consumed)
-    }
-
-    private fun parseConnectTarget(authority: String): ConnectTarget {
-        val trimmed = authority.trim()
-        val host: String
-        val portText: String
-
-        if (trimmed.startsWith("[")) {
-            val closingBracket = trimmed.indexOf(']')
-            require(closingBracket > 1) { "Invalid IPv6 CONNECT target" }
-            host = trimmed.substring(1, closingBracket)
-            val suffix = trimmed.substring(closingBracket + 1)
-            portText = suffix.removePrefix(":").ifBlank { "443" }
-        } else {
-            val separator = trimmed.lastIndexOf(':')
-            val hasSinglePortSeparator = separator > 0 && trimmed.indexOf(':') == separator
-            if (hasSinglePortSeparator) {
-                host = trimmed.substring(0, separator)
-                portText = trimmed.substring(separator + 1).ifBlank { "443" }
-            } else {
-                host = trimmed
-                portText = "443"
-            }
-        }
-
-        require(host.isNotBlank()) { "CONNECT target host is empty" }
-        require(host.length <= MAX_CONNECT_HOST_LENGTH) { "CONNECT target host is too long" }
-        val port = portText.toIntOrNull()
-            ?: throw IllegalArgumentException("CONNECT target port is invalid")
-        require(port in 1..65535) { "CONNECT target port is out of range" }
-        return ConnectTarget(host, port)
-    }
-
-    private fun writeHttpError(output: java.io.BufferedWriter, status: String) {
-        output.write("HTTP/1.1 $status\r\nConnection: close\r\n\r\n")
-        output.flush()
     }
 
     private fun bridgeBidirectional(client: java.net.Socket, upstream: java.net.Socket) {
