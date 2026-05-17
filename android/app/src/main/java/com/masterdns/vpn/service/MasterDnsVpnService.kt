@@ -287,7 +287,6 @@ class MasterDnsVpnService : VpnService() {
                 val builder = Builder()
                     .setSession(getString(R.string.app_name))
                     .setMtu(1500)
-                    .setBlocking(true)
                     .addAddress(if (globalSettings.fakeDnsEnabled) "172.19.0.1" else "10.0.0.2", if (globalSettings.fakeDnsEnabled) 30 else 32)
                     .addRoute("0.0.0.0", 0)
 
@@ -385,14 +384,8 @@ class MasterDnsVpnService : VpnService() {
                         if (caps == null || caps.hasTransport(android.net.NetworkCapabilities.TRANSPORT_VPN)) return
                         if (isStopping) return
                         
-                        VpnManager.appendLog("Underlying network changed, bouncing TUN bridge...")
-                        if (tunBridgeActive) {
-                            runCatching { mobile.Mobile.stopTunBridge() }
-                            runCatching { mobile.Mobile.startTunBridge(vpnInterface!!.fd.toLong(), 1500L, "127.0.0.1:$socksPort") }
-                        } else {
-                            runCatching { mobile.Mobile.stopTun() }
-                            runCatching { mobile.Mobile.startTun(vpnInterface!!.fd.toLong(), "127.0.0.1:$socksPort") }
-                        }
+                        VpnManager.appendLog("Underlying network changed, updating VPN underlying network...")
+                        setUnderlyingNetworks(arrayOf(network))
                     }
                 }
                 try {
