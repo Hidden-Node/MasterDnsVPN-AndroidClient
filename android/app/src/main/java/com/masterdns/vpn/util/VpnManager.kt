@@ -166,6 +166,11 @@ object VpnManager {
 
     fun updateState(newState: VpnState) {
         _state.value = newState
+        if (newState == VpnState.CONNECTING) {
+            _connectedDurationSeconds.value = 0L
+            _uploadTotalBytes.value = 0L
+            _downloadTotalBytes.value = 0L
+        }
         if (newState == VpnState.CONNECTED) {
             _scanStatus.value = _scanStatus.value.copy(
                 lastResolver = "",

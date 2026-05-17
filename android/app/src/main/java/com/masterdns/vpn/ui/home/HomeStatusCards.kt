@@ -87,7 +87,10 @@ fun MdvConnectionTelemetryCard(
                     )
                 }
 
-                if (connectedDurationSeconds > 0) {
+                if (connectedDurationSeconds > 0 ||
+                    vpnState == VpnManager.VpnState.CONNECTED ||
+                    vpnState == VpnManager.VpnState.CONNECTING
+                ) {
                     Column(horizontalAlignment = Alignment.End, modifier = Modifier.padding(start = 8.dp)) {
                         Text(
                             text = "SESSION",
