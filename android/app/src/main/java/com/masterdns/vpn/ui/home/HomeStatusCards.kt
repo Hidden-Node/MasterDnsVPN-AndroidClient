@@ -285,7 +285,12 @@ fun MdvConnectionTelemetryCard(
                         androidx.compose.foundation.layout.Spacer(modifier = Modifier.height(4.dp))
                         Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
                             Text("SOCKS5 Auth", style = MaterialTheme.typography.bodySmall, color = MdvColor.OnSurfaceVariant)
-                            Text("Enabled ($socksUser:$socksPass)", style = MaterialTheme.typography.bodySmall, color = MdvColor.OnSurface, fontWeight = FontWeight.Bold)
+                            Text("Enabled", style = MaterialTheme.typography.bodySmall, color = MdvColor.OnSurface, fontWeight = FontWeight.Bold)
+                        }
+                        androidx.compose.foundation.layout.Spacer(modifier = Modifier.height(2.dp))
+                        Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+                            Text("  ↳ Credentials", style = MaterialTheme.typography.bodySmall, color = MdvColor.OnSurfaceVariant)
+                            Text("$socksUser:$socksPass", style = MaterialTheme.typography.bodySmall, color = MdvColor.OnSurfaceVariant)
                         }
                     }
                 }
