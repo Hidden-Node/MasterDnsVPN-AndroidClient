@@ -60,7 +60,7 @@
     <string name="home_state_disconnected">Disconnected</string>
     <string name="home_connection_status_title">CONNECTION STATUS</string>
     <string name="home_connection_running">Connected and running</string>
-    <string name="home_connection_preparing">Preparing tunnel (tap again to cancel)</string>
+    <string name="home_connection_preparing">Preparing tunnel\n(tap again to cancel)</string>
     <string name="home_connection_error_check_logs">Error - check logs</string>
     <string name="home_resolver_row">Resolver: %1$s  %2$s</string>
     <string name="home_valid_prefix">Valid: </string>
