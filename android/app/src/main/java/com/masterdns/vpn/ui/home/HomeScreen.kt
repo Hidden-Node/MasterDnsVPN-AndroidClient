@@ -14,6 +14,7 @@ import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -21,22 +22,35 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
+import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.AssistChip
+import androidx.compose.material3.AssistChipDefaults
+import androidx.compose.material3.Button
+import androidx.compose.material3.Card
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalLayoutDirection
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
@@ -140,6 +154,7 @@ fun HomeScreen(
         VpnManager.VpnState.ERROR -> stringResource(R.string.home_state_error)
         else -> stringResource(R.string.home_state_disconnected)
     }
+    var showHowToUse by remember { mutableStateOf(false) }
 
     BoxWithConstraints(
         modifier = Modifier
@@ -252,6 +267,8 @@ fun HomeScreen(
                             Spacer(modifier = Modifier.height(MdvSpace.S4))
                             MdvErrorCard(msg = msg)
                         }
+                        Spacer(modifier = Modifier.height(MdvSpace.S3))
+                        HowToUseCard(onOpen = { showHowToUse = true })
                     }
                 }
             }
@@ -328,8 +345,14 @@ fun HomeScreen(
                     Spacer(modifier = Modifier.height(MdvSpace.S4))
                     MdvErrorCard(msg = msg)
                 }
+                Spacer(modifier = Modifier.height(MdvSpace.S3))
+                HowToUseCard(onOpen = { showHowToUse = true })
             }
         }
+    }
+
+    if (showHowToUse) {
+        HowToUseDialog(onDismiss = { showHowToUse = false })
     }
 }
 
@@ -340,4 +363,120 @@ private fun parseAdvanced(json: String): Map<String, String> {
     } catch (_: Exception) {
         emptyMap()
     }
+}
+
+private enum class HowToLang { EN, FA }
+
+@Composable
+private fun HowToUseCard(onOpen: () -> Unit) {
+    Card(modifier = Modifier.fillMaxWidth(), onClick = onOpen) {
+        Column(modifier = Modifier.fillMaxWidth().padding(MdvSpace.S3)) {
+            Text(
+                text = "How to Use / راهنمای استفاده",
+                style = MaterialTheme.typography.titleMedium,
+                color = MdvColor.OnSurface
+            )
+            Spacer(modifier = Modifier.height(MdvSpace.S1))
+            Text(
+                text = "Quick setup and usage guide (English / Persian).",
+                style = MaterialTheme.typography.bodySmall,
+                color = MdvColor.OnSurfaceVariant
+            )
+        }
+    }
+}
+
+@Composable
+private fun HowToUseDialog(onDismiss: () -> Unit) {
+    var lang by remember { mutableStateOf(HowToLang.EN) }
+    val screenHeight = LocalConfiguration.current.screenHeightDp.dp
+    val maxDialogContentHeight = (screenHeight * 0.65f)
+    val textEn = """
+        MasterDnsVPN is an advanced DNS tunneling VPN designed to bypass strict network censorship. It tunnels your traffic inside standard DNS queries (port 53) to keep you connected even during severe shutdowns.
+
+        Note: To set up your own custom configuration, you must purchase a VPS and a domain name first.
+
+        To ensure high resilience, the core uses:
+        - Multipath transmission & packet duplication.
+        - Load balancing across multiple DNS resolvers.
+        - Low-overhead ARQ to handle data loss.
+
+        Quick setup:
+        1) Go to the Profiles tab.
+        2) Create a new profile or import an existing one.
+        3) Fill in the DOMAINS and ENCRYPTION_KEY fields (from your server configuration).
+        4) Add DNS resolvers (IP or IP:PORT, one per line).
+        5) Save and select the profile.
+        6) Go back to the Home tab and tap Connect.
+    """.trimIndent()
+
+    val textFa = """
+        برنامه MasterDnsVPN یک VPN پیشرفته مبتنی بر DNS Tunneling است که برای دور زدن فیلترینگ شدید طراحی شده است. این ابزار ترافیک شما را درون DNS Queryهای استاندارد (پورت 53) تونل می‌کند تا حتی در زمان قطعی‌های گسترده نیز اتصال شما برقرار بماند.
+
+        توجه: در صورتی که قصد دارید کانفیگ شخصی خودتان را راه‌اندازی کنید، ابتدا نیاز به تهیه یک VPS و یک Domain دارید.
+
+        هسته برنامه برای پایداری و Resilience بالا از قابلیت‌های زیر استفاده می‌کند:
+        - ارسال Multipath و Packet Duplication.
+        - توزیع بار (Load Balancing) روی چندین DNS Resolver.
+        - سیستم کم‌هزینه ARQ برای مدیریت Packet Loss شبکه.
+
+        راه‌اندازی سریع:
+        ۱) به تب Profiles بروید.
+        ۲) یک Profile جدید بسازید یا Profile موجود را وارد کنید.
+        ۳) مقادیر DOMAINS و ENCRYPTION_KEY را بر اساس سرور خود پر کنید.
+        ۴) لیست DNS Resolverها را وارد کنید (هر IP یا IP:PORT در یک خط).
+        ۵) Profile را ذخیره و انتخاب کنید.
+        ۶) به تب اصلی (Home) برگردید و دکمه Connect را لمس کنید.
+    """.trimIndent()
+
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        confirmButton = { Button(onClick = onDismiss) { Text("Close") } },
+        title = { Text("How to Use") },
+        text = {
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .heightIn(max = maxDialogContentHeight)
+                    .verticalScroll(rememberScrollState()),
+                verticalArrangement = Arrangement.spacedBy(MdvSpace.S2)
+            ) {
+                Row(horizontalArrangement = Arrangement.spacedBy(MdvSpace.S2)) {
+                    AssistChip(
+                        onClick = { lang = HowToLang.EN },
+                        label = { Text("English") },
+                        colors = AssistChipDefaults.assistChipColors(
+                            containerColor = if (lang == HowToLang.EN) {
+                                MdvColor.PrimaryContainer.copy(alpha = 0.2f)
+                            } else MdvColor.SurfaceHigh
+                        )
+                    )
+                    AssistChip(
+                        onClick = { lang = HowToLang.FA },
+                        label = { Text("فارسی") },
+                        colors = AssistChipDefaults.assistChipColors(
+                            containerColor = if (lang == HowToLang.FA) {
+                                MdvColor.PrimaryContainer.copy(alpha = 0.2f)
+                            } else MdvColor.SurfaceHigh
+                        )
+                    )
+                }
+                CompositionLocalProvider(
+                    LocalLayoutDirection provides if (lang == HowToLang.FA) {
+                        LayoutDirection.Rtl
+                    } else {
+                        LayoutDirection.Ltr
+                    }
+                ) {
+                    Text(
+                        text = if (lang == HowToLang.EN) textEn else textFa,
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MdvColor.OnSurface,
+                        modifier = Modifier.fillMaxWidth(),
+                        textAlign = if (lang == HowToLang.FA) TextAlign.Right else TextAlign.Left
+                    )
+                }
+            }
+        }
+    )
 }
