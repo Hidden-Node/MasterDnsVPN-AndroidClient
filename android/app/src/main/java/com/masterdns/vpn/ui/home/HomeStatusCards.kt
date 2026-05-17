@@ -23,6 +23,7 @@ import com.masterdns.vpn.R
 import com.masterdns.vpn.ui.components.mdv.cards.MdvCardHigh
 import com.masterdns.vpn.ui.components.mdv.cards.MdvCardLow
 import com.masterdns.vpn.ui.theme.ConnectedGreen
+import com.masterdns.vpn.ui.theme.ConnectingAmber
 import com.masterdns.vpn.ui.theme.DisconnectedRed
 import com.masterdns.vpn.ui.theme.MdvColor
 import com.masterdns.vpn.ui.theme.MdvSpace
