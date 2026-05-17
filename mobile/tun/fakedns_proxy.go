@@ -47,7 +47,6 @@ func (p *FakeDNSProxy) Stop() {
 	if p.listener != nil {
 		p.listener.Close()
 	}
-	p.wg.Wait()
 }
 
 func (p *FakeDNSProxy) acceptLoop() {
