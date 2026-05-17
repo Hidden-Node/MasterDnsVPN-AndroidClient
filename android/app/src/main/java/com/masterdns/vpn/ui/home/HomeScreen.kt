@@ -71,6 +71,7 @@ fun HomeScreen(
     val scanStatus by VpnManager.scanStatus.collectAsState()
     val selectedProfile by viewModel.selectedProfile.collectAsState()
     val error by VpnManager.errorMessage.collectAsState()
+    val connectionWarning by VpnManager.connectionWarning.collectAsState()
     val context = LocalContext.current
 
     val advanced = remember(selectedProfile?.advancedJson) {
@@ -239,7 +240,8 @@ fun HomeScreen(
                             socksAuthEnabled = socksAuthEnabled,
                             socksUser = socksUser,
                             socksPass = socksPass,
-                            isConnecting = isConnecting
+                            isConnecting = isConnecting,
+                            connectionWarning = connectionWarning
                         )
                         Spacer(modifier = Modifier.height(MdvSpace.S3))
                         MdvProfileSelectorCard(
@@ -311,7 +313,8 @@ fun HomeScreen(
                     socksAuthEnabled = socksAuthEnabled,
                     socksUser = socksUser,
                     socksPass = socksPass,
-                    isConnecting = isConnecting
+                    isConnecting = isConnecting,
+                    connectionWarning = connectionWarning
                 )
 
                 Spacer(modifier = Modifier.height(MdvSpace.S3))

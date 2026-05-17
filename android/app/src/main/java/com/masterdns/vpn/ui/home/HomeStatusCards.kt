@@ -45,7 +45,8 @@ fun MdvConnectionTelemetryCard(
     socksAuthEnabled: Boolean,
     socksUser: String,
     socksPass: String,
-    isConnecting: Boolean
+    isConnecting: Boolean,
+    connectionWarning: String? = null
 ) {
     MdvCardLow(modifier = Modifier.fillMaxWidth()) {
         Column(
@@ -182,6 +183,35 @@ fun MdvConnectionTelemetryCard(
                                 overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis
                             )
                         }
+                    }
+                }
+            }
+
+            // Connection Warning Section
+            if (connectionWarning != null && vpnState == VpnManager.VpnState.CONNECTING) {
+                androidx.compose.foundation.layout.Spacer(modifier = Modifier.height(MdvSpace.S3))
+                androidx.compose.material3.Surface(
+                    shape = androidx.compose.foundation.shape.RoundedCornerShape(12.dp),
+                    color = ConnectingAmber.copy(alpha = 0.12f),
+                    border = androidx.compose.foundation.BorderStroke(1.dp, ConnectingAmber.copy(alpha = 0.4f)),
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Row(
+                        modifier = Modifier.padding(horizontal = MdvSpace.S3, vertical = 10.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Text(
+                            text = "⚠",
+                            style = MaterialTheme.typography.titleMedium,
+                            color = ConnectingAmber,
+                            modifier = Modifier.padding(end = 8.dp)
+                        )
+                        Text(
+                            text = connectionWarning,
+                            style = MaterialTheme.typography.bodySmall,
+                            color = ConnectingAmber,
+                            fontWeight = FontWeight.SemiBold
+                        )
                     }
                 }
             }

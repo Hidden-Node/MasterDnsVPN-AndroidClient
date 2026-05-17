@@ -56,6 +56,9 @@ object VpnManager {
     private val _errorMessage = MutableStateFlow<String?>(null)
     val errorMessage: StateFlow<String?> = _errorMessage.asStateFlow()
 
+    private val _connectionWarning = MutableStateFlow<String?>(null)
+    val connectionWarning: StateFlow<String?> = _connectionWarning.asStateFlow()
+
     private val _activeResolvers = MutableStateFlow<List<String>>(emptyList())
     val activeResolvers: StateFlow<List<String>> = _activeResolvers.asStateFlow()
 
@@ -130,6 +133,10 @@ object VpnManager {
         "DNS Resolver disabled.*?(\\d+\\.\\d+\\.\\d+\\.\\d+:\\d+|\\[[a-fA-F0-9:]+\\]:\\d+)",
         RegexOption.IGNORE_CASE
     )
+    private val SESSION_INIT_BACKOFF_REGEX = Regex(
+        "Session init retry backoff:\\s*(.*)",
+        RegexOption.IGNORE_CASE
+    )
     private val TIMESTAMP_CANDIDATES = listOf(
         TimestampCandidate(
             Regex("^(\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}\\.\\d{3}Z)(.*)$"),
@@ -170,6 +177,10 @@ object VpnManager {
             _connectedDurationSeconds.value = 0L
             _uploadTotalBytes.value = 0L
             _downloadTotalBytes.value = 0L
+            _connectionWarning.value = null
+        }
+        if (newState == VpnState.CONNECTED || newState == VpnState.DISCONNECTED || newState == VpnState.ERROR) {
+            _connectionWarning.value = null
         }
         if (newState == VpnState.CONNECTED) {
             _scanStatus.value = _scanStatus.value.copy(
@@ -426,6 +437,11 @@ object VpnManager {
             line.contains("Session Initialized Successfully", ignoreCase = true)
         ) {
             _scanStatus.value = _scanStatus.value.copy(scanning = false)
+        }
+
+        SESSION_INIT_BACKOFF_REGEX.find(line)?.let { match ->
+            val backoff = match.groupValues[1].trim()
+            _connectionWarning.value = "Session init retry backoff: $backoff"
         }
     }
 
