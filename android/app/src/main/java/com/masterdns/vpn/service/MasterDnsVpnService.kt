@@ -287,14 +287,9 @@ class MasterDnsVpnService : VpnService() {
                     .setMtu(1500)
                     .addAddress(if (globalSettings.fakeDnsEnabled) "172.19.0.1" else "10.0.0.2", if (globalSettings.fakeDnsEnabled) 30 else 32)
                     .addRoute("0.0.0.0", 0)
-                
-                try {
-                    builder.addAddress(if (globalSettings.fakeDnsEnabled) "fc00::1" else "fc00::2", if (globalSettings.fakeDnsEnabled) 126 else 128)
-                    builder.addRoute("::", 0)
-                    VpnManager.appendLog("IPv4 route enabled: 0.0.0.0/0. IPv6 route enabled: ::/0.")
-                } catch (e: Exception) {
-                    VpnManager.appendLog("IPv4 route enabled: 0.0.0.0/0. IPv6 routing disabled: ${e.message}")
-                }
+
+                VpnManager.appendLog("IPv4 route enabled: 0.0.0.0/0.")
+
                 vpnDnsServers.forEach { builder.addDnsServer(it) }
                 if (globalSettings.fakeDnsEnabled) {
                     builder.addRoute("198.18.0.0", 16)
