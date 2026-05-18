@@ -27,12 +27,13 @@ type LogCallback interface {
 }
 
 var (
-	mu         sync.Mutex
-	vpnClient  *client.Client
-	cancelFunc context.CancelFunc
-	running    bool
-	logCb      LogCallback
-	tunRunning bool
+	mu               sync.Mutex
+	vpnClient        *client.Client
+	cancelFunc       context.CancelFunc
+	running          bool
+	logCb            LogCallback
+	tunRunning       bool
+	tunBridgeRunning bool
 )
 
 // Bandwidth holds upload and download counters for gomobile bindings.
@@ -102,24 +103,34 @@ func StartTun(fd int64, proxyAddr string) {
 	mu.Unlock()
 }
 
-// StopTun stops the tun2socks engine.
+// StopTun stops the tun2socks engine. Safe to call multiple times.
 func StopTun() {
 	mu.Lock()
-	defer mu.Unlock()
-	if tunRunning {
-		engine.Stop()
-		tunRunning = false
+	if !tunRunning {
+		mu.Unlock()
+		return
 	}
+	tunRunning = false
+	mu.Unlock()
+
+	// Stop outside lock to avoid deadlock. Recover from panic in case
+	// engine is in a bad state (e.g. fd already closed by Android).
+	func() {
+		defer func() { recover() }()
+		engine.Stop()
+	}()
 }
 
 // StopClient gracefully stops the running client.
 func StopClient() {
 	StopTun()
 	StopTunBridge()
+
 	mu.Lock()
 	defer mu.Unlock()
 	if cancelFunc != nil {
 		cancelFunc()
+		cancelFunc = nil
 	}
 }
 
@@ -163,19 +174,38 @@ func StartTunBridge(tunFd int64, mtu int64, socksAddr string) error {
 
 	engine.Insert(key)
 	engine.Start()
+
+	mu.Lock()
+	tunBridgeRunning = true
+	mu.Unlock()
 	
 	return nil
 }
 
-// StopTunBridge stops the DNS-aware TUN bridge.
+// StopTunBridge stops the DNS-aware TUN bridge. Safe to call multiple times.
 func StopTunBridge() {
-	engine.Stop()
+	mu.Lock()
+	if !tunBridgeRunning {
+		mu.Unlock()
+		return
+	}
+	tunBridgeRunning = false
+	mu.Unlock()
+
+	// Stop outside lock to avoid deadlock. Recover from panic in case
+	// engine is in a bad state (e.g. fd already closed by Android).
+	func() {
+		defer func() { recover() }()
+		engine.Stop()
+	}()
 	tun.StopFakeDNSProxy()
 }
 
 // IsTunBridgeRunning returns true if the DNS-aware TUN bridge is active.
 func IsTunBridgeRunning() bool {
-	return tun.IsFakeDNSProxyRunning()
+	mu.Lock()
+	defer mu.Unlock()
+	return tunBridgeRunning
 }
 
 // GetTunBandwidth returns upload/download counters from the TUN bridge.

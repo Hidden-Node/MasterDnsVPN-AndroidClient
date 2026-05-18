@@ -418,33 +418,23 @@ class MasterDnsVpnService : VpnService() {
         isStopping = true
 
         // Use a separate scope so that serviceScope.cancel() in onDestroy()
-        // does not kill this coroutine mid-cleanup, which was causing the crash.
+        // does not kill this coroutine mid-cleanup.
         val stopScope = CoroutineScope(Dispatchers.IO + SupervisorJob())
         stopScope.launch {
             try {
                 connectJob?.cancel()
                 VpnManager.appendLog("VPN stop requested")
-
-                val wasTunBridgeActive = tunBridgeActive
                 tunBridgeActive = false
 
-                // ── Stop Go core and TUN bridge ─────────────────────────────
-                // Both paths use a background thread with a hard timeout so
-                // the Android service teardown is never blocked indefinitely.
+                // Stop everything in Go layer via a single stopClient() call.
+                // Go's StopClient() internally handles StopTun/StopTunBridge
+                // with idempotent guards and panic recovery, so this is safe.
                 val stopThread = Thread {
-                    if (wasTunBridgeActive) {
-                        // FAKE DNS ON: stop bridge first, then core.
-                        VpnManager.appendLog("Stopping DNS-aware TUN bridge...")
-                        runCatching { mobile.Mobile.stopTunBridge() }
-                    } else {
-                        // FAKE DNS OFF: stop tun engine.
-                        VpnManager.appendLog("Stopping TUN engine...")
-                        runCatching { mobile.Mobile.stopTun() }
-                    }
-
                     VpnManager.appendLog("Stopping Go core...")
                     runCatching {
-                        if (mobile.Mobile.isRunning()) mobile.Mobile.stopClient()
+                        mobile.Mobile.stopClient()
+                    }.onFailure { e ->
+                        VpnManager.appendLog("Go core stop error: ${e.message}")
                     }
                 }
                 stopThread.start()
@@ -535,18 +525,12 @@ class MasterDnsVpnService : VpnService() {
     }
 
     override fun onDestroy() {
-        // Normal path: stopVpn() already ran — these are no-ops.
-        // Force-kill path: stopVpn() was never called, so the Go bridge is
-        // still running.  Stop the bridge FIRST so Go drains cleanly before
-        // the fd is closed; otherwise goroutines get EBADF and crash.
+        // Normal path: stopVpn() already ran — Go layer guards make re-calls no-ops.
+        // Force-kill path: stopVpn() was never called, so do full cleanup.
         if (!isStopping) {
-            try { mobile.Mobile.stopTunBridge() } catch (_: Exception) {}
-            try { mobile.Mobile.stopTun() } catch (_: Exception) {}
-            try {
-                if (mobile.Mobile.isRunning()) {
-                    mobile.Mobile.stopClient()
-                }
-            } catch (_: Exception) {}
+            // stopClient() internally handles StopTun + StopTunBridge + cancel
+            // with idempotent guards and panic recovery.
+            try { mobile.Mobile.stopClient() } catch (_: Exception) {}
             try {
                 vpnInterface?.close()
             } catch (_: Exception) {}
