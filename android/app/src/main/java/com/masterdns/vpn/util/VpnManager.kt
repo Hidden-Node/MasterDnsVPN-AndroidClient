@@ -335,7 +335,7 @@ object VpnManager {
      * Stop the VPN service.
      */
     fun disconnect(context: Context) {
-        if (_state.value == VpnState.DISCONNECTED) return
+        if (_state.value == VpnState.DISCONNECTED || _state.value == VpnState.DISCONNECTING) return
 
         updateState(VpnState.DISCONNECTING)
         stopTrafficMonitor()

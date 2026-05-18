@@ -416,7 +416,11 @@ class MasterDnsVpnService : VpnService() {
     private fun stopVpn() {
         if (isStopping) return
         isStopping = true
-        serviceScope.launch {
+
+        // Use a separate scope so that serviceScope.cancel() in onDestroy()
+        // does not kill this coroutine mid-cleanup, which was causing the crash.
+        val stopScope = CoroutineScope(Dispatchers.IO + SupervisorJob())
+        stopScope.launch {
             try {
                 connectJob?.cancel()
                 VpnManager.appendLog("VPN stop requested")
@@ -424,51 +428,38 @@ class MasterDnsVpnService : VpnService() {
                 val wasTunBridgeActive = tunBridgeActive
                 tunBridgeActive = false
 
-                if (wasTunBridgeActive) {
-                    // FAKE DNS ON: It hangs on stop.
-                    // We extract the interface and close it to free Android network resources,
-                    // but we offload the actual Go core stops to a fire-and-forget thread.
-                    val iface = vpnInterface
-                    vpnInterface = null
-                    
-                    Thread {
-                        VpnManager.appendLog("Closing TUN interface (async)...")
-                        runCatching { iface?.close() }
-
-                        VpnManager.appendLog("Stopping DNS-aware TUN bridge (async)...")
+                // ── Stop Go core and TUN bridge ─────────────────────────────
+                // Both paths use a background thread with a hard timeout so
+                // the Android service teardown is never blocked indefinitely.
+                val stopThread = Thread {
+                    if (wasTunBridgeActive) {
+                        // FAKE DNS ON: stop bridge first, then core.
+                        VpnManager.appendLog("Stopping DNS-aware TUN bridge...")
                         runCatching { mobile.Mobile.stopTunBridge() }
-
-                        VpnManager.appendLog("Stopping Go core (async)...")
-                        runCatching {
-                            if (mobile.Mobile.isRunning()) mobile.Mobile.stopClient()
-                        }
-                    }.start()
-                } else {
-                    // FAKE DNS OFF: It crashes if TUN is closed before Go core stops.
-                    // It does not hang, so we can do it sequentially, but with a hard timeout just in case.
-                    VpnManager.appendLog("Stopping Go core...")
-                    runCatching {
-                        val stopThread = Thread {
-                            runCatching {
-                                if (mobile.Mobile.isRunning()) mobile.Mobile.stopClient()
-                            }
-                        }
-                        stopThread.start()
-                        stopThread.join(4000L) // Wait up to 4 seconds to prevent deadlocks
-                        if (stopThread.isAlive) {
-                            VpnManager.appendLog("Go core stop timed out, proceeding anyway")
-                        } else {
-                            VpnManager.appendLog("Go core stopped successfully")
-                        }
-                    }.onFailure { e ->
-                        VpnManager.appendLog("Go core stop failed: ${e.message}")
+                    } else {
+                        // FAKE DNS OFF: stop tun engine.
+                        VpnManager.appendLog("Stopping TUN engine...")
+                        runCatching { mobile.Mobile.stopTun() }
                     }
 
-                    VpnManager.appendLog("Closing TUN interface...")
-                    val iface = vpnInterface
-                    vpnInterface = null
-                    runCatching { iface?.close() }
+                    VpnManager.appendLog("Stopping Go core...")
+                    runCatching {
+                        if (mobile.Mobile.isRunning()) mobile.Mobile.stopClient()
+                    }
                 }
+                stopThread.start()
+                stopThread.join(5000L)
+                if (stopThread.isAlive) {
+                    VpnManager.appendLog("Go core stop timed out, proceeding anyway")
+                } else {
+                    VpnManager.appendLog("Go core stopped successfully")
+                }
+
+                // Close TUN fd AFTER Go core stops to avoid EBADF in goroutines.
+                VpnManager.appendLog("Closing TUN interface...")
+                val iface = vpnInterface
+                vpnInterface = null
+                runCatching { iface?.close() }
 
                 // Cancel coroutines
                 VpnManager.appendLog("Stopping Android session jobs...")
@@ -517,9 +508,13 @@ class MasterDnsVpnService : VpnService() {
                 runCatching { stopSelf() }
             } catch (e: Exception) {
                 Log.e(TAG, "Error in stopVpn", e)
-            } finally {
-                isStopping = false
+                // Ensure state is updated even on error so UI doesn't stay stuck
+                VpnManager.updateState(VpnManager.VpnState.DISCONNECTED)
+                VpnManager.stopTrafficMonitor()
+                runCatching { stopSelf() }
             }
+            // NOTE: isStopping intentionally stays true until onDestroy() completes.
+            // This prevents onDestroy() from double-closing already-freed resources.
         }
     }
 
@@ -540,20 +535,32 @@ class MasterDnsVpnService : VpnService() {
     }
 
     override fun onDestroy() {
+        // Normal path: stopVpn() already ran — these are no-ops.
+        // Force-kill path: stopVpn() was never called, so the Go bridge is
+        // still running.  Stop the bridge FIRST so Go drains cleanly before
+        // the fd is closed; otherwise goroutines get EBADF and crash.
         if (!isStopping) {
+            try { mobile.Mobile.stopTunBridge() } catch (_: Exception) {}
+            try { mobile.Mobile.stopTun() } catch (_: Exception) {}
             try {
                 if (mobile.Mobile.isRunning()) {
                     mobile.Mobile.stopClient()
                 }
-            } catch (_: Exception) {
-            }
+            } catch (_: Exception) {}
             try {
                 vpnInterface?.close()
-            } catch (_: Exception) {
-            }
+            } catch (_: Exception) {}
             vpnInterface = null
         }
+        networkCallback?.let {
+            runCatching {
+                val cm = getSystemService(android.content.Context.CONNECTIVITY_SERVICE) as android.net.ConnectivityManager
+                cm.unregisterNetworkCallback(it)
+            }
+            networkCallback = null
+        }
         releaseWakeLock()
+        isStopping = false
         serviceScope.cancel()
         super.onDestroy()
     }
