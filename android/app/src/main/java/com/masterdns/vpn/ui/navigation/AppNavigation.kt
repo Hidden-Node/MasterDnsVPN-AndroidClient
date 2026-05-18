@@ -91,8 +91,8 @@ fun AppNavigation() {
                             Text(
                                 title,
                                 style = MaterialTheme.typography.labelSmall.copy(
-                                    fontSize = 10.sp,
-                                    letterSpacing = 0.1.sp
+                                    fontSize = 11.sp,
+                                    letterSpacing = 0.05.sp
                                 ),
                                 maxLines = 1,
                                 overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis,
