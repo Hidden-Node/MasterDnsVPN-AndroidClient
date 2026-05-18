@@ -12,6 +12,7 @@ import (
 	"os"
 	"path/filepath"
 	"sync"
+	"syscall"
 
 	"masterdnsvpn-go/internal/client"
 	"masterdnsvpn-go/internal/config"
@@ -87,11 +88,27 @@ func StartClient(configPath string, logPath string) error {
 	return runErr
 }
 
+// dupFd duplicates a file descriptor so tun2socks and Android each own
+// independent copies.  When engine.Stop() internally closes the duplicated fd,
+// Android's ParcelFileDescriptor still has its original fd to close safely —
+// no double-close SIGSEGV.
+func dupFd(fd int) int {
+	dup, err := syscall.Dup(fd)
+	if err != nil {
+		// Fallback: use original fd (carries double-close risk but better
+		// than failing to start entirely).
+		return fd
+	}
+	return dup
+}
+
 // StartTun starts a tun2socks engine to bridge the TUN interface (fd) to a SOCKS5 proxy.
 func StartTun(fd int64, proxyAddr string) {
+	safeFd := dupFd(int(fd))
+
 	key := &engine.Key{
 		Proxy:  "socks5://" + proxyAddr,
-		Device: fmt.Sprintf("fd://%d", fd),
+		Device: fmt.Sprintf("fd://%d", safeFd),
 		MTU:    1500,
 	}
 
@@ -165,10 +182,12 @@ func StartTunBridge(tunFd int64, mtu int64, socksAddr string) error {
 	if err != nil {
 		return err
 	}
-	
+
+	safeFd := dupFd(int(tunFd))
+
 	key := &engine.Key{
 		Proxy:  "socks5://" + proxyAddr,
-		Device: fmt.Sprintf("fd://%d", tunFd),
+		Device: fmt.Sprintf("fd://%d", safeFd),
 		MTU:    int(mtu),
 	}
 
@@ -178,7 +197,7 @@ func StartTunBridge(tunFd int64, mtu int64, socksAddr string) error {
 	mu.Lock()
 	tunBridgeRunning = true
 	mu.Unlock()
-	
+
 	return nil
 }
 
