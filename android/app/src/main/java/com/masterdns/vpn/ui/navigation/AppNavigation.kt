@@ -29,6 +29,8 @@ import com.masterdns.vpn.ui.settings.GlobalSettingsScreen
 import com.masterdns.vpn.ui.settings.SettingsScreen
 import com.masterdns.vpn.ui.theme.MdvColor
 
+import androidx.compose.ui.unit.sp
+
 sealed class Screen(val route: String, @StringRes val titleRes: Int) {
     data object Home : Screen("home", R.string.title_home)
     data object Profiles : Screen("profiles", R.string.title_profiles)
@@ -87,8 +89,14 @@ fun AppNavigation() {
                         },
                         label = {
                             Text(
-                                title.uppercase(),
-                                fontWeight = FontWeight.SemiBold,
+                                title,
+                                style = MaterialTheme.typography.labelSmall.copy(
+                                    fontSize = 10.sp,
+                                    letterSpacing = 0.1.sp
+                                ),
+                                maxLines = 1,
+                                overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis,
+                                fontWeight = if (selected) FontWeight.Bold else FontWeight.Medium,
                                 color = if (selected) MdvColor.Primary else MdvColor.Secondary.copy(alpha = 0.65f)
                             )
                         },
