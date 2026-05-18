@@ -13,6 +13,7 @@ import (
 	"path/filepath"
 	"sync"
 	"syscall"
+	"time"
 
 	"masterdnsvpn-go/internal/client"
 	"masterdnsvpn-go/internal/config"
@@ -35,6 +36,7 @@ var (
 	logCb            LogCallback
 	tunRunning       bool
 	tunBridgeRunning bool
+	clientDone       chan struct{} // closed when app.Run(ctx) returns
 )
 
 // Bandwidth holds upload and download counters for gomobile bindings.
@@ -70,19 +72,26 @@ func StartClient(configPath string, logPath string) error {
 	}
 
 	ctx, cancel := context.WithCancel(context.Background())
+	done := make(chan struct{})
 
 	mu.Lock()
 	vpnClient = app
 	cancelFunc = cancel
+	clientDone = done
 	running = true
 	mu.Unlock()
 
 	runErr := app.Run(ctx)
 
+	// Signal that the client has fully stopped BEFORE clearing state.
+	// StopClient waits on this channel to know it's safe to tear down tun2socks.
+	close(done)
+
 	mu.Lock()
 	running = false
 	vpnClient = nil
 	cancelFunc = nil
+	clientDone = nil
 	mu.Unlock()
 
 	return runErr
@@ -139,17 +148,35 @@ func StopTun() {
 }
 
 // StopClient gracefully stops the running client.
+// Order: cancel Go context first (stops traffic), wait for client to drain,
+// THEN stop tun2socks (no more goroutines writing to the engine).
 func StopClient() {
+	// 1. Cancel context — tells app.Run(ctx) to shut down.
+	mu.Lock()
+	cancel := cancelFunc
+	done := clientDone
+	cancelFunc = nil
+	mu.Unlock()
+
+	if cancel != nil {
+		cancel()
+	}
+
+	// 2. Wait for the Go client to fully stop (with timeout).
+	//    This ensures no goroutine is writing to the tun2socks engine
+	//    when we tear it down in step 3.
+	if done != nil {
+		select {
+		case <-done:
+		case <-time.After(3 * time.Second):
+		}
+	}
+
+	// 3. NOW it's safe to stop tun2socks — no traffic flowing.
 	StopTun()
 	StopTunBridge()
-
-	mu.Lock()
-	defer mu.Unlock()
-	if cancelFunc != nil {
-		cancelFunc()
-		cancelFunc = nil
-	}
 }
+
 
 // IsRunning returns true if the client is currently running.
 func IsRunning() bool {

@@ -222,11 +222,18 @@ class MasterDnsVpnService : VpnService() {
                             configFile.absolutePath,
                             logFile.absolutePath
                         )
+                    } catch (_: CancellationException) {
+                        // Normal shutdown — coroutine was cancelled during disconnect.
+                        VpnManager.appendLog("Go core stopped (coroutine cancelled)")
                     } catch (e: Exception) {
-                        Log.e(TAG, "Go core error", e)
-                        VpnManager.appendLog("Go core error: ${e.message}")
-                        withContext(Dispatchers.Main) {
-                            VpnManager.setError("Go core error: ${e.message}")
+                        // Only log real errors, not context cancellation from Go.
+                        val msg = e.message ?: ""
+                        if (!msg.contains("context canceled", ignoreCase = true)) {
+                            Log.e(TAG, "Go core error", e)
+                            VpnManager.appendLog("Go core error: $msg")
+                            runCatching {
+                                VpnManager.setError("Go core error: $msg")
+                            }
                         }
                     }
                 }
