@@ -858,7 +858,7 @@ class MasterDnsVpnService : VpnService() {
         }
     }
 
-    private fun handleSharingSocksClient(client: java.net.Socket) {
+    private suspend fun handleSharingSocksClient(client: java.net.Socket) {
         var upstream: java.net.Socket? = null
         try {
             upstream = java.net.Socket("127.0.0.1", activeLocalSocksPort)
@@ -871,12 +871,28 @@ class MasterDnsVpnService : VpnService() {
         }
     }
 
-private suspend fun handleHttpProxyClient(client: java.net.Socket, upstreamSocksPort: Int, username: String, password: String) {
+    private fun readLineUnbuffered(input: java.io.InputStream): String? {
+        val bytes = ArrayList<Byte>()
+        while (true) {
+            val next = input.read()
+            if (next < 0) {
+                if (bytes.isEmpty()) return null
+                break
+            }
+            if (next == '\n'.code) break
+            if (next != '\r'.code) {
+                bytes.add(next.toByte())
+            }
+        }
+        return String(bytes.toByteArray(), Charsets.ISO_8859_1)
+    }
+
+    private suspend fun handleHttpProxyClient(client: java.net.Socket, upstreamSocksPort: Int, username: String, password: String) {
         try {
-            val input = client.getInputStream().bufferedReader()
+            val input = client.getInputStream()
             val output = client.getOutputStream().bufferedWriter()
 
-            val requestLine = input.readLine() ?: return
+            val requestLine = readLineUnbuffered(input) ?: return
             val parts = requestLine.split(" ")
             if (parts.size < 2) {
                 client.close()
@@ -888,7 +904,7 @@ private suspend fun handleHttpProxyClient(client: java.net.Socket, upstreamSocks
 
             var authHeader: String? = null
             while (true) {
-                val line = input.readLine() ?: break
+                val line = readLineUnbuffered(input) ?: break
                 if (line.isBlank()) break
                 val idx = line.indexOf(':')
                 if (idx <= 0) continue
@@ -930,8 +946,8 @@ private suspend fun handleHttpProxyClient(client: java.net.Socket, upstreamSocks
         runCatching { client.close() }
     }
 
-    private fun bridgeBidirectional(client: java.net.Socket, upstream: java.net.Socket) {
-        val upToClient = serviceScope.launch(Dispatchers.IO) {
+    private suspend fun bridgeBidirectional(client: java.net.Socket, upstream: java.net.Socket) = coroutineScope {
+        val upToClient = launch(Dispatchers.IO) {
             val buffer = ByteArray(8192)
             try {
                 val input = upstream.getInputStream()
@@ -948,7 +964,7 @@ private suspend fun handleHttpProxyClient(client: java.net.Socket, upstreamSocks
             }
         }
 
-        val clientToUp = serviceScope.launch(Dispatchers.IO) {
+        val clientToUp = launch(Dispatchers.IO) {
             val buffer = ByteArray(8192)
             try {
                 val input = client.getInputStream()
@@ -965,9 +981,7 @@ private suspend fun handleHttpProxyClient(client: java.net.Socket, upstreamSocks
             }
         }
 
-        runBlocking {
-            joinAll(upToClient, clientToUp)
-        }
+        joinAll(upToClient, clientToUp)
         runCatching { upstream.close() }
         runCatching { client.close() }
     }
