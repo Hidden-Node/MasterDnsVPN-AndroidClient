@@ -9,9 +9,12 @@ package mobile
 import (
 	"context"
 	"fmt"
+	"io"
+	"net"
 	"os"
 	"path/filepath"
 	"sync"
+	"sync/atomic"
 	"syscall"
 	"time"
 
@@ -37,7 +40,91 @@ var (
 	tunRunning       bool
 	tunBridgeRunning bool
 	clientDone       chan struct{} // closed when app.Run(ctx) returns
+
+	trackedUp        int64
+	trackedDown      int64
+	trackingListener net.Listener
+	trackingMu       sync.Mutex
 )
+
+type trackingConn struct {
+	net.Conn
+	onRead  func(int64)
+	onWrite func(int64)
+}
+
+func (t *trackingConn) Read(b []byte) (n int, err error) {
+	n, err = t.Conn.Read(b)
+	if n > 0 && t.onRead != nil {
+		t.onRead(int64(n))
+	}
+	return
+}
+
+func (t *trackingConn) Write(b []byte) (n int, err error) {
+	n, err = t.Conn.Write(b)
+	if n > 0 && t.onWrite != nil {
+		t.onWrite(int64(n))
+	}
+	return
+}
+
+func startTrackingProxy(realProxyAddr string) (string, error) {
+	trackingMu.Lock()
+	defer trackingMu.Unlock()
+
+	if trackingListener != nil {
+		trackingListener.Close()
+	}
+
+	atomic.StoreInt64(&trackedUp, 0)
+	atomic.StoreInt64(&trackedDown, 0)
+
+	l, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		return "", err
+	}
+
+	trackingListener = l
+
+	go func() {
+		for {
+			client, err := l.Accept()
+			if err != nil {
+				return
+			}
+			go handleTracking(client, realProxyAddr)
+		}
+	}()
+
+	return l.Addr().String(), nil
+}
+
+func handleTracking(c net.Conn, realProxyAddr string) {
+	defer c.Close()
+	server, err := net.Dial("tcp", realProxyAddr)
+	if err != nil {
+		return
+	}
+	defer server.Close()
+
+	tcClient := &trackingConn{
+		Conn: c,
+		onRead:  func(n int64) { atomic.AddInt64(&trackedUp, n) },
+		onWrite: func(n int64) { atomic.AddInt64(&trackedDown, n) },
+	}
+
+	errc := make(chan error, 2)
+	go func() {
+		_, err := io.Copy(server, tcClient)
+		errc <- err
+	}()
+	go func() {
+		_, err := io.Copy(tcClient, server)
+		errc <- err
+	}()
+	<-errc
+}
 
 // Bandwidth holds upload and download counters for gomobile bindings.
 type Bandwidth struct {
@@ -113,6 +200,11 @@ func dupFd(fd int) int {
 
 // StartTun starts a tun2socks engine to bridge the TUN interface (fd) to a SOCKS5 proxy.
 func StartTun(fd int64, proxyAddr string) {
+	trackedAddr, err := startTrackingProxy(proxyAddr)
+	if err == nil {
+		proxyAddr = trackedAddr
+	}
+
 	safeFd := dupFd(int(fd))
 
 	key := &engine.Key{
@@ -138,6 +230,13 @@ func StopTun() {
 	}
 	tunRunning = false
 	mu.Unlock()
+
+	trackingMu.Lock()
+	if trackingListener != nil {
+		trackingListener.Close()
+		trackingListener = nil
+	}
+	trackingMu.Unlock()
 
 	// Stop outside lock to avoid deadlock. Recover from panic in case
 	// engine is in a bad state (e.g. fd already closed by Android).
@@ -210,6 +309,11 @@ func StartTunBridge(tunFd int64, mtu int64, socksAddr string) error {
 		return err
 	}
 
+	trackedAddr, err2 := startTrackingProxy(proxyAddr)
+	if err2 == nil {
+		proxyAddr = trackedAddr
+	}
+
 	safeFd := dupFd(int(tunFd))
 
 	key := &engine.Key{
@@ -238,6 +342,13 @@ func StopTunBridge() {
 	tunBridgeRunning = false
 	mu.Unlock()
 
+	trackingMu.Lock()
+	if trackingListener != nil {
+		trackingListener.Close()
+		trackingListener = nil
+	}
+	trackingMu.Unlock()
+
 	// Stop outside lock to avoid deadlock. Recover from panic in case
 	// engine is in a bad state (e.g. fd already closed by Android).
 	func() {
@@ -256,7 +367,8 @@ func IsTunBridgeRunning() bool {
 
 // GetTunBandwidth returns upload/download counters from the TUN bridge.
 func GetTunBandwidth() *Bandwidth {
-	up, down := tun.GetTunBandwidth()
+	up := atomic.LoadInt64(&trackedUp)
+	down := atomic.LoadInt64(&trackedDown)
 	return &Bandwidth{
 		Up:   up,
 		Down: down,

@@ -20,6 +20,7 @@ import java.util.Date
 import java.util.Locale
 import java.util.TimeZone
 import java.util.ArrayDeque
+import mobile.Mobile
 
 /**
  * Singleton bridge between Kotlin UI and Go core.
@@ -273,8 +274,9 @@ object VpnManager {
         val uid = appContext.applicationInfo.uid
         trafficMonitorJob?.cancel()
         trafficMonitorJob = monitorScope.launch {
-            var prevTx = TrafficStats.getUidTxBytes(uid).coerceAtLeast(0L)
-            var prevRx = TrafficStats.getUidRxBytes(uid).coerceAtLeast(0L)
+            val initialBw = Mobile.getTunBandwidth()
+            var prevTx = initialBw.up.coerceAtLeast(0L)
+            var prevRx = initialBw.down.coerceAtLeast(0L)
             var prevTime = System.currentTimeMillis()
             val startedAt = prevTime
             _uploadTotalBytes.value = 0L
@@ -283,8 +285,9 @@ object VpnManager {
             while (isActive) {
                 delay(1000L)
                 val now = System.currentTimeMillis()
-                val tx = TrafficStats.getUidTxBytes(uid).coerceAtLeast(0L)
-                val rx = TrafficStats.getUidRxBytes(uid).coerceAtLeast(0L)
+                val bw = Mobile.getTunBandwidth()
+                val tx = bw.up.coerceAtLeast(0L)
+                val rx = bw.down.coerceAtLeast(0L)
                 val dt = (now - prevTime).coerceAtLeast(1L)
                 val uploadDelta = (tx - prevTx).coerceAtLeast(0L)
                 val downloadDelta = (rx - prevRx).coerceAtLeast(0L)
