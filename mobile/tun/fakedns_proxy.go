@@ -244,6 +244,8 @@ func (p *FakeDNSProxy) handleUDPAssociate(tcpConn net.Conn, atyp byte, targetAdd
 	var realUdpAddr *net.UDPAddr
 	if replyHeader[3] == 1 {
 		realUdpAddr = &net.UDPAddr{IP: net.IP(bndAddr), Port: int(binary.BigEndian.Uint16(bndPortBuf))}
+	} else if replyHeader[3] == 4 {
+		realUdpAddr = &net.UDPAddr{IP: net.IP(bndAddr), Port: int(binary.BigEndian.Uint16(bndPortBuf))}
 	}
 	if realUdpAddr != nil && realUdpAddr.IP.IsUnspecified() {
 		host, _, _ := net.SplitHostPort(p.RealSocksAddr)
@@ -334,9 +336,11 @@ func (p *FakeDNSProxy) handleUDPAssociate(tcpConn net.Conn, atyp byte, targetAdd
 				continue
 			}
 
-			if realUdpAddr != nil {
-				localUdp.WriteToUDP(buf[:n], realUdpAddr)
-			}
+			// ponytail: non-DNS UDP (QUIC, etc.) dropped, not forwarded.
+			// Upstream SOCKS5 UDP_ASSOCIATE rejects non-53 targets
+			// (socks_manager.go:665), forwarding would close the association
+			// and break subsequent DNS queries. Dropping lets the browser's
+			// QUIC probe time out fast and fall back to TCP (issue #32).
 		}
 	}()
 

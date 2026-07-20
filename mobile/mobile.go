@@ -109,7 +109,7 @@ func handleTracking(c net.Conn, realProxyAddr string) {
 	defer server.Close()
 
 	tcClient := &trackingConn{
-		Conn: c,
+		Conn:    c,
 		onRead:  func(n int64) { atomic.AddInt64(&trackedUp, n) },
 		onWrite: func(n int64) { atomic.AddInt64(&trackedDown, n) },
 	}
@@ -210,7 +210,9 @@ func StartTun(fd int64, proxyAddr string) {
 	key := &engine.Key{
 		Proxy:  "socks5://" + proxyAddr,
 		Device: fmt.Sprintf("fd://%d", safeFd),
-		MTU:    1500,
+		// ponytail: 1400 leaves headroom for SOCKS5/transport overhead so QUIC
+		// datagrams don't exceed upstream path MTU and black-hole (issue #32).
+		MTU: 1400,
 	}
 
 	engine.Insert(key)
@@ -275,7 +277,6 @@ func StopClient() {
 	StopTun()
 	StopTunBridge()
 }
-
 
 // IsRunning returns true if the client is currently running.
 func IsRunning() bool {

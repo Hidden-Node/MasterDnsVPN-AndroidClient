@@ -287,21 +287,17 @@ class MasterDnsVpnService : VpnService() {
 
                 val builder = Builder()
                     .setSession(getString(R.string.app_name))
-                    .setMtu(1500)
+                    .setMtu(1400)
                     .addAddress(if (globalSettings.fakeDnsEnabled) "172.19.0.1" else "10.0.0.2", if (globalSettings.fakeDnsEnabled) 30 else 32)
                     .addRoute("0.0.0.0", 0)
+                    .setBlocking(true) // tun2socks/gVisor requires blocking fd reads
 
-                // Prevent IPv6 DNS leaks: if we don't route IPv6 and provide an IPv6 DNS,
-                // Android may leak DNS requests to the cellular network's IPv6 DNS server,
-                // resulting in hijacked IPs like 10.10.34.36 from the ISP.
-                try {
-                    builder.addAddress("fc00::1", 128)
-                    builder.addRoute("::", 0)
-                    // We don't add fc00::1 to dns servers here because Android sometimes rejects it,
-                    // but routing ::/0 forces all IPv6 traffic (including DNS) into the TUN.
-                } catch (e: Exception) {
-                    VpnManager.appendLog("IPv6 routing skipped: ${e.message}")
-                }
+                // ponytail: IPv6 NOT routed into the TUN across all Android versions.
+                // FakeDNSProxy only has IPv4 DNS to advertise and upstream SOCKS5 UDP_ASSOCIATE
+                // rejects non-53 traffic (fakedns_proxy.go:339-345, socks_manager.go:665), so
+                // routing ::/0 black-holes IPv6 QUIC on every Android version, not just 16+.
+                // Re-enable when FakeDNSProxy parses atyp==4 BND AND an IPv6 DNS is configured
+                // AND upstream SOCKS5 carries non-DNS IPv6 UDP.
 
                 vpnDnsServers.forEach { builder.addDnsServer(it) }
                 if (globalSettings.fakeDnsEnabled) {
@@ -368,7 +364,7 @@ class MasterDnsVpnService : VpnService() {
 
                 if (globalSettings.fakeDnsEnabled) {
                     VpnManager.appendLog("Starting DNS-aware TUN bridge...")
-                    mobile.Mobile.startTunBridge(vpnInterface!!.fd.toLong(), 1500L, "127.0.0.1:$socksPort")
+                    mobile.Mobile.startTunBridge(vpnInterface!!.fd.toLong(), 1400L, "127.0.0.1:$socksPort")
                     tunBridgeActive = true
                     VpnManager.appendLog("DNS-aware TUN bridge started")
                 } else {
@@ -384,9 +380,15 @@ class MasterDnsVpnService : VpnService() {
                         val caps = cm.getNetworkCapabilities(network)
                         if (caps == null || caps.hasTransport(android.net.NetworkCapabilities.TRANSPORT_VPN)) return
                         if (isStopping) return
-                        
+
                         VpnManager.appendLog("Underlying network changed, updating VPN underlying network...")
                         setUnderlyingNetworks(arrayOf(network))
+                    }
+
+                    override fun onLost(network: android.net.Network) {
+                        if (isStopping) return
+                        VpnManager.appendLog("Underlying network lost, resetting VPN underlying network...")
+                        setUnderlyingNetworks(null)
                     }
                 }
                 try {
