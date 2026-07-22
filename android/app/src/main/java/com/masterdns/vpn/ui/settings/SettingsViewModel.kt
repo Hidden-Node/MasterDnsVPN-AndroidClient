@@ -99,13 +99,6 @@ class SettingsViewModel @Inject constructor(
         }
     }
 
-    private fun normalizeResolverBalancingStrategy(value: String?, fallback: Int): Int {
-        val parsed = value?.trim()?.toIntOrNull()
-        if (parsed != null && parsed in 1..8) return parsed
-        if (parsed == 0) return 2
-        return if (fallback in 1..8) fallback else 2
-    }
-
     private fun buildUpdatedProfile(profile: ProfileEntity, values: Map<String, String>): ProfileEntity {
         val mergedAdvanced = parseAdvanced(profile.advancedJson).toMutableMap()
         values.forEach { (key, value) ->

@@ -216,7 +216,7 @@ object ConfigGenerator {
         }
     }
 
-    private fun escapeToml(s: String): String {
+    internal fun escapeToml(s: String): String {
         return s.replace("\\", "\\\\").replace("\"", "\\\"")
     }
 }
