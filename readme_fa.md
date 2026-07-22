@@ -56,7 +56,7 @@
 ### پیش نیازها
 
 - JDK 17
-- Android SDK (سازگار با `compileSdk 35`)
+- Android SDK (سازگار با `compileSdk 36`)
 - Go toolchain
 - ابزارهای `gomobile` و `gobind`
 

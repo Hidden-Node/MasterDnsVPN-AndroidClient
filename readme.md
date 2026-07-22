@@ -56,7 +56,7 @@ You need an operational MasterDnsVPN server first.
 ### Requirements
 
 - JDK 17
-- Android SDK (platform/Build-Tools compatible with `compileSdk 35`)
+- Android SDK (platform/Build-Tools compatible with `compileSdk 36`)
 - Go toolchain (as used in CI)
 - `gomobile` and `gobind`
 
