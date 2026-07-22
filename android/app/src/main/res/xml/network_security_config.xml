@@ -1,8 +1,22 @@
 <?xml version="1.0" encoding="utf-8"?>
 <network-security-config>
-    <base-config cleartextTrafficPermitted="true">
+    <!--
+      Default posture: TLS-only (Android's default). Cleartext HTTP is
+      rejected for any host not listed below.
+    -->
+    <base-config>
         <trust-anchors>
             <certificates src="system" />
         </trust-anchors>
     </base-config>
+
+    <!--
+      Loopback exemption: the app's own proxies (SOCKS5 at 127.0.0.1:18000,
+      sharing SOCKS5/HTTP at 127.0.0.1:8090/8091) are plaintext by design.
+      WebSocket/HTTP connections to those addresses must be permitted.
+    -->
+    <domain-config cleartextTrafficPermitted="true">
+        <domain includeSubdomains="false">127.0.0.1</domain>
+        <domain includeSubdomains="false">localhost</domain>
+    </domain-config>
 </network-security-config>
