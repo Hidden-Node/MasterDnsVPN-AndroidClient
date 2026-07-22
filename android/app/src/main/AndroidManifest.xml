@@ -8,8 +8,6 @@
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_SPECIAL_USE"
         tools:targetApi="34" />
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
-    <!-- TODO(auto-connect): enable when an explicit auto-connect-on-boot setting exists. -->
-    <!-- <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" /> -->
     <uses-permission android:name="android.permission.WAKE_LOCK" />
 
     <queries>
@@ -78,15 +76,5 @@
             </intent-filter>
         </service>
 
-        <!--
-        TODO(auto-connect): enable only after adding explicit Settings UI and permission-safe startup flow.
-        <receiver
-            android:name=".service.BootReceiver"
-            android:exported="false">
-            <intent-filter>
-                <action android:name="android.intent.action.BOOT_COMPLETED" />
-            </intent-filter>
-        </receiver>
-        -->
     </application>
 </manifest>

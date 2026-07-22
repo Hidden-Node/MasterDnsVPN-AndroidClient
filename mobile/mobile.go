@@ -20,7 +20,6 @@ import (
 
 	"masterdnsvpn-go/internal/client"
 	"masterdnsvpn-go/internal/config"
-	"masterdnsvpn-go/internal/version"
 	"masterdnsvpn-go/mobile/tun"
 
 	"github.com/xjasonlyu/tun2socks/v2/engine"
@@ -285,24 +284,6 @@ func IsRunning() bool {
 	return running
 }
 
-// GetVersion returns the build version string of the Go core.
-func GetVersion() string {
-	return version.GetVersion()
-}
-
-// GetListenAddress returns the configured listen address (e.g., "127.0.0.1:18000").
-// Returns empty string if client is not initialized.
-func GetListenAddress() string {
-	mu.Lock()
-	defer mu.Unlock()
-	if vpnClient == nil {
-		return ""
-	}
-	// The listen address comes from the config, not directly exposed.
-	// We'll return it via the config the user provides.
-	return ""
-}
-
 // StartTunBridge starts the TUN bridge with DNS interception using FakeDNS proxy.
 func StartTunBridge(tunFd int64, mtu int64, socksAddr string) error {
 	proxyAddr, err := tun.StartFakeDNSProxy(socksAddr)
@@ -359,13 +340,6 @@ func StopTunBridge() {
 	tun.StopFakeDNSProxy()
 }
 
-// IsTunBridgeRunning returns true if the DNS-aware TUN bridge is active.
-func IsTunBridgeRunning() bool {
-	mu.Lock()
-	defer mu.Unlock()
-	return tunBridgeRunning
-}
-
 // GetTunBandwidth returns upload/download counters from the TUN bridge.
 func GetTunBandwidth() *Bandwidth {
 	up := atomic.LoadInt64(&trackedUp)
@@ -374,19 +348,4 @@ func GetTunBandwidth() *Bandwidth {
 		Up:   up,
 		Down: down,
 	}
-}
-
-// GetDNSMapping resolves a fake IP to hostname when available.
-func GetDNSMapping(fakeIP string) string {
-	return tun.GetDNSMapping(fakeIP)
-}
-
-// GetDNSMappingCount returns the number of active fake DNS mappings.
-func GetDNSMappingCount() int {
-	return tun.GetDNSMappingCount()
-}
-
-// GetTunVersion returns the TUN bridge module version.
-func GetTunVersion() string {
-	return tun.GetVersion()
 }

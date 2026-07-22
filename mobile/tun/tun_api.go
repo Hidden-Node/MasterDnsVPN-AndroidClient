@@ -6,10 +6,6 @@ import (
 	"sync"
 )
 
-func GetVersion() string {
-	return "1.0.0-fakedns-proxy"
-}
-
 var (
 	bridgeMu     sync.Mutex
 	activeProxy  *FakeDNSProxy
@@ -63,11 +59,6 @@ func IsFakeDNSProxyRunning() bool {
 	bridgeMu.Lock()
 	defer bridgeMu.Unlock()
 	return activeProxy != nil
-}
-
-func GetTunBandwidth() (up int64, down int64) {
-	// tun2socks engine handles bandwidth stats, this is dummy now
-	return 0, 0
 }
 
 func GetDNSMapping(fakeIP string) string {
