@@ -58,7 +58,7 @@ jobs:
 
       - name: Install gomobile
         run: |
-          MOBILE_TOOLS_VERSION=v0.0.0-20260312152759-81488f6aeb60
+          MOBILE_TOOLS_VERSION="$(tr -d '[:space:]' < android/gomobile.version)"
           go install golang.org/x/mobile/cmd/gomobile@${MOBILE_TOOLS_VERSION}
           go install golang.org/x/mobile/cmd/gobind@${MOBILE_TOOLS_VERSION}
           echo "$(go env GOPATH)/bin" >> "$GITHUB_PATH"
