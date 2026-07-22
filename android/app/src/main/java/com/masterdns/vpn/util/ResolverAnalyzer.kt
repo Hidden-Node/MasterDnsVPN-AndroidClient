@@ -163,13 +163,13 @@ object ResolverAnalyzer {
         return runCatching { gson.fromJson(json, ResolverImportStats::class.java) }.getOrNull()
     }
 
-    private data class ResolverEntry(
+    internal data class ResolverEntry(
         val host: String,
         val port: Int,
         val hasExplicitPort: Boolean
     )
 
-    private fun parseEntry(line: String): ResolverEntry? {
+    internal fun parseEntry(line: String): ResolverEntry? {
         val text = line.trim()
         if (text.isEmpty()) return null
         if (text.startsWith("[")) {
@@ -196,7 +196,7 @@ object ResolverAnalyzer {
         return ResolverEntry(text, DEFAULT_PORT, false)
     }
 
-    private fun parseIp(host: String): String? {
+    internal fun parseIp(host: String): String? {
         val text = host.trim()
         val numericCandidate = when {
             "." in text && ":" !in text -> text.matches(Regex("\\d{1,3}(\\.\\d{1,3}){3}"))
@@ -207,7 +207,7 @@ object ResolverAnalyzer {
         return runCatching { InetAddress.getByName(text).hostAddress }.getOrNull()
     }
 
-    private fun expandCidr(value: String): List<String>? {
+    internal fun expandCidr(value: String): List<String>? {
         val parts = value.split("/")
         if (parts.size != 2) return null
         val normalizedBase = parseIp(parts[0].trim()) ?: return null
