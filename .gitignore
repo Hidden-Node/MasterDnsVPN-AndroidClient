@@ -23,3 +23,11 @@ logs/
 build/
 .gocache
 .bench/
+# Android build artifacts and signing keys
+*.aar
+*.jks
+*.keystore
+android/.gradle/
+android/local.properties
+android/release.jks
+android/app/libs/*.aar
