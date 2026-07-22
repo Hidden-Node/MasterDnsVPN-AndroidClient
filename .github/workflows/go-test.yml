@@ -19,3 +19,6 @@ jobs:
 
       - name: Run Go tests (exclude root and gomobile bridge)
         run: go test $(go list ./... | grep -v -e '^masterdnsvpn-go$' -e '^masterdnsvpn-go/mobile$')
+
+      - name: Run mobile/tun tests (explicit, incl. new characterization tests)
+        run: go test ./mobile/tun/... -v
