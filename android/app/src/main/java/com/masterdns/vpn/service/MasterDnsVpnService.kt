@@ -83,6 +83,24 @@ class MasterDnsVpnService : VpnService() {
     @Volatile
     private var activeLocalSocksPort: Int = DEFAULT_SOCKS_PORT
 
+    /**
+     * Close any ParcelFileDescriptor left from a previous session before we
+     * attempt establish() again. The fd must be closed AFTER the Go core
+     * stops (see MasterDnsVpnService.kt:457's comment) to avoid EBADF in
+     * tun2socks goroutines that are mid-read on the fd.
+     *
+     * Plan 013: called at the top of startVpn() so connect-after-disconnect
+     * racy reconnects don't leak an fd when ensureGoCoreStopped() reports
+     * "Go core may still be running" and we proceed anyway.
+     */
+    private fun closeStaleVpnInterface() {
+        val stale = vpnInterface ?: return
+        VpnManager.appendLog("Closing stale TUN interface from previous session (fd=${stale.fd})")
+        vpnInterface = null
+        tunBridgeActive = false
+        runCatching { stale.close() }
+    }
+
     override fun onCreate() {
         super.onCreate()
         Log.i(TAG, "VPN Service created")
@@ -130,6 +148,7 @@ class MasterDnsVpnService : VpnService() {
 
                 VpnManager.appendLog("Loading profile: ${profile.name}")
                 ensureGoCoreStopped()
+                closeStaleVpnInterface()
                 ensureSocksPortAvailable(socksPort)
 
                 // Generate config files
@@ -722,7 +741,12 @@ class MasterDnsVpnService : VpnService() {
                 return
             }
         }
-        VpnManager.appendLog("Warning: Go core may still be running")
+        // Plan 013: previously this logged and continued, leaking the prior
+        // vpnInterface fd if the Go core hung. Now we throw so the catch-all
+        // at startVpn()'s bottom sets ERROR state and runs stopVpn(). The
+        // user sees a "Go core did not stop cleanly" error instead of a
+        // silent CONNECTING-forever or cascading fd leaks.
+        throw IllegalStateException("Go core did not stop cleanly within 4 seconds")
     }
 
     private fun isLocalPortInUse(port: Int): Boolean {
