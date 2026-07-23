@@ -154,29 +154,8 @@ class MainActivity : ComponentActivity() {
             ?.takeIf { it.isNotEmpty() }
     }
 
-    private fun parseTomlValues(tomlContent: String): Map<String, String> {
-        val values = mutableMapOf<String, String>()
-        tomlContent.lineSequence().forEach { raw ->
-            val line = raw.substringBefore("#").trim()
-            if (line.isEmpty() || "=" !in line) return@forEach
-            val key = line.substringBefore("=").trim()
-            val valueRaw = line.substringAfter("=").trim()
-            val parsed = when {
-                key == "DOMAINS" -> valueRaw
-                    .removePrefix("[")
-                    .removeSuffix("]")
-                    .split(",")
-                    .map { it.trim().removeSurrounding("\"") }
-                    .filter { it.isNotBlank() }
-                    .joinToString(", ")
-                valueRaw.startsWith("\"") && valueRaw.endsWith("\"") ->
-                    valueRaw.removeSurrounding("\"")
-                else -> valueRaw
-            }
-            values[key] = parsed
-        }
-        return values
-    }
+    private fun parseTomlValues(tomlContent: String): Map<String, String> =
+        ProfileTomlImporter.parseTomlValues(tomlContent)
 
     private fun normalizeProtocol(value: String?): String {
         return when (value?.trim()?.uppercase()) {
