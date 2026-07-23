@@ -323,13 +323,21 @@ func (p *FakeDNSProxy) handleUDPAssociate(tcpConn net.Conn, atyp byte, targetAdd
 			}
 
 			if tPort == 53 {
-				dnsQuery := buf[offset:n]
+				// Plan 015: previously `append(buf[:offset], resp...)` reused
+				// the receive buffer's backing array. On the next ReadFromUDP,
+				// only `n` bytes overwrite buf, leaving stale response bytes
+				// past `n` — parseDNSQuery then read corrupted offsets from
+				// the previous iteration's reply. Build in a fresh slice.
+				dnsQuery := make([]byte, n-offset)
+				copy(dnsQuery, buf[offset:n])
 				hostname := parseDNSQuery(dnsQuery)
 				if hostname != "" {
 					fakeIP := p.dnsMap.GetFakeIP(hostname)
 					resp := buildDNSResponse(dnsQuery, fakeIP)
 					if resp != nil {
-						fullResp := append(buf[:offset], resp...)
+						fullResp := make([]byte, 0, offset+len(resp))
+						fullResp = append(fullResp, buf[:offset]...)
+						fullResp = append(fullResp, resp...)
 						localUdp.WriteToUDP(fullResp, rAddr)
 					}
 				}
