@@ -364,12 +364,23 @@ class MasterDnsVpnService : VpnService() {
 
                 if (globalSettings.fakeDnsEnabled) {
                     VpnManager.appendLog("Starting DNS-aware TUN bridge...")
-                    mobile.Mobile.startTunBridge(vpnInterface!!.fd.toLong(), 1400L, "127.0.0.1:$socksPort")
-                    tunBridgeActive = true
-                    VpnManager.appendLog("DNS-aware TUN bridge started")
+                    runCatching {
+                        mobile.Mobile.startTunBridge(vpnInterface!!.fd.toLong(), 1400L, "127.0.0.1:$socksPort")
+                    }.onSuccess {
+                        tunBridgeActive = true
+                        VpnManager.appendLog("DNS-aware TUN bridge started")
+                    }.onFailure { e ->
+                        VpnManager.appendLog("DNS-aware TUN bridge failed: ${e.message}")
+                        throw IllegalStateException("TUN bridge start failed: ${e.message}", e)
+                    }
                 } else {
                     VpnManager.appendLog("Starting tun2socks bridge: TUN fd -> socks5://127.0.0.1:$socksPort")
-                    mobile.Mobile.startTun(vpnInterface!!.fd.toLong(), "127.0.0.1:$socksPort")
+                    runCatching {
+                        mobile.Mobile.startTun(vpnInterface!!.fd.toLong(), "127.0.0.1:$socksPort")
+                    }.onFailure { e ->
+                        VpnManager.appendLog("tun2socks bridge failed: ${e.message}")
+                        throw IllegalStateException("TUN start failed: ${e.message}", e)
+                    }
                 }
 
                 // Register Network Change detection to bounce TUN bridge
@@ -414,6 +425,10 @@ class MasterDnsVpnService : VpnService() {
                 VpnManager.appendLog("Connection canceled")
                 throw e
             } catch (e: Exception) {
+                // The TUN bridge calls (lines 367/372) now re-throw on Go-side
+                // error so this catch-all fires and stopVpn() runs — previously
+                // a startTunBridge failure left the UI reporting CONNECTED
+                // with no traffic flowing.
                 Log.e(TAG, "Failed to start VPN", e)
                 VpnManager.appendLog("Error: ${e.message}")
                 VpnManager.setError(e.message ?: "Unknown error")
