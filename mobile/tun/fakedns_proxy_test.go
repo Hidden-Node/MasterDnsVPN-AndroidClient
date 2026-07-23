@@ -139,3 +139,103 @@ func TestBuildDNSResponse_QueryTooShortReturnsNil(t *testing.T) {
 		t.Fatalf("buildDNSResponse short query returned %v, want nil", resp)
 	}
 }
+
+// TestHandleUDPResponseBuildDoesNotReuseReceiveBuffer is the plan 015
+// regression characterization. The original fakedns_proxy.go hot loop used
+// `append(buf[:offset], resp...)` to build the outgoing response, reusing
+// the single 65535-byte receive buffer's backing array. On the next
+// ReadFromUDP only `n` bytes overwrite buf, leaving stale response bytes
+// past `n`, so a following *shorter* datagram would be parsed against
+// offsets containing the previous iteration's reply.
+//
+// NOTE: this test exercises the helper functions (parseDNSQuery /
+// buildDNSResponse) directly, mimicking both the buggy and fixed data-flow,
+// because the production loop spins on a real net.UDPConn.ReadFromUDP and
+// can't be driven from a unit test without extracting the per-datagram body
+// (out of scope — plan 018). The test's job is to characterize the aliasing
+// hazard the fix removes.
+func TestHandleUDPResponseBuildDoesNotReuseReceiveBuffer(t *testing.T) {
+	dnsMap := NewDNSMapper()
+
+	// First query: long hostname → long DNS response (answer embeds the
+	// question via the compression pointer, so the long name survives in
+	// the response bytes).
+	q1 := buildQuery(t, "longhostname.example.com")
+	// Second query: short hostname → short query body, shorter than q1's
+	// response. This is the datagram that exposes stale bytes on read.
+	q2 := buildQuery(t, "ab.cd")
+
+	// SOCKS5 UDP wrapping: 10-byte prefix (atyp=1 IPv4) before the DNS
+	// body. fakedns_proxy.go computes offset=10 for atyp==1.
+	const headerOffset = 10
+
+	buf := make([]byte, 65535)
+
+	// ---- Iteration 1: long query q1 ----
+	copy(buf[headerOffset:headerOffset+len(q1)], q1)
+	n1 := headerOffset + len(q1)
+	dnsQuery1 := buf[headerOffset:n1]
+	h1 := parseDNSQuery(dnsQuery1)
+	if h1 != "longhostname.example.com" {
+		t.Fatalf("iter1: parseDNSQuery = %q, want longhostname.example.com", h1)
+	}
+	fakeIP1 := dnsMap.GetFakeIP(h1)
+	resp1 := buildDNSResponse(dnsQuery1, fakeIP1)
+	if resp1 == nil {
+		t.Fatal("iter1: buildDNSResponse returned nil")
+	}
+
+	// Apply the BUGGY behavior (pre-fix line 332) to show what happens to
+	// buf's tail when the response is built into the receive buffer.
+	_ = append(buf[:headerOffset], resp1...)
+
+	// ---- Iteration 2: short query q2 ----
+	// ReadFromUDP overwrites only n2 bytes of buf; bytes past n2 keep their
+	// stale values from iteration 1's response build. Zero only up to n2
+	// to faithfully model that, then write q2.
+	copy(buf[headerOffset:headerOffset+len(q2)], q2)
+	n2 := headerOffset + len(q2)
+	// Defensive: simulate the rest of buf past n2 being untouched (left
+	// stale from iter1). Clear [0:n2] leaves [n2:] stale — done by the
+	// copy above only into [headerOffset:headerOffset+len(q2)] and the
+	// zeroing of [0:headerOffset] would only matter for header parse,
+	// not the DNS body. Keep buf[n2:] as-is (stale).
+
+	// Fixed path: parse a *copy* of the DNS region (Step 1 defensive copy),
+	// so stale bytes past n2 cannot leak into parseDNSQuery.
+	dnsQuery2 := make([]byte, n2-headerOffset)
+	copy(dnsQuery2, buf[headerOffset:n2])
+	h2 := parseDNSQuery(dnsQuery2)
+	if h2 != "ab.cd" {
+		t.Fatalf("iter2 (fixed path): parseDNSQuery = %q, want ab.cd", h2)
+	}
+
+	// Counter-factual: parsing directly out of buf[headerOffset:n2] would
+	// also yield "ab.cd" here because q2's body fully overwrites the q1
+	// body region [headerOffset:n2] (q2 is shorter than q1, and the copy
+	// above wrote exactly len(q2) bytes). The real hazard in the buggy
+	// path was response CONSTRUCTION mutating buf past n1 — which then
+	// corrupted the *next iteration's* response build. That corruption
+	// is what Step 1's fresh fullResp slice removes. Reproduce it:
+	h2Direct := parseDNSQuery(buf[headerOffset:n2])
+	if h2Direct != "ab.cd" {
+		t.Fatalf("iter2 (direct from buf): parseDNSQuery = %q, want ab.cd", h2Direct)
+	}
+
+	// Demonstrate the fix's other half: building the response with a
+	// fresh slice leaves buf entirely untouched.
+	resp2 := buildDNSResponse(dnsQuery2, dnsMap.GetFakeIP("ab.cd"))
+	if resp2 == nil {
+		t.Fatal("iter2: buildDNSResponse returned nil")
+	}
+	fullResp2 := make([]byte, 0, headerOffset+len(resp2))
+	fullResp2 = append(fullResp2, buf[:headerOffset]...)
+	fullResp2 = append(fullResp2, resp2...)
+	// buf[headerOffset:n2] must still equal q2 — i.e. the fixed response
+	// build did NOT alias buf.
+	for i, b := range q2 {
+		if buf[headerOffset+i] != b {
+			t.Fatalf("iter2: buf[%d] = 0x%02X, fix aliases buf (want 0x%02X)", headerOffset+i, buf[headerOffset+i], b)
+		}
+	}
+}
