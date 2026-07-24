@@ -4,6 +4,7 @@ import android.content.Context
 import androidx.datastore.preferences.core.Preferences
 import androidx.datastore.preferences.core.booleanPreferencesKey
 import androidx.datastore.preferences.core.edit
+import androidx.datastore.preferences.core.intPreferencesKey
 import androidx.datastore.preferences.core.stringPreferencesKey
 import androidx.datastore.preferences.preferencesDataStore
 import kotlinx.coroutines.flow.Flow
@@ -38,8 +39,8 @@ object GlobalSettingsStore {
     private val KEY_CUSTOM_DNS_SERVERS = stringPreferencesKey("custom_dns_servers")
     private val KEY_FAKE_DNS_ENABLED = booleanPreferencesKey("fake_dns_enabled")
     private val KEY_INTERNET_SHARING_ENABLED = booleanPreferencesKey("internet_sharing_enabled")
-    private val KEY_INTERNET_SHARING_SOCKS_PORT = stringPreferencesKey("internet_sharing_socks_port")
-    private val KEY_INTERNET_SHARING_HTTP_PORT = stringPreferencesKey("internet_sharing_http_port")
+    private val KEY_INTERNET_SHARING_SOCKS_PORT = intPreferencesKey("internet_sharing_socks_port_v2")
+    private val KEY_INTERNET_SHARING_HTTP_PORT = intPreferencesKey("internet_sharing_http_port_v2")
     private val KEY_INTERNET_SHARING_USER = stringPreferencesKey("internet_sharing_user")
     private val KEY_INTERNET_SHARING_PASS = stringPreferencesKey("internet_sharing_pass")
 
@@ -63,8 +64,8 @@ object GlobalSettingsStore {
             prefs[KEY_CUSTOM_DNS_SERVERS] = settings.customDnsServers
             prefs[KEY_FAKE_DNS_ENABLED] = settings.fakeDnsEnabled
             prefs[KEY_INTERNET_SHARING_ENABLED] = settings.internetSharingEnabled
-            prefs[KEY_INTERNET_SHARING_SOCKS_PORT] = settings.internetSharingSocksPort.toString()
-            prefs[KEY_INTERNET_SHARING_HTTP_PORT] = settings.internetSharingHttpPort.toString()
+            prefs[KEY_INTERNET_SHARING_SOCKS_PORT] = settings.internetSharingSocksPort.coerceIn(1, 65535)
+            prefs[KEY_INTERNET_SHARING_HTTP_PORT] = settings.internetSharingHttpPort.coerceIn(1, 65535)
             prefs[KEY_INTERNET_SHARING_USER] = settings.internetSharingUser
             prefs[KEY_INTERNET_SHARING_PASS] = settings.internetSharingPass
         }
@@ -80,8 +81,8 @@ object GlobalSettingsStore {
             customDnsServers = this[KEY_CUSTOM_DNS_SERVERS] ?: "",
             fakeDnsEnabled = this[KEY_FAKE_DNS_ENABLED] ?: true,
             internetSharingEnabled = this[KEY_INTERNET_SHARING_ENABLED] ?: false,
-            internetSharingSocksPort = this[KEY_INTERNET_SHARING_SOCKS_PORT]?.toIntOrNull() ?: 8090,
-            internetSharingHttpPort = this[KEY_INTERNET_SHARING_HTTP_PORT]?.toIntOrNull() ?: 8091,
+            internetSharingSocksPort = this[KEY_INTERNET_SHARING_SOCKS_PORT] ?: 8090,
+            internetSharingHttpPort = this[KEY_INTERNET_SHARING_HTTP_PORT] ?: 8091,
             internetSharingUser = this[KEY_INTERNET_SHARING_USER] ?: "",
             internetSharingPass = this[KEY_INTERNET_SHARING_PASS] ?: ""
         )
