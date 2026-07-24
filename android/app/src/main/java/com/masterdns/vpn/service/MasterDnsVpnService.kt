@@ -60,7 +60,25 @@ class MasterDnsVpnService : VpnService() {
             "com.android.chrome" // system Chrome on some OEMs
         )
 
-
+        internal fun parseConnectTarget(url: String): Pair<String, Int> {
+            if (url.startsWith("[")) {
+                val close = url.indexOf("]")
+                if (close > 0) {
+                    val host = url.substring(1, close)
+                    val portPart = url.substring(close + 1).removePrefix(":")
+                    val port = portPart.toIntOrNull()?.coerceIn(1, 65535) ?: 80
+                    return host to port
+                }
+            }
+            val lastColon = url.lastIndexOf(':')
+            return if (lastColon > 0) {
+                val host = url.substring(0, lastColon)
+                val port = url.substring(lastColon + 1).toIntOrNull()?.coerceIn(1, 65535) ?: 80
+                host to port
+            } else {
+                url to 80
+            }
+        }
     }
 
     private val serviceScope = CoroutineScope(Dispatchers.IO + SupervisorJob())
@@ -979,9 +997,7 @@ class MasterDnsVpnService : VpnService() {
             }
 
             if (method == "CONNECT") {
-                val hostPort = url.split(":")
-                val host = hostPort[0]
-                val port = hostPort.getOrElse(1) { "80" }.toIntOrNull() ?: 80
+                val (host, port) = parseConnectTarget(url)
 
                 output.write("HTTP/1.1 200 Connection Established\r\n\r\n")
                 output.flush()
