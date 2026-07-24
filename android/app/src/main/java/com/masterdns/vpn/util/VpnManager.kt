@@ -314,7 +314,9 @@ object VpnManager {
      * Start the VPN service.
      */
     fun connect(context: Context, profile: ProfileEntity) {
-        if (_state.value == VpnState.CONNECTED || _state.value == VpnState.CONNECTING) return
+        if (_state.value == VpnState.CONNECTED ||
+            _state.value == VpnState.CONNECTING ||
+            _state.value == VpnState.DISCONNECTING) return
 
         updateState(VpnState.CONNECTING)
         clearError()
