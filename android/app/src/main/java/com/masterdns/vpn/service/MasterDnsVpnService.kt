@@ -140,6 +140,19 @@ class MasterDnsVpnService : VpnService() {
                 val profileId = intent.getLongExtra(EXTRA_PROFILE_ID, -1)
                 if (profileId > 0) {
                     startVpn(profileId)
+                } else {
+                    val msg = "Invalid profile id: $profileId"
+                    VpnManager.appendLog(msg)
+                    VpnManager.setError(msg)
+                    runCatching {
+                        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) {
+                            stopForeground(STOP_FOREGROUND_REMOVE)
+                        } else {
+                            @Suppress("DEPRECATION")
+                            stopForeground(true)
+                        }
+                    }
+                    runCatching { stopSelf() }
                 }
             }
             ACTION_DISCONNECT -> {
