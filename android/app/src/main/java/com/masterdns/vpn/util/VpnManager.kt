@@ -98,46 +98,6 @@ object VpnManager {
     private val logBuffer = ArrayDeque<LogEntry>(MAX_LOG_LINES)
     private var logBufferVersion = 0L
 
-    private val INDEXED_PROGRESS_REGEX = Regex(
-        "(?:scan|scanning|resolver|resolvers|mtu|accepted|rejected).{0,40}?(\\d+)\\s*/\\s*(\\d+)",
-        setOf(RegexOption.IGNORE_CASE, RegexOption.DOT_MATCHES_ALL)
-    )
-    private val TOTAL_CANDIDATES_REGEX = Regex(
-        "(?:valid\\s+resolvers|resolvers\\s+for\\s+scan|scan\\s+pool|resolver\\s+pool|total\\s+resolvers).{0,20}?(\\d+)",
-        RegexOption.IGNORE_CASE
-    )
-    private val SCAN_TOTALS_REGEX = Regex(
-        "via\\s+([^\\s|]+)\\s*\\|.*totals:\\s*valid=(\\d+),\\s*rejected=(\\d+)",
-        RegexOption.IGNORE_CASE
-    )
-    private val ACTIVE_RESOLVERS_REGEX = Regex(
-        "Active Resolvers\\s*[:=]\\s*[^\\d-]*(\\d+)",
-        RegexOption.IGNORE_CASE
-    )
-    private val TOTAL_ACTIVE_REGEX = Regex(
-        "total\\s+active\\s*[:=]\\s*[^\\d-]*(\\d+)",
-        RegexOption.IGNORE_CASE
-    )
-    private val REMAINING_REGEX = Regex(
-        "remaining\\s*[:=]\\s*[^\\d-]*(\\d+)",
-        RegexOption.IGNORE_CASE
-    )
-    private val SYNCED_MTU_REGEX = Regex(
-        "Selected Synced Upload MTU:\\s*(\\d+)\\s*\\|\\s*Selected Synced Download MTU:\\s*(\\d+)",
-        RegexOption.IGNORE_CASE
-    )
-    private val RESOLVER_ADDED_REGEX = Regex(
-        "(?:✅ Accepted|🔄 DNS Resolver Reactivated).*?(\\d+\\.\\d+\\.\\d+\\.\\d+:\\d+|\\[[a-fA-F0-9:]+\\]:\\d+)",
-        RegexOption.IGNORE_CASE
-    )
-    private val RESOLVER_REMOVED_REGEX = Regex(
-        "DNS Resolver disabled.*?(\\d+\\.\\d+\\.\\d+\\.\\d+:\\d+|\\[[a-fA-F0-9:]+\\]:\\d+)",
-        RegexOption.IGNORE_CASE
-    )
-    private val SESSION_INIT_BACKOFF_REGEX = Regex(
-        "Session init retry backoff:\\s*(.*)",
-        RegexOption.IGNORE_CASE
-    )
     private val TIMESTAMP_CANDIDATES = listOf(
         TimestampCandidate(
             Regex("^(\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}\\.\\d{3}Z)(.*)$"),
@@ -357,97 +317,15 @@ object VpnManager {
     }
 
     private fun parseScanLine(line: String) {
-        RESOLVER_ADDED_REGEX.find(line)?.let { match ->
-            val res = match.groupValues[1]
-            val current = _activeResolvers.value.toMutableSet()
-            current.add(res)
-            _activeResolvers.value = current.toList()
-        }
-
-        RESOLVER_REMOVED_REGEX.find(line)?.let { match ->
-            val res = match.groupValues[1]
-            val current = _activeResolvers.value.toMutableSet()
-            current.remove(res)
-            _activeResolvers.value = current.toList()
-        }
-
-        INDEXED_PROGRESS_REGEX.find(line)?.let { match ->
-            val total = match.groupValues[2].toIntOrNull()
-            if (total != null && total > 0) {
-                _scanStatus.value = _scanStatus.value.copy(scanTotalFromCore = total)
-            }
-        }
-
-        TOTAL_CANDIDATES_REGEX.find(line)?.let { match ->
-            val total = match.groupValues[1].toIntOrNull()
-            if (total != null && total > 0) {
-                _scanStatus.value = _scanStatus.value.copy(scanTotalFromCore = total)
-            }
-        }
-
-        SCAN_TOTALS_REGEX.find(line)?.let { match ->
-            val resolver = match.groupValues[1]
-            val valid = match.groupValues[2].toIntOrNull() ?: _scanStatus.value.validCount
-            val rejected = match.groupValues[3].toIntOrNull() ?: _scanStatus.value.rejectedCount
-            val decision = when {
-                line.contains("Accepted", ignoreCase = true) -> "Accepted"
-                line.contains("Rejected", ignoreCase = true) -> "Rejected"
-                else -> ""
-            }
-            _scanStatus.value = _scanStatus.value.copy(
-                scanning = true,
-                lastResolver = resolver,
-                lastDecision = decision,
-                validCount = valid,
-                rejectedCount = rejected
-            )
-            return
-        }
-
-        ACTIVE_RESOLVERS_REGEX.find(line)?.let { match ->
-            _scanStatus.value = _scanStatus.value.copy(
-                activeResolvers = match.groupValues[1].toIntOrNull() ?: _scanStatus.value.activeResolvers
-            )
-            return
-        }
-
-        TOTAL_ACTIVE_REGEX.find(line)?.let { match ->
-            _scanStatus.value = _scanStatus.value.copy(
-                activeResolvers = match.groupValues[1].toIntOrNull() ?: _scanStatus.value.activeResolvers
-            )
-            return
-        }
-
-        REMAINING_REGEX.find(line)?.let { match ->
-            _scanStatus.value = _scanStatus.value.copy(
-                activeResolvers = match.groupValues[1].toIntOrNull() ?: _scanStatus.value.activeResolvers
-            )
-            return
-        }
-
-        SYNCED_MTU_REGEX.find(line)?.let { match ->
-            _scanStatus.value = _scanStatus.value.copy(
-                syncedUploadMtu = match.groupValues[1].toIntOrNull() ?: 0,
-                syncedDownloadMtu = match.groupValues[2].toIntOrNull() ?: 0
-            )
-            return
-        }
-
-        if (line.contains("Testing MTU sizes", ignoreCase = true)) {
-            _scanStatus.value = _scanStatus.value.copy(scanning = true)
-            return
-        }
-
-        if (line.contains("MTU Testing Completed", ignoreCase = true) ||
-            line.contains("Session Initialized Successfully", ignoreCase = true)
-        ) {
-            _scanStatus.value = _scanStatus.value.copy(scanning = false)
-        }
-
-        SESSION_INIT_BACKOFF_REGEX.find(line)?.let { match ->
-            val backoff = match.groupValues[1].trim()
-            _connectionWarning.value = "Session init retry backoff: $backoff"
-        }
+        val prev = ScanStateBundle(
+            scanStatus = _scanStatus.value,
+            activeResolvers = _activeResolvers.value,
+            connectionWarning = _connectionWarning.value
+        )
+        val next = ScanStateReducer.reduce(prev, line)
+        if (next.scanStatus != prev.scanStatus) _scanStatus.value = next.scanStatus
+        if (next.activeResolvers != prev.activeResolvers) _activeResolvers.value = next.activeResolvers
+        if (next.connectionWarning != prev.connectionWarning) _connectionWarning.value = next.connectionWarning
     }
 
     private fun normalizeLogTimestampToLocal(line: String): String {
