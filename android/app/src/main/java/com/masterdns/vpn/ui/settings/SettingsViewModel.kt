@@ -114,7 +114,7 @@ class SettingsViewModel @Inject constructor(
             encryptionKey = values["ENCRYPTION_KEY"] ?: profile.encryptionKey,
             protocolType = normalizeProtocol(values["PROTOCOL_TYPE"], profile.protocolType),
             listenPort = values["LISTEN_PORT"]?.toIntOrNull()
-                ?.coerceIn(1, 65535) ?: profile.listenPort,
+                ?.coerceIn(1025, 65535) ?: profile.listenPort,
             resolverBalancingStrategy = normalizeResolverBalancingStrategy(
                 values["RESOLVER_BALANCING_STRATEGY"],
                 profile.resolverBalancingStrategy
