@@ -15,10 +15,11 @@ import com.google.gson.reflect.TypeToken
 import com.masterdns.vpn.App
 import com.masterdns.vpn.MainActivity
 import com.masterdns.vpn.R
-import com.masterdns.vpn.data.local.AppDatabase
+import com.masterdns.vpn.data.repository.ProfileRepository
 import com.masterdns.vpn.util.ConfigGenerator
 import com.masterdns.vpn.util.GlobalSettingsStore
 import com.masterdns.vpn.util.VpnManager
+import dagger.hilt.android.AndroidEntryPoint
 import kotlinx.coroutines.*
 import java.io.File
 import java.io.FileInputStream
@@ -28,8 +29,10 @@ import java.net.InetAddress
 import java.net.InetSocketAddress
 import java.net.ServerSocket
 import java.net.Socket
+import javax.inject.Inject
 import kotlin.coroutines.coroutineContext
 
+@AndroidEntryPoint
 class MasterDnsVpnService : VpnService() {
 
     companion object {
@@ -82,6 +85,9 @@ class MasterDnsVpnService : VpnService() {
     private var sessionBusyWarningShown = false
     @Volatile
     private var activeLocalSocksPort: Int = DEFAULT_SOCKS_PORT
+
+    @Inject
+    lateinit var profileRepository: ProfileRepository
 
     /**
      * Close any ParcelFileDescriptor left from a previous session before we
@@ -136,8 +142,7 @@ class MasterDnsVpnService : VpnService() {
                 acquireWakeLock()
 
                 // Load profile from DB
-                val db = AppDatabase.getInstance(this@MasterDnsVpnService)
-                val profile = db.profileDao().getProfileById(profileId)
+                val profile = profileRepository.getProfileById(profileId)
                     ?: throw IllegalStateException("Profile not found")
                 val socksPort = profile.listenPort.takeIf { it in 1..65535 } ?: DEFAULT_SOCKS_PORT
                 activeLocalSocksPort = socksPort
