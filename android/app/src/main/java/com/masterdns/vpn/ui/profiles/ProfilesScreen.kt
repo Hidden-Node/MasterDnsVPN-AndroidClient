@@ -754,7 +754,7 @@ private fun parseProfileTomlForImport(fileName: String, tomlContent: String): Im
         encryptionMethod = values["DATA_ENCRYPTION_METHOD"]?.toIntOrNull() ?: 1,
         encryptionKey = parsedKey,
         protocolType = normalizeProtocol(values["PROTOCOL_TYPE"]),
-        listenPort = values["LISTEN_PORT"]?.toIntOrNull()?.coerceIn(1, 65535) ?: 18000,
+        listenPort = values["LISTEN_PORT"]?.toIntOrNull()?.coerceIn(1025, 65535) ?: 18000,
         resolverBalancingStrategy = values["RESOLVER_BALANCING_STRATEGY"]?.toIntOrNull() ?: 2,
         packetDuplicationCount = values["PACKET_DUPLICATION_COUNT"]?.toIntOrNull() ?: 2,
         setupPacketDuplicationCount = values["SETUP_PACKET_DUPLICATION_COUNT"]?.toIntOrNull() ?: 2,

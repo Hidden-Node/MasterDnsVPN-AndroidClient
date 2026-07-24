@@ -64,8 +64,8 @@ object GlobalSettingsStore {
             prefs[KEY_CUSTOM_DNS_SERVERS] = settings.customDnsServers
             prefs[KEY_FAKE_DNS_ENABLED] = settings.fakeDnsEnabled
             prefs[KEY_INTERNET_SHARING_ENABLED] = settings.internetSharingEnabled
-            prefs[KEY_INTERNET_SHARING_SOCKS_PORT] = settings.internetSharingSocksPort.coerceIn(1, 65535)
-            prefs[KEY_INTERNET_SHARING_HTTP_PORT] = settings.internetSharingHttpPort.coerceIn(1, 65535)
+            prefs[KEY_INTERNET_SHARING_SOCKS_PORT] = settings.internetSharingSocksPort.coerceIn(1025, 65535)
+            prefs[KEY_INTERNET_SHARING_HTTP_PORT] = settings.internetSharingHttpPort.coerceIn(1025, 65535)
             prefs[KEY_INTERNET_SHARING_USER] = settings.internetSharingUser
             prefs[KEY_INTERNET_SHARING_PASS] = settings.internetSharingPass
         }
