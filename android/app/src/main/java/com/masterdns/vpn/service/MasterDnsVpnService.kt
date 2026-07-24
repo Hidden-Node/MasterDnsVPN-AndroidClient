@@ -65,6 +65,7 @@ class MasterDnsVpnService : VpnService() {
 
     private val serviceScope = CoroutineScope(Dispatchers.IO + SupervisorJob())
     private var connectJob: Job? = null
+    private var stopJob: Job? = null
     private var vpnInterface: ParcelFileDescriptor? = null
     private var goClientJob: Job? = null
     private var httpProxyJob: Job? = null
@@ -465,10 +466,10 @@ class MasterDnsVpnService : VpnService() {
         if (isStopping) return
         isStopping = true
 
-        // Use a separate scope so that serviceScope.cancel() in onDestroy()
-        // does not kill this coroutine mid-cleanup.
-        val stopScope = CoroutineScope(Dispatchers.IO + SupervisorJob())
-        stopScope.launch {
+        // plan 014: retain the cleanup Job in stopJob so a process pause/resume
+        // can't GC it mid-teardown; onDestroy() joins it before cancelling scope.
+        if (stopJob?.isActive == true) return
+        stopJob = serviceScope.launch {
             try {
                 connectJob?.cancel()
                 VpnManager.appendLog("VPN stop requested")
@@ -550,9 +551,10 @@ class MasterDnsVpnService : VpnService() {
                 VpnManager.updateState(VpnManager.VpnState.DISCONNECTED)
                 VpnManager.stopTrafficMonitor()
                 runCatching { stopSelf() }
+            } finally {
+                // plan 014: reset synchronously so connect() doesn't race stopSelf()
+                isStopping = false
             }
-            // NOTE: isStopping intentionally stays true until onDestroy() completes.
-            // This prevents onDestroy() from double-closing already-freed resources.
         }
     }
 
@@ -573,6 +575,12 @@ class MasterDnsVpnService : VpnService() {
     }
 
     override fun onDestroy() {
+        // plan 014: let any in-flight stopVpn() finish before cancelling serviceScope.
+        val inFlightStop = stopJob
+        if (inFlightStop != null && inFlightStop.isActive) {
+            kotlinx.coroutines.runBlocking { inFlightStop.join() }
+        }
+
         // Normal path: stopVpn() already ran — Go layer guards make re-calls no-ops.
         // Force-kill path: stopVpn() was never called, so do full cleanup.
         if (!isStopping) {
