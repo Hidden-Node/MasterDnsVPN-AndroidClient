@@ -8,18 +8,24 @@ import android.service.quicksettings.TileService
 import androidx.annotation.RequiresApi
 import com.masterdns.vpn.MainActivity
 import com.masterdns.vpn.R
-import com.masterdns.vpn.data.local.AppDatabase
+import com.masterdns.vpn.data.repository.ProfileRepository
 import com.masterdns.vpn.util.VpnManager
+import dagger.hilt.android.AndroidEntryPoint
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.launch
+import javax.inject.Inject
 
+@AndroidEntryPoint
 @RequiresApi(Build.VERSION_CODES.N)
 class VpnTileService : TileService() {
 
     private val tileScope = CoroutineScope(SupervisorJob() + Dispatchers.Main)
+
+    @Inject
+    lateinit var profileRepository: ProfileRepository
 
     override fun onStartListening() {
         super.onStartListening()
@@ -50,9 +56,7 @@ class VpnTileService : TileService() {
         }
 
         tileScope.launch(Dispatchers.IO) {
-            val selectedProfile = AppDatabase.getInstance(this@VpnTileService)
-                .profileDao()
-                .getSelectedProfile()
+            val selectedProfile = profileRepository.getSelectedProfile()
 
             launch(Dispatchers.Main) {
                 if (selectedProfile != null) {
