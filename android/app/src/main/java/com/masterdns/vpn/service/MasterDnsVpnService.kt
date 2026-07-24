@@ -162,6 +162,20 @@ class MasterDnsVpnService : VpnService() {
         return START_STICKY
     }
 
+    private data class ConnectInputs(
+        val profile: com.masterdns.vpn.data.local.ProfileEntity,
+        val socksPort: Int,
+        val globalSettings: com.masterdns.vpn.util.GlobalSettings,
+        val proxyMode: Boolean,
+        val localDnsEnabled: Boolean
+    )
+
+    private data class ConfigPaths(
+        val configFile: java.io.File,
+        val resolversFile: java.io.File,
+        val logFile: java.io.File
+    )
+
     private fun startVpn(profileId: Long) {
         connectJob?.cancel()
         connectJob = serviceScope.launch {
@@ -173,323 +187,318 @@ class MasterDnsVpnService : VpnService() {
 
                 acquireWakeLock()
 
-                // Load profile from DB
-                val profile = profileRepository.getProfileById(profileId)
-                    ?: throw IllegalStateException("Profile not found")
-                val socksPort = profile.listenPort.takeIf { it in 1..65535 } ?: DEFAULT_SOCKS_PORT
-                activeLocalSocksPort = socksPort
-                val globalSettings = GlobalSettingsStore.load(this@MasterDnsVpnService)
-                val proxyMode = globalSettings.connectionMode.equals("PROXY", ignoreCase = true)
-                val protocolOverride = "SOCKS5"
-                val listenIpOverride: String? = null
-
-                VpnManager.appendLog("Loading profile: ${profile.name}")
+                val inputs = loadProfileAndSettings(profileId)
+                VpnManager.appendLog("Loading profile: ${inputs.profile.name}")
                 ensureGoCoreStopped()
                 closeStaleVpnInterface()
-                ensureSocksPortAvailable(socksPort)
+                ensureSocksPortAvailable(inputs.socksPort)
 
-                // Generate config files
-                val configDir = File(filesDir, "config")
-                configDir.mkdirs()
-
-                val configFile = File(configDir, "client_config.toml")
-                val resolversFile = File(configDir, "client_resolvers.txt")
-                mtuExportTargetUri = null
-                mtuConfigDir = null
-                val advanced = parseAdvanced(profile.advancedJson)
-                val saveMtuToFile = advanced["SAVE_MTU_SERVERS_TO_FILE"].equals("true", ignoreCase = true)
-                var runtimeProfile = profile
-                if (saveMtuToFile) {
-                    val configuredPath = advanced["MTU_SERVERS_FILE_NAME"]
-                        ?.trim()
-                        ?.ifBlank { "masterdnsvpn_success_test_{time}.log" }
-                        ?: "masterdnsvpn_success_test_{time}.log"
-                    val exportUri = advanced["MTU_EXPORT_URI"]?.trim().orEmpty()
-                    if (exportUri.isNotBlank()) {
-                        val advancedMutable = advanced.toMutableMap()
-                        configDir.mkdirs()
-                        val targetPath = "masterdnsvpn_success_test_{time}.log"
-                        advancedMutable["MTU_SERVERS_FILE_NAME"] = targetPath
-                        runtimeProfile = profile.copy(advancedJson = Gson().toJson(advancedMutable))
-                        mtuExportTargetUri = exportUri
-                        mtuConfigDir = configDir
-                        VpnManager.appendLog("MTU results will be saved to config directory")
-                        VpnManager.appendLog("MTU export destination selected via file manager")
-                    } else {
-                        VpnManager.appendLog("MTU results target: $configuredPath")
-                    }
-                }
-
-                // Detect LOCAL_DNS_ENABLED with a privileged port (<=1024) — requires root on Android.
-                // Automatically fall back to port 5353 to avoid a bind permission error on non-rooted devices.
-                val advancedForDns = parseAdvanced(runtimeProfile.advancedJson)
-                val localDnsEnabled = advancedForDns["LOCAL_DNS_ENABLED"].equals("true", ignoreCase = true)
-                val localDnsPort = advancedForDns["LOCAL_DNS_PORT"]?.toIntOrNull() ?: 53
-                val safeDnsPort: Int? = if (!proxyMode && localDnsEnabled && localDnsPort <= 1024) {
-                    VpnManager.appendLog(
-                        "WARNING: LOCAL_DNS_PORT=$localDnsPort requires root on Android. " +
-                            "Automatically using port 5353 instead."
-                    )
-                    5353
-                } else null
-                val effectiveLocalDnsPort = safeDnsPort ?: localDnsPort
-                if (!proxyMode && localDnsEnabled) {
-                    ensureLocalDnsPortAvailable(effectiveLocalDnsPort)
-                }
-
-                configFile.writeText(
-                    ConfigGenerator.generateConfig(
-                        profile = runtimeProfile,
-                        listenPort = socksPort,
-                        listenIpOverride = listenIpOverride,
-                        protocolOverride = protocolOverride,
-                        localDnsEnabledOverride = if (proxyMode) false else null,
-                        localDnsPortOverride = if (proxyMode) null else safeDnsPort
-                    )
-                )
-                if (runtimeProfile.resolvers.isNotBlank()) {
-                    resolversFile.writeText(ConfigGenerator.generateResolvers(runtimeProfile))
-                } else if (!resolversFile.exists() || resolversFile.readText().isBlank()) {
-                    resolversFile.writeText(ConfigGenerator.generateResolvers(runtimeProfile))
-                } else {
-                    VpnManager.appendLog("Using existing client_resolvers.txt from app storage")
-                }
-
-                VpnManager.appendLog("Config written to: ${configFile.absolutePath}")
+                val configPaths = prepareConfigFiles(inputs)
+                VpnManager.appendLog("Config written to: ${configPaths.configFile.absolutePath}")
                 VpnManager.appendLog("Starting Go core...")
 
-                // Start Go client in background thread
-                val logFile = File(cacheDir, "vpn.log")
-                if (!logFile.exists()) {
-                    logFile.createNewFile()
-                } else {
-                    logFile.writeText("")
+                launchGoCoreAndWait(configPaths)
+
+                if (inputs.globalSettings.internetSharingEnabled) {
+                    startInternetSharing(
+                        inputs.globalSettings.internetSharingSocksPort,
+                        inputs.globalSettings.internetSharingHttpPort,
+                        inputs.globalSettings.internetSharingUser,
+                        inputs.globalSettings.internetSharingPass
+                    )
                 }
 
-                logTailJob?.cancel()
-                logTailJob = launch(Dispatchers.IO) {
-                    tailLogFile(logFile)
-                }
-
-                goClientJob = launch(Dispatchers.IO) {
-                    try {
-                        // Call the Go mobile wrapper
-                        mobile.Mobile.startClient(
-                            configFile.absolutePath,
-                            logFile.absolutePath
-                        )
-                    } catch (_: CancellationException) {
-                        // Normal shutdown — coroutine was cancelled during disconnect.
-                        VpnManager.appendLog("Go core stopped (coroutine cancelled)")
-                    } catch (e: Exception) {
-                        // Only log real errors, not context cancellation from Go.
-                        val msg = e.message ?: ""
-                        if (!msg.contains("context canceled", ignoreCase = true)) {
-                            Log.e(TAG, "Go core error", e)
-                            VpnManager.appendLog("Go core error: $msg")
-                            runCatching {
-                                VpnManager.setError("Go core error: $msg")
-                            }
-                        }
-                    }
-                }
-
-                // Wait until SOCKS5 is actually listening. MTU test/session init may take a few minutes.
-                waitForSocksProxyReady(
-                    host = "127.0.0.1",
-                    port = socksPort,
-                    timeoutMs = SOCKS_STARTUP_TIMEOUT_MS
-                )
-                VpnManager.appendLog("SOCKS5 proxy is ready on 127.0.0.1:$socksPort")
-
-                // Start Internet Sharing proxies if enabled
-                if (globalSettings.internetSharingEnabled) {
-                    val socksPort = globalSettings.internetSharingSocksPort
-                    val httpPort = globalSettings.internetSharingHttpPort
-                    val user = globalSettings.internetSharingUser
-                    val pass = globalSettings.internetSharingPass
-                    startInternetSharing(socksPort, httpPort, user, pass)
-                }
-
-                if (proxyMode) {
+                if (inputs.proxyMode) {
                     VpnManager.appendLog("Proxy mode active: skipping Android VpnService TUN setup")
                     VpnManager.updateState(VpnManager.VpnState.CONNECTED)
                     VpnManager.startTrafficMonitor(this@MasterDnsVpnService)
-                    val notification = buildNotification("Proxy mode active on port $socksPort")
+                    val notification = buildNotification("Proxy mode active on port ${inputs.socksPort}")
                     val manager = getSystemService(NOTIFICATION_SERVICE) as android.app.NotificationManager
                     manager.notify(NOTIFICATION_ID, notification)
                     return@launch
                 }
 
-                val vpnDnsServers = if (globalSettings.customDnsServers.isNotBlank()) {
-                    globalSettings.customDnsServers
-                        .split(",")
-                        .map { it.trim() }
-                        .filter { it.isNotEmpty() }
-                        .also { servers ->
-                            VpnManager.appendLog("Using custom DNS servers: ${servers.joinToString()}")
-                        }
-                } else if (globalSettings.fakeDnsEnabled) {
-                    listOf("172.19.0.2").also {
-                        VpnManager.appendLog("Using TUN bridge DNS: 172.19.0.2")
-                    }
-                } else if (localDnsEnabled && !proxyMode) {
-                    listOf("10.0.0.2").also {
-                        VpnManager.appendLog("Using local DNS via TUN address: 10.0.0.2")
-                    }
-                } else {
-                    listOf("8.8.8.8")
-                }
+                establishVpnInterface(inputs)
+                registerNetworkCallback()
 
-                val builder = Builder()
-                    .setSession(getString(R.string.app_name))
-                    .setMtu(1400)
-                    .addAddress(if (globalSettings.fakeDnsEnabled) "172.19.0.1" else "10.0.0.2", if (globalSettings.fakeDnsEnabled) 30 else 32)
-                    .addRoute("0.0.0.0", 0)
-                    .setBlocking(true) // tun2socks/gVisor requires blocking fd reads
-
-                // ponytail: IPv6 NOT routed into the TUN across all Android versions.
-                // FakeDNSProxy only has IPv4 DNS to advertise and upstream SOCKS5 UDP_ASSOCIATE
-                // rejects non-53 traffic (fakedns_proxy.go:339-345, socks_manager.go:665), so
-                // routing ::/0 black-holes IPv6 QUIC on every Android version, not just 16+.
-                // Re-enable when FakeDNSProxy parses atyp==4 BND AND an IPv6 DNS is configured
-                // AND upstream SOCKS5 carries non-DNS IPv6 UDP.
-
-                vpnDnsServers.forEach { builder.addDnsServer(it) }
-                if (globalSettings.fakeDnsEnabled) {
-                    builder.addRoute("198.18.0.0", 16)
-                    VpnManager.appendLog("Added fake DNS route: 198.18.0.0/16")
-                }
-
-                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) {
-                    val splitEnabled = globalSettings.splitTunnelingEnabled &&
-                        globalSettings.splitPackagesCsv.isNotBlank()
-                    if (splitEnabled) {
-                        val userSelected = globalSettings.splitPackagesCsv
-                            .split(",")
-                            .map { it.trim() }
-                            .filter { it.isNotEmpty() }
-                            .toSet()
-
-                        if (globalSettings.splitTunnelMode == com.masterdns.vpn.util.SplitTunnelMode.INCLUDE) {
-                            val pm = packageManager
-                            val appCompanions = mutableSetOf<String>()
-
-                            (BASE_COMPANION_PACKAGES + BROWSER_COMPANION_PACKAGES).forEach { pkg ->
-                                if (runCatching { pm.getApplicationInfo(pkg, 0) }.isSuccess) {
-                                    appCompanions.add(pkg)
-                                }
-                            }
-
-                            // Do NOT include our own packageName here.
-                            val finalAllowed = userSelected + appCompanions
-
-                            VpnManager.appendLog(
-                                "Split tunnel (Include): ${userSelected.size} apps, " +
-                                "${appCompanions.size} companions"
-                            )
-
-                            finalAllowed.forEach { pkg ->
-                                try {
-                                    builder.addAllowedApplication(pkg)
-                                } catch (e: Exception) {
-                                    VpnManager.appendLog("Split tunnel skip '$pkg': ${e.message}")
-                                }
-                            }
-                        } else {
-                            VpnManager.appendLog("Split tunnel (Exclude): Bypassing ${userSelected.size} apps")
-                            try { builder.addDisallowedApplication(packageName) } catch (e: Exception) {}
-                            userSelected.forEach { pkg ->
-                                try {
-                                    builder.addDisallowedApplication(pkg)
-                                } catch (e: Exception) {
-                                    VpnManager.appendLog("Split tunnel skip '$pkg': ${e.message}")
-                                }
-                            }
-                        }
-                    } else {
-                        // Exclude app itself by default to avoid self-loop traffic.
-                        builder.addDisallowedApplication(packageName)
-                    }
-                }
-
-                vpnInterface = builder.establish()
-                    ?: throw IllegalStateException("VPN interface could not be established. Check VPN permission.")
-
-                VpnManager.appendLog("TUN interface established (fd=${vpnInterface!!.fd})")
-
-                if (globalSettings.fakeDnsEnabled) {
-                    VpnManager.appendLog("Starting DNS-aware TUN bridge...")
-                    runCatching {
-                        mobile.Mobile.startTunBridge(vpnInterface!!.fd.toLong(), 1400L, "127.0.0.1:$socksPort")
-                    }.onSuccess {
-                        tunBridgeActive = true
-                        VpnManager.appendLog("DNS-aware TUN bridge started")
-                    }.onFailure { e ->
-                        VpnManager.appendLog("DNS-aware TUN bridge failed: ${e.message}")
-                        throw IllegalStateException("TUN bridge start failed: ${e.message}", e)
-                    }
-                } else {
-                    VpnManager.appendLog("Starting tun2socks bridge: TUN fd -> socks5://127.0.0.1:$socksPort")
-                    runCatching {
-                        mobile.Mobile.startTun(vpnInterface!!.fd.toLong(), "127.0.0.1:$socksPort")
-                    }.onFailure { e ->
-                        VpnManager.appendLog("tun2socks bridge failed: ${e.message}")
-                        throw IllegalStateException("TUN start failed: ${e.message}", e)
-                    }
-                }
-
-                // Register Network Change detection to bounce TUN bridge
-                val cm = getSystemService(android.content.Context.CONNECTIVITY_SERVICE) as android.net.ConnectivityManager
-                networkCallback?.let { cm.unregisterNetworkCallback(it) }
-                networkCallback = object : android.net.ConnectivityManager.NetworkCallback() {
-                    override fun onAvailable(network: android.net.Network) {
-                        val caps = cm.getNetworkCapabilities(network)
-                        if (caps == null || caps.hasTransport(android.net.NetworkCapabilities.TRANSPORT_VPN)) return
-                        if (isStopping) return
-
-                        VpnManager.appendLog("Underlying network changed, updating VPN underlying network...")
-                        setUnderlyingNetworks(arrayOf(network))
-                    }
-
-                    override fun onLost(network: android.net.Network) {
-                        if (isStopping) return
-                        VpnManager.appendLog("Underlying network lost, resetting VPN underlying network...")
-                        setUnderlyingNetworks(null)
-                    }
-                }
-                try {
-                    val request = android.net.NetworkRequest.Builder()
-                        .addCapability(android.net.NetworkCapabilities.NET_CAPABILITY_INTERNET)
-                        .build()
-                    cm.registerNetworkCallback(request, networkCallback!!)
-                } catch (e: Exception) {
-                    VpnManager.appendLog("Failed to register network callback: ${e.message}")
-                }
-
-                // Update state
                 VpnManager.updateState(VpnManager.VpnState.CONNECTED)
                 VpnManager.startTrafficMonitor(this@MasterDnsVpnService)
                 VpnManager.appendLog("VPN connected successfully!")
 
-                // Update notification
                 val notification = buildNotification(getString(R.string.notification_connected))
                 val manager = getSystemService(NOTIFICATION_SERVICE) as android.app.NotificationManager
                 manager.notify(NOTIFICATION_ID, notification)
-
             } catch (e: CancellationException) {
                 VpnManager.appendLog("Connection canceled")
                 throw e
             } catch (e: Exception) {
-                // The TUN bridge calls (lines 367/372) now re-throw on Go-side
-                // error so this catch-all fires and stopVpn() runs — previously
-                // a startTunBridge failure left the UI reporting CONNECTED
-                // with no traffic flowing.
                 Log.e(TAG, "Failed to start VPN", e)
                 VpnManager.appendLog("Error: ${e.message}")
                 VpnManager.setError(e.message ?: "Unknown error")
                 stopVpn()
             }
+        }
+    }
+
+    private suspend fun loadProfileAndSettings(profileId: Long): ConnectInputs {
+        val profile = profileRepository.getProfileById(profileId)
+            ?: throw IllegalStateException("Profile not found")
+        val socksPort = profile.listenPort.takeIf { it in 1..65535 } ?: DEFAULT_SOCKS_PORT
+        activeLocalSocksPort = socksPort
+        val globalSettings = GlobalSettingsStore.load(this)
+        val proxyMode = globalSettings.connectionMode.equals("PROXY", ignoreCase = true)
+        val localDnsEnabled = parseAdvanced(profile.advancedJson)["LOCAL_DNS_ENABLED"].equals("true", ignoreCase = true)
+        return ConnectInputs(profile, socksPort, globalSettings, proxyMode, localDnsEnabled)
+    }
+
+    private suspend fun prepareConfigFiles(inputs: ConnectInputs): ConfigPaths {
+        val configDir = File(filesDir, "config")
+        configDir.mkdirs()
+
+        val configFile = File(configDir, "client_config.toml")
+        val resolversFile = File(configDir, "client_resolvers.txt")
+        mtuExportTargetUri = null
+        mtuConfigDir = null
+        val advanced = parseAdvanced(inputs.profile.advancedJson)
+        val saveMtuToFile = advanced["SAVE_MTU_SERVERS_TO_FILE"].equals("true", ignoreCase = true)
+        var runtimeProfile = inputs.profile
+        if (saveMtuToFile) {
+            val configuredPath = advanced["MTU_SERVERS_FILE_NAME"]
+                ?.trim()
+                ?.ifBlank { "masterdnsvpn_success_test_{time}.log" }
+                ?: "masterdnsvpn_success_test_{time}.log"
+            val exportUri = advanced["MTU_EXPORT_URI"]?.trim().orEmpty()
+            if (exportUri.isNotBlank()) {
+                val advancedMutable = advanced.toMutableMap()
+                configDir.mkdirs()
+                val targetPath = "masterdnsvpn_success_test_{time}.log"
+                advancedMutable["MTU_SERVERS_FILE_NAME"] = targetPath
+                runtimeProfile = inputs.profile.copy(advancedJson = Gson().toJson(advancedMutable))
+                mtuExportTargetUri = exportUri
+                mtuConfigDir = configDir
+                VpnManager.appendLog("MTU results will be saved to config directory")
+                VpnManager.appendLog("MTU export destination selected via file manager")
+            } else {
+                VpnManager.appendLog("MTU results target: $configuredPath")
+            }
+        }
+
+        val advancedForDns = parseAdvanced(runtimeProfile.advancedJson)
+        val localDnsEnabled = advancedForDns["LOCAL_DNS_ENABLED"].equals("true", ignoreCase = true)
+        val localDnsPort = advancedForDns["LOCAL_DNS_PORT"]?.toIntOrNull() ?: 53
+        val safeDnsPort: Int? = if (!inputs.proxyMode && localDnsEnabled && localDnsPort <= 1024) {
+            VpnManager.appendLog(
+                "WARNING: LOCAL_DNS_PORT=$localDnsPort requires root on Android. " +
+                    "Automatically using port 5353 instead."
+            )
+            5353
+        } else null
+        val effectiveLocalDnsPort = safeDnsPort ?: localDnsPort
+        if (!inputs.proxyMode && localDnsEnabled) {
+            ensureLocalDnsPortAvailable(effectiveLocalDnsPort)
+        }
+
+        val protocolOverride = "SOCKS5"
+        val listenIpOverride: String? = null
+        configFile.writeText(
+            ConfigGenerator.generateConfig(
+                profile = runtimeProfile,
+                listenPort = inputs.socksPort,
+                listenIpOverride = listenIpOverride,
+                protocolOverride = protocolOverride,
+                localDnsEnabledOverride = if (inputs.proxyMode) false else null,
+                localDnsPortOverride = if (inputs.proxyMode) null else safeDnsPort
+            )
+        )
+        if (runtimeProfile.resolvers.isNotBlank()) {
+            resolversFile.writeText(ConfigGenerator.generateResolvers(runtimeProfile))
+        } else if (!resolversFile.exists() || resolversFile.readText().isBlank()) {
+            resolversFile.writeText(ConfigGenerator.generateResolvers(runtimeProfile))
+        } else {
+            VpnManager.appendLog("Using existing client_resolvers.txt from app storage")
+        }
+
+        val logFile = File(cacheDir, "vpn.log")
+        if (!logFile.exists()) {
+            logFile.createNewFile()
+        } else {
+            logFile.writeText("")
+        }
+
+        logTailJob?.cancel()
+        logTailJob = serviceScope.launch(Dispatchers.IO) {
+            tailLogFile(logFile)
+        }
+
+        return ConfigPaths(configFile, resolversFile, logFile)
+    }
+
+    private suspend fun launchGoCoreAndWait(configPaths: ConfigPaths) {
+        goClientJob = serviceScope.launch(Dispatchers.IO) {
+            try {
+                mobile.Mobile.startClient(
+                    configPaths.configFile.absolutePath,
+                    configPaths.logFile.absolutePath
+                )
+            } catch (_: CancellationException) {
+                VpnManager.appendLog("Go core stopped (coroutine cancelled)")
+            } catch (e: Exception) {
+                val msg = e.message ?: ""
+                if (!msg.contains("context canceled", ignoreCase = true)) {
+                    Log.e(TAG, "Go core error", e)
+                    VpnManager.appendLog("Go core error: $msg")
+                    runCatching {
+                        VpnManager.setError("Go core error: $msg")
+                    }
+                }
+            }
+        }
+
+        waitForSocksProxyReady(
+            host = "127.0.0.1",
+            port = activeLocalSocksPort,
+            timeoutMs = SOCKS_STARTUP_TIMEOUT_MS
+        )
+        VpnManager.appendLog("SOCKS5 proxy is ready on 127.0.0.1:$activeLocalSocksPort")
+    }
+
+    private fun establishVpnInterface(inputs: ConnectInputs) {
+        val vpnDnsServers = if (inputs.globalSettings.customDnsServers.isNotBlank()) {
+            inputs.globalSettings.customDnsServers
+                .split(",")
+                .map { it.trim() }
+                .filter { it.isNotEmpty() }
+                .also { servers ->
+                    VpnManager.appendLog("Using custom DNS servers: ${servers.joinToString()}")
+                }
+        } else if (inputs.globalSettings.fakeDnsEnabled) {
+            listOf("172.19.0.2").also {
+                VpnManager.appendLog("Using TUN bridge DNS: 172.19.0.2")
+            }
+        } else if (inputs.localDnsEnabled && !inputs.proxyMode) {
+            listOf("10.0.0.2").also {
+                VpnManager.appendLog("Using local DNS via TUN address: 10.0.0.2")
+            }
+        } else {
+            listOf("8.8.8.8")
+        }
+
+        val builder = Builder()
+            .setSession(getString(R.string.app_name))
+            .setMtu(1400)
+            .addAddress(if (inputs.globalSettings.fakeDnsEnabled) "172.19.0.1" else "10.0.0.2", if (inputs.globalSettings.fakeDnsEnabled) 30 else 32)
+            .addRoute("0.0.0.0", 0)
+            .setBlocking(true)
+
+        vpnDnsServers.forEach { builder.addDnsServer(it) }
+        if (inputs.globalSettings.fakeDnsEnabled) {
+            builder.addRoute("198.18.0.0", 16)
+            VpnManager.appendLog("Added fake DNS route: 198.18.0.0/16")
+        }
+
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) {
+            val splitEnabled = inputs.globalSettings.splitTunnelingEnabled &&
+                inputs.globalSettings.splitPackagesCsv.isNotBlank()
+            if (splitEnabled) {
+                val userSelected = inputs.globalSettings.splitPackagesCsv
+                    .split(",")
+                    .map { it.trim() }
+                    .filter { it.isNotEmpty() }
+                    .toSet()
+
+                if (inputs.globalSettings.splitTunnelMode == com.masterdns.vpn.util.SplitTunnelMode.INCLUDE) {
+                    val pm = packageManager
+                    val appCompanions = mutableSetOf<String>()
+
+                    (BASE_COMPANION_PACKAGES + BROWSER_COMPANION_PACKAGES).forEach { pkg ->
+                        if (runCatching { pm.getApplicationInfo(pkg, 0) }.isSuccess) {
+                            appCompanions.add(pkg)
+                        }
+                    }
+
+                    val finalAllowed = userSelected + appCompanions
+
+                    VpnManager.appendLog(
+                        "Split tunnel (Include): ${userSelected.size} apps, " +
+                        "${appCompanions.size} companions"
+                    )
+
+                    finalAllowed.forEach { pkg ->
+                        try {
+                            builder.addAllowedApplication(pkg)
+                        } catch (e: Exception) {
+                            VpnManager.appendLog("Split tunnel skip '$pkg': ${e.message}")
+                        }
+                    }
+                } else {
+                    VpnManager.appendLog("Split tunnel (Exclude): Bypassing ${userSelected.size} apps")
+                    try { builder.addDisallowedApplication(packageName) } catch (e: Exception) {}
+                    userSelected.forEach { pkg ->
+                        try {
+                            builder.addDisallowedApplication(pkg)
+                        } catch (e: Exception) {
+                            VpnManager.appendLog("Split tunnel skip '$pkg': ${e.message}")
+                        }
+                    }
+                }
+            } else {
+                builder.addDisallowedApplication(packageName)
+            }
+        }
+
+        vpnInterface = builder.establish()
+            ?: throw IllegalStateException("VPN interface could not be established. Check VPN permission.")
+
+        VpnManager.appendLog("TUN interface established (fd=${vpnInterface!!.fd})")
+
+        if (inputs.globalSettings.fakeDnsEnabled) {
+            VpnManager.appendLog("Starting DNS-aware TUN bridge...")
+            runCatching {
+                mobile.Mobile.startTunBridge(vpnInterface!!.fd.toLong(), 1400L, "127.0.0.1:${inputs.socksPort}")
+            }.onSuccess {
+                tunBridgeActive = true
+                VpnManager.appendLog("DNS-aware TUN bridge started")
+            }.onFailure { e ->
+                VpnManager.appendLog("DNS-aware TUN bridge failed: ${e.message}")
+                throw IllegalStateException("TUN bridge start failed: ${e.message}", e)
+            }
+        } else {
+            VpnManager.appendLog("Starting tun2socks bridge: TUN fd -> socks5://127.0.0.1:${inputs.socksPort}")
+            runCatching {
+                mobile.Mobile.startTun(vpnInterface!!.fd.toLong(), "127.0.0.1:${inputs.socksPort}")
+            }.onFailure { e ->
+                VpnManager.appendLog("tun2socks bridge failed: ${e.message}")
+                throw IllegalStateException("TUN start failed: ${e.message}", e)
+            }
+        }
+    }
+
+    private fun registerNetworkCallback() {
+        val cm = getSystemService(android.content.Context.CONNECTIVITY_SERVICE) as android.net.ConnectivityManager
+        networkCallback?.let { cm.unregisterNetworkCallback(it) }
+        networkCallback = object : android.net.ConnectivityManager.NetworkCallback() {
+            override fun onAvailable(network: android.net.Network) {
+                val caps = cm.getNetworkCapabilities(network)
+                if (caps == null || caps.hasTransport(android.net.NetworkCapabilities.TRANSPORT_VPN)) return
+                if (isStopping) return
+
+                VpnManager.appendLog("Underlying network changed, updating VPN underlying network...")
+                setUnderlyingNetworks(arrayOf(network))
+            }
+
+            override fun onLost(network: android.net.Network) {
+                if (isStopping) return
+                VpnManager.appendLog("Underlying network lost, resetting VPN underlying network...")
+                setUnderlyingNetworks(null)
+            }
+        }
+        try {
+            val request = android.net.NetworkRequest.Builder()
+                .addCapability(android.net.NetworkCapabilities.NET_CAPABILITY_INTERNET)
+                .build()
+            cm.registerNetworkCallback(request, networkCallback!!)
+        } catch (e: Exception) {
+            VpnManager.appendLog("Failed to register network callback: ${e.message}")
         }
     }
 
