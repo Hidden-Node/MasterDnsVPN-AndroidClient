@@ -95,6 +95,12 @@ android {
             excludes += "/META-INF/{AL2.0,LGPL2.1}"
         }
     }
+
+    testOptions {
+        unitTests {
+            isIncludeAndroidResources = true
+        }
+    }
 }
 
 gradle.taskGraph.whenReady {
@@ -145,6 +151,12 @@ dependencies {
     // Gson for JSON serialization
     implementation("com.google.code.gson:gson:2.11.0")
 
+    // SQLCipher — at-rest encryption for the Room profile DB
+    implementation("net.zetetic:android-database-sqlcipher:4.5.4")
+
+    // EncryptedSharedPreferences — at-rest encryption for sharing credentials
+    implementation("androidx.security:security-crypto:1.1.0-alpha06")
+
     // Debug
     debugImplementation("androidx.compose.ui:ui-tooling")
     debugImplementation("androidx.compose.ui:ui-test-manifest")
@@ -152,6 +164,11 @@ dependencies {
     // JVM unit tests
     testImplementation("junit:junit:4.13.2")
     testImplementation("org.jetbrains.kotlinx:kotlinx-coroutines-test:1.9.0")
+
+    // Robolectric — needed by Step 9's JVM test for PlaintextToSqlCipherMigrator,
+    // which exercises Android framework (Context, SQLiteDatabase, SharedPreferences)
+    // and so cannot be a plain JUnit4 test like GlobalSettingsPortRangeTest.
+    testImplementation("org.robolectric:robolectric:4.13")
 
     // Instrumented tests (configure the runner so connectedAndroidTest doesn't NPE)
     androidTestImplementation("androidx.test:runner:1.6.2")
