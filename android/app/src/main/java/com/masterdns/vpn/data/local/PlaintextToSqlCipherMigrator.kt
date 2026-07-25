@@ -3,7 +3,6 @@ package com.masterdns.vpn.data.local
 import android.content.Context
 import android.util.Log
 import androidx.annotation.VisibleForTesting
-import net.zetetic.database.sqlcipher.SQLiteDatabase as SqlcipherDatabase
 
 /**
  * One-time migrator: copies an existing v1 plaintext `masterdns_vpn.db` into
@@ -13,7 +12,7 @@ import net.zetetic.database.sqlcipher.SQLiteDatabase as SqlcipherDatabase
  * Option A: drive Room codegen first (getInstance + touch writableDatabase),
  * close, then ATTACH the renamed plaintext file and INSERT...SELECT the rows.
  *
- * Never throws - a thrown exception from App.onCreate() crashloops the app.
+ * Never throws - a thrown exception from App.onCreate() crash loops the app.
  * On any failure, sets FLAG_FAILED=true + FLAG_DONE=true (so it never retries
  * automatically) and returns normally; the user must clear app data to retry.
  */
@@ -51,28 +50,22 @@ internal object PlaintextToSqlCipherMigrator {
             return
         }
 
-        // Step 0: Keystore availability pre-check.
-        val passphrase = runCatching { DatabaseEncryptionKey.passphrase(context) }.getOrElse {
+        // Step 0: Keystore availability pre-check. Passphrase is probed for its
+        // throwing side-effect; the value is unused (Room's SupportFactory owns
+        // the actual encryption decision in AppDatabase.wrapWithSqlCipher).
+        runCatching { DatabaseEncryptionKey.passphrase(context) }.getOrElse {
             Log.w(TAG, "keystore unavailable; skipping migration", it)
             flags.edit().putBoolean(KEY_FLAG_DONE, true).commit()
             return
         }
 
         val dbFile = context.getDatabasePath(DB_NAME)
-        // Step 1: Pre-check - only migrate if the file exists AND is plaintext.
+        // Step 1: Pre-check - file exists? plaintext? (byte-header check, no native lib)
         if (!dbFile.exists()) {
             flags.edit().putBoolean(KEY_FLAG_DONE, true).commit()
             return
         }
-        // Detect whether the file is already SQLCipher by trying to open it
-        // with the passphrase. If openOrCreateDatabase succeeds and PRAGMA
-        // cipher_version returns, it's already encrypted - no migration needed.
-        val alreadyEncrypted = runCatching {
-            SqlcipherDatabase.openOrCreateDatabase(dbFile, String(passphrase), null).use { db ->
-                db.execSQL("PRAGMA cipher_version")
-            }
-            true
-        }.getOrElse { false }
+        val alreadyEncrypted = runCatching { isSqlcipherFile(dbFile) }.getOrElse { true }
         if (alreadyEncrypted) {
             flags.edit().putBoolean(KEY_FLAG_DONE, true).commit()
             return
@@ -87,6 +80,7 @@ internal object PlaintextToSqlCipherMigrator {
         val plainWalFile = java.io.File(dbFile.parentFile, "$DB_PLAIN_NAME-wal")
         val plainShmFile = java.io.File(dbFile.parentFile, "$DB_PLAIN_NAME-shm")
 
+        var db: AppDatabase? = null  // visible to catch block
         try {
             if (!dbFile.renameTo(plainFile)) {
                 throw java.io.IOException("rename failed: $dbFile -> $plainFile")
@@ -94,45 +88,53 @@ internal object PlaintextToSqlCipherMigrator {
             if (walFile.exists()) walFile.renameTo(plainWalFile)
             if (shmFile.exists()) shmFile.renameTo(plainShmFile)
 
-            // Step 4: Drive Room codegen on a fresh encrypted file. getInstance
-            // + writableDatabase.execSQL("SELECT 1") forces CREATE TABLE.
-            val db = AppDatabase.getInstance(context)
+            // Step 4: Drive Room codegen on a fresh encrypted file. KEEP THE HANDLE
+            // OPEN through step 7r2 - closing here would force a second SQLCipher
+            // open (and its native-lib dependency) in the r1 sequence.
+            db = AppDatabase.getInstance(context)
             db.openHelper.writableDatabase.execSQL("SELECT 1")
-            AppDatabase.closeForMigration()
 
-            // Step 5: Raw SQLCipher copy.
-            SqlcipherDatabase.openOrCreateDatabase(dbFile, String(passphrase), null).use { cipherDb ->
-                copyFailureInjector?.invoke()  // test seam - throws if set by test
-                val plainPath = plainFile.absolutePath
-                cipherDb.execSQL("ATTACH DATABASE '$plainPath' AS plain_db KEY ''")
+            // Step 5r2: Detect cipher mode on Room's handle (same handle step 4 just
+            // touched - no fresh open). PRAGMA cipher_version returns a row on
+            // SQLCipher and throws on plain SQLite -> isCipher autodetection.
+            val isCipher = runCatching {
+                db.openHelper.writableDatabase.query("PRAGMA cipher_version").use { it.moveToFirst() }
+            }.isSuccess
 
-                // Step 6: Insert + verify row count BEFORE DETACH.
-                cipherDb.execSQL("INSERT INTO main.profiles SELECT * FROM plain_db.profiles")
-                val plainCount = cipherDb.rawQuery("SELECT COUNT(*) FROM plain_db.profiles", null).use {
-                    it.moveToFirst(); it.getInt(0)
-                }
-                val mainCount = cipherDb.rawQuery("SELECT COUNT(*) FROM main.profiles", null).use {
-                    it.moveToFirst(); it.getInt(0)
-                }
-                if (plainCount != mainCount) {
-                    throw IllegalStateException("row count mismatch: plain=$plainCount main=$mainCount")
-                }
-                cipherDb.execSQL("DETACH DATABASE 'plain_db'")
+            // Step 6r2: ATTACH + INSERT + count-verify + DETACH on Room's handle.
+            copyFailureInjector?.invoke()  // test seam - throws if set by test
+            val plainPath = plainFile.absolutePath
+            val attachSql = if (isCipher)
+                "ATTACH DATABASE '$plainPath' AS plain_db KEY ''"
+            else
+                "ATTACH DATABASE '$plainPath' AS plain_db"
+            db.openHelper.writableDatabase.execSQL(attachSql)
+            db.openHelper.writableDatabase.execSQL(
+                "INSERT INTO main.profiles SELECT * FROM plain_db.profiles"
+            )
+            val plainCount = db.openHelper.writableDatabase
+                .query("SELECT COUNT(*) FROM plain_db.profiles").use { it.moveToFirst(); it.getInt(0) }
+            val mainCount = db.openHelper.writableDatabase
+                .query("SELECT COUNT(*) FROM main.profiles").use { it.moveToFirst(); it.getInt(0) }
+            if (plainCount != mainCount) {
+                throw IllegalStateException("row count mismatch: plain=$plainCount main=$mainCount")
             }
+            db.openHelper.writableDatabase.execSQL("DETACH DATABASE 'plain_db'")
 
-            // Step 7: Commit. Delete the plain backup + its wal/shm.
+            // Step 7r2: Commit. Close Room handle, drop singleton, delete backups.
+            db.close()
+            db = null
             plainFile.delete()
             plainWalFile.delete()
             plainShmFile.delete()
             AppDatabase.invalidateInstance()
             flags.edit().putBoolean(KEY_FLAG_DONE, true).commit()
-            Log.i(TAG, "migration complete: copied rows from plaintext to SQLCipher")
+            Log.i(TAG, "migration complete: copied $mainCount rows from plaintext to SQLCipher")
         } catch (t: Throwable) {
-            // Step 8: Rollback. Restore plain file, mark failed.
+            // Step 8r2: Rollback. Never throws out of runIfNeeded.
             Log.e(TAG, "migration failed; rolling back", t)
-            runCatching { SqlcipherDatabase.openOrCreateDatabase(dbFile, String(passphrase), null).close() }
+            runCatching { db?.close() }
             runCatching { AppDatabase.invalidateInstance() }
-            // Restore the plain file if the cipher file exists but plain doesn't.
             if (plainFile.exists() && dbFile.exists()) {
                 dbFile.delete()
                 plainFile.renameTo(dbFile)
@@ -142,5 +144,19 @@ internal object PlaintextToSqlCipherMigrator {
             flags.edit().putBoolean(KEY_FLAG_FAILED, true).putBoolean(KEY_FLAG_DONE, true).commit()
             // DO NOT throw - see class KDoc.
         }
+    }
+
+    /**
+     * Returns true iff [file] starts with the SQLCipher salt (random-looking bytes)
+     * rather than the SQLite plaintext header ("SQLite format 3\0" = 16 bytes).
+     * Pure byte check - no native-lib dependency, runs on host JVM under Robolectric.
+     */
+    private fun isSqlcipherFile(file: java.io.File): Boolean {
+        if (file.length() < 16) return false
+        val header = ByteArray(16)
+        java.io.RandomAccessFile(file, "r").use { it.readFully(header) }
+        val isPlain = String(header, 0, 15, Charsets.US_ASCII) == "SQLite format 3" &&
+            header[15] == 0.toByte()
+        return !isPlain
     }
 }

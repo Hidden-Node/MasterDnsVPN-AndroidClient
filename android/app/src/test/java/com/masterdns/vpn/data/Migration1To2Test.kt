@@ -7,10 +7,6 @@ import androidx.sqlite.db.framework.FrameworkSQLiteOpenHelper
 import androidx.test.core.app.ApplicationProvider
 import com.masterdns.vpn.data.local.Migration1To2
 import org.junit.Assert.assertEquals
-import androidx.sqlite.db.SupportSQLiteOpenHelper
-import androidx.sqlite.db.framework.FrameworkSQLiteOpenHelper
-import androidx.test.core.app.ApplicationProvider
-import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Test
 import org.junit.runner.RunWith
