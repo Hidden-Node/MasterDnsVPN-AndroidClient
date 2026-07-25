@@ -10,6 +10,8 @@ import dagger.hilt.android.HiltAndroidApp
 class App : Application() {
     override fun onCreate() {
         super.onCreate()
+        com.masterdns.vpn.data.local.PlaintextToSqlCipherMigrator.runIfNeeded(this)
+        com.masterdns.vpn.util.SecureCredentialStore.migrateFromDataStoreOnce(this)
         createNotificationChannel()
     }
 
