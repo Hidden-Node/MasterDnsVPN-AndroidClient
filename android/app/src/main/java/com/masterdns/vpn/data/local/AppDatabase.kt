@@ -46,5 +46,16 @@ abstract class AppDatabase : RoomDatabase() {
                 }
             builder.openHelperFactory(SupportFactory(passphrase, null, false))
         }
+
+        internal fun closeForMigration() {
+            INSTANCE?.let { db ->
+                if (db.isOpen) db.close()
+            }
+            INSTANCE = null
+        }
+
+        internal fun invalidateInstance() {
+            INSTANCE = null
+        }
     }
 }
