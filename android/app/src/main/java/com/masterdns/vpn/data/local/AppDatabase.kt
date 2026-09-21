@@ -4,7 +4,6 @@ import android.content.Context
 import androidx.room.Database
 import androidx.room.Room
 import androidx.room.RoomDatabase
-import net.zetetic.database.sqlcipher.SupportFactory
 
 @Database(entities = [ProfileEntity::class], version = 2, exportSchema = false)
 abstract class AppDatabase : RoomDatabase() {
@@ -26,25 +25,11 @@ abstract class AppDatabase : RoomDatabase() {
                 AppDatabase::class.java,
                 "masterdns_vpn.db"
             )
-            wrapWithSqlCipher(context, builder)
+            // If this install still carries an SQLCipher-encrypted DB (plan 011 era),
+            // move it aside; Room cannot open it without the (removed) native library.
+            SqlcipherFileDetector.quarantineEncryptedDb(context, "masterdns_vpn.db")
             builder.addMigrations(Migration1To2)
             return builder.build()
-        }
-
-        /**
-         * Wraps the Room builder with SQLCipher if AndroidKeystore is available.
-         * On any keystore failure, falls back to plaintext so the app still opens.
-         */
-        private fun wrapWithSqlCipher(
-            context: Context,
-            builder: RoomDatabase.Builder<AppDatabase>
-        ) {
-            val passphrase = runCatching { DatabaseEncryptionKey.passphrase(context) }
-                .getOrElse {
-                    android.util.Log.w("AppDatabase", "Keystore unavailable; DB opened in plaintext fallback", it)
-                    return
-                }
-            builder.openHelperFactory(SupportFactory(passphrase, null, false))
         }
 
         internal fun closeForMigration() {

@@ -151,9 +151,6 @@ dependencies {
     // Gson for JSON serialization
     implementation("com.google.code.gson:gson:2.11.0")
 
-    // SQLCipher — at-rest encryption for the Room profile DB
-    implementation("net.zetetic:android-database-sqlcipher:4.5.4")
-
     // EncryptedSharedPreferences — at-rest encryption for sharing credentials
     implementation("androidx.security:security-crypto:1.1.0-alpha06")
 
@@ -165,9 +162,7 @@ dependencies {
     testImplementation("junit:junit:4.13.2")
     testImplementation("org.jetbrains.kotlinx:kotlinx-coroutines-test:1.9.0")
 
-    // Robolectric — needed by Step 9's JVM test for PlaintextToSqlCipherMigrator,
-    // which exercises Android framework (Context, SQLiteDatabase, SharedPreferences)
-    // and so cannot be a plain JUnit4 test like GlobalSettingsPortRangeTest.
+    // Robolectric - JVM tests that need a real SQLite DB (ProfileSelectionTransactionTest, SqlcipherFileDetectorTest)
     testImplementation("org.robolectric:robolectric:4.13")
 
     // Instrumented tests (configure the runner so connectedAndroidTest doesn't NPE)
