@@ -160,9 +160,6 @@ dependencies {
     // Gson for JSON serialization
     implementation("com.google.code.gson:gson:2.11.0")
 
-    // EncryptedSharedPreferences — at-rest encryption for sharing credentials
-    implementation("androidx.security:security-crypto:1.1.0-alpha06")
-
     // Debug
     debugImplementation("androidx.compose.ui:ui-tooling")
     debugImplementation("androidx.compose.ui:ui-test-manifest")
