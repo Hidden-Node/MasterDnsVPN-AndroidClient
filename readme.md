@@ -69,6 +69,10 @@ cd android
 ./gradlew :app:assembleDebug
 ```
 
+Note: the AAR is built from **committed** HEAD (`git archive HEAD` inside the
+script) — commit your Go changes under `mobile/` **before** rebuilding, or
+the AAR silently excludes them.
+
 ### Release Build (local)
 
 Release builds require signing environment variables (see workflow `release-manual.yml` for exact names):
