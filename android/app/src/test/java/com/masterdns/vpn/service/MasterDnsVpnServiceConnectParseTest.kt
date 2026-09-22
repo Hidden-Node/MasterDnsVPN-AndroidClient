@@ -34,12 +34,30 @@ class MasterDnsVpnServiceConnectParseTest {
     }
 
     @Test
-    fun doesNotClampOutOfRangePort() {
-        // Goose's parser has no 1..65535 clamp: toIntOrNull() succeeds, so the
-        // raw value is returned. Reference behavior, not a rejection.
-        val t = parseProxyTarget("CONNECT", "example.com:99999")!!
-        assertEquals("example.com", t.host)
-        assertEquals(99999, t.port)
+    fun rejectsOutOfRangePorts() {
+        // Intentional divergence from Goose (whose parser has no clamp): a
+        // port outside 1..65535 would be truncated to a different port by the
+        // 2-byte SOCKS5 serialization, so the parser must reject it.
+        assertNull(parseProxyTarget("CONNECT", "example.com:99999"))
+    }
+
+    @Test
+    fun rejectsPortZero() {
+        assertNull(parseProxyTarget("CONNECT", "example.com:0"))
+    }
+
+    @Test
+    fun acceptsHighestValidPort() {
+        val t = parseProxyTarget("CONNECT", "example.com:65535")!!
+        assertEquals(65535, t.port)
+    }
+
+    @Test
+    fun absoluteFormRejectsMalformedAndOutOfRangePorts() {
+        assertNull(parseProxyTarget("GET", "http://example.com:99999/x"))
+        assertNull(parseProxyTarget("GET", "http://example.com:99999999999/x"))
+        val t = parseProxyTarget("GET", "http://example.com:8080/x")!!
+        assertEquals(8080, t.port)
     }
 
     @Test

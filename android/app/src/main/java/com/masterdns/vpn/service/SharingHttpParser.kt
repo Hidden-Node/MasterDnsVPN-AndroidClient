@@ -23,6 +23,7 @@ internal fun parseProxyTarget(method: String, target: String): ProxyTarget? {
             if (host.isBlank()) return null
             val rest = target.substring(close + 1)
             val port = if (rest.isEmpty()) 443 else if (rest.startsWith(":")) rest.substring(1).toIntOrNull() ?: return null else return null
+            if (port !in 1..65535) return null
             return ProxyTarget(host, port, "")
         }
         val idx = target.lastIndexOf(':')
@@ -30,6 +31,7 @@ internal fun parseProxyTarget(method: String, target: String): ProxyTarget? {
         val host = target.substring(0, idx)
         val port = target.substring(idx + 1).toIntOrNull() ?: return null
         if (host.isBlank() || host.contains(':')) return null
+        if (port !in 1..65535) return null
         return ProxyTarget(host, port, "")
     }
     // absolute-form: scheme://host[:port]/path — only http accepted; https
@@ -41,7 +43,9 @@ internal fun parseProxyTarget(method: String, target: String): ProxyTarget? {
     if (rawHost.isBlank()) return null
     val host = if (rawHost.startsWith("[") && rawHost.endsWith("]")) rawHost.substring(1, rawHost.length - 1) else rawHost
     if (host.isBlank()) return null
-    val port = m.groupValues[2].toIntOrNull() ?: 80
+    val parsedPort = m.groupValues[2].toIntOrNull()
+    if (m.groupValues[2].isNotEmpty() && (parsedPort == null || parsedPort !in 1..65535)) return null
+    val port = parsedPort ?: 80
     val rawPath = m.groupValues[3].ifEmpty { "/" }
     val path = if (rawPath.startsWith("/")) rawPath else "/$rawPath"
     return ProxyTarget(host, port, path)
