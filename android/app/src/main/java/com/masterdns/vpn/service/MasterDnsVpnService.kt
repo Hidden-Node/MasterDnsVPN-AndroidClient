@@ -88,6 +88,10 @@ class MasterDnsVpnService : VpnService() {
     private var tunBridgeActive = false
     @Volatile
     private var isStopping = false
+
+    // Incremented by every connect; lets a finishing stopVpn detect that a
+    // newer session started during its teardown window.
+    private val sessionGeneration = java.util.concurrent.atomic.AtomicInteger(0)
     @Volatile
     private var socksAuthWarningShown = false
     @Volatile
@@ -167,6 +171,7 @@ class MasterDnsVpnService : VpnService() {
     )
 
     private fun startVpn(profileId: Long) {
+        sessionGeneration.incrementAndGet()
         connectJob?.cancel()
         connectJob = serviceScope.launch {
             try {
@@ -494,6 +499,7 @@ class MasterDnsVpnService : VpnService() {
     }
 
     private fun stopVpn() {
+        val genAtStop = sessionGeneration.get()
         if (isStopping) return
         isStopping = true
 
@@ -571,13 +577,19 @@ class MasterDnsVpnService : VpnService() {
 
                 // Delay to allow UI to update before stopping service
                 delay(500L)
-                runCatching { stopSelf() }
+                // If a new connect arrived during this teardown window, the
+                // service belongs to the newer session now — do not stop it.
+                if (sessionGeneration.get() == genAtStop) {
+                    runCatching { stopSelf() }
+                } else {
+                    VpnManager.appendLog("New session started during teardown; deferring service stop")
+                }
             } catch (e: Exception) {
                 Log.e(TAG, "Error in stopVpn", e)
                 // Ensure state is updated even on error so UI doesn't stay stuck
                 VpnManager.updateState(VpnManager.VpnState.DISCONNECTED)
                 VpnManager.stopTrafficMonitor()
-                runCatching { stopSelf() }
+                if (sessionGeneration.get() == genAtStop) runCatching { stopSelf() }
             } finally {
                 // plan 014: reset synchronously so connect() doesn't race stopSelf()
                 isStopping = false
