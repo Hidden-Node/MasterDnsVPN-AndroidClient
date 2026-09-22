@@ -6,24 +6,19 @@ import org.junit.Test
 class GlobalSettingsPortRangeTest {
     @Test
     fun clampsBelow1025UpToFloor() {
-        val settings = GlobalSettings(internetSharingSocksPort = 80, internetSharingHttpPort = 443)
-        val socks = settings.internetSharingSocksPort.coerceIn(1025, 65535)
-        val http = settings.internetSharingHttpPort.coerceIn(1025, 65535)
-        assertEquals(1025, socks)
-        assertEquals(1025, http)
+        assertEquals(1025, GlobalSettingsStore.coerceSharingPort(80))
+        assertEquals(1025, GlobalSettingsStore.coerceSharingPort(443))
+        assertEquals(1025, GlobalSettingsStore.coerceSharingPort(1024))
     }
 
     @Test
     fun clampsAbove65535DownToCeiling() {
-        val settings = GlobalSettings(internetSharingSocksPort = 99999)
-        val socks = settings.internetSharingSocksPort.coerceIn(1025, 65535)
-        assertEquals(65535, socks)
+        assertEquals(65535, GlobalSettingsStore.coerceSharingPort(99999))
     }
 
     @Test
     fun preservesValidPort() {
-        val settings = GlobalSettings(internetSharingSocksPort = 8090, internetSharingHttpPort = 18000)
-        assertEquals(8090, settings.internetSharingSocksPort.coerceIn(1025, 65535))
-        assertEquals(18000, settings.internetSharingHttpPort.coerceIn(1025, 65535))
+        assertEquals(8090, GlobalSettingsStore.coerceSharingPort(8090))
+        assertEquals(18000, GlobalSettingsStore.coerceSharingPort(18000))
     }
 }

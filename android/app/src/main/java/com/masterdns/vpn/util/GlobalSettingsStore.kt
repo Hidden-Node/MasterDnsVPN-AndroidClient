@@ -73,6 +73,9 @@ object GlobalSettingsStore {
     internal suspend fun snapshot(context: Context): androidx.datastore.preferences.core.Preferences =
         context.dataStore.data.first()
 
+    // Shared-port floor: Android non-root processes cannot bind < 1025.
+    internal fun coerceSharingPort(port: Int): Int = port.coerceIn(1025, 65535)
+
     suspend fun save(context: Context, settings: GlobalSettings) {
         context.dataStore.edit { prefs ->
             prefs[KEY_CONNECTION_MODE] = settings.connectionMode
@@ -83,8 +86,8 @@ object GlobalSettingsStore {
             prefs[KEY_CUSTOM_DNS_SERVERS] = settings.customDnsServers
             prefs[KEY_FAKE_DNS_ENABLED] = settings.fakeDnsEnabled
             prefs[KEY_INTERNET_SHARING_ENABLED] = settings.internetSharingEnabled
-            prefs[KEY_INTERNET_SHARING_SOCKS_PORT] = settings.internetSharingSocksPort.coerceIn(1025, 65535)
-            prefs[KEY_INTERNET_SHARING_HTTP_PORT] = settings.internetSharingHttpPort.coerceIn(1025, 65535)
+            prefs[KEY_INTERNET_SHARING_SOCKS_PORT] = coerceSharingPort(settings.internetSharingSocksPort)
+            prefs[KEY_INTERNET_SHARING_HTTP_PORT] = coerceSharingPort(settings.internetSharingHttpPort)
         }
         SecureCredentialStore.setUser(context, settings.internetSharingUser)
         SecureCredentialStore.setPass(context, settings.internetSharingPass)
