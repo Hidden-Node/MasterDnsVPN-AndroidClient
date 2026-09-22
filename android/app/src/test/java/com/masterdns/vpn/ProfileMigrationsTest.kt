@@ -1,4 +1,4 @@
-﻿package com.masterdns.vpn
+package com.masterdns.vpn
 
 import android.content.Context
 import androidx.room.migration.Migration

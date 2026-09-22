@@ -105,11 +105,6 @@ android {
     ksp {
         arg("room.schemaLocation", "$projectDir/schemas")
     }
-
-    sourceSets {
-        // MigrationTestHelper loads Room schema JSONs from androidTest assets.
-        getByName("androidTest").assets.srcDir("$projectDir/schemas")
-    }
 }
 
 gradle.taskGraph.whenReady {
