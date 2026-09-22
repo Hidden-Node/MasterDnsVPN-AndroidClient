@@ -73,6 +73,11 @@ class MasterDnsVpnService : VpnService() {
     private var sharingSocksServer: java.net.ServerSocket? = null
     private var sharingHttpServer: java.net.ServerSocket? = null
     private val sharingConnections = java.util.Collections.synchronizedSet(mutableSetOf<java.net.Socket>())
+    // ponytail: cap of 64 concurrent sharing clients; a phone proxy serves a
+    // LAN, not the internet. Ceiling reached = accept loop suspends (backlog
+    // fills, clients time out) — upgrade path is an explicit error reply per
+    // protocol instead of backpressure.
+    private val sharingPermits = kotlinx.coroutines.sync.Semaphore(permits = 64)
     private val sharingStartStopMutex = kotlinx.coroutines.sync.Mutex()
     private val sharingGeneration = java.util.concurrent.atomic.AtomicInteger(0)
     private var logTailJob: Job? = null
@@ -918,11 +923,13 @@ class MasterDnsVpnService : VpnService() {
                     while (isActive) {
                         val client = server.accept()
                         if (!isActive) { runCatching { client.close() }; break }
+                        sharingPermits.acquire()
                         launch(Dispatchers.IO) {
                             sharingConnections.add(client)
                             try {
                                 handleSharingSocksClient(client, coreSocksPort, username, password)
                             } finally {
+                                sharingPermits.release()
                                 sharingConnections.remove(client)
                             }
                         }
@@ -949,11 +956,13 @@ class MasterDnsVpnService : VpnService() {
                     while (isActive) {
                         val client = server.accept()
                         if (!isActive) { runCatching { client.close() }; break }
+                        sharingPermits.acquire()
                         launch(Dispatchers.IO) {
                             sharingConnections.add(client)
                             try {
                                 handleHttpProxyClient(client, coreSocksPort, username, password)
                             } finally {
+                                sharingPermits.release()
                                 sharingConnections.remove(client)
                             }
                         }
