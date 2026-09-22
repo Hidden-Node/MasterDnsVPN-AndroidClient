@@ -175,19 +175,32 @@ func (p *FakeDNSProxy) handleConnection(conn net.Conn) {
 		bndAddr = make([]byte, 4)
 	} else if replyHeader[3] == 3 {
 		l := make([]byte, 1)
-		io.ReadFull(realConn, l)
-		bndAddr = make([]byte, l[0])
-		bndAddr = append(l, bndAddr...)
+		if _, err := io.ReadFull(realConn, l); err != nil {
+			return
+		}
+		dom := make([]byte, l[0])
+		if _, err := io.ReadFull(realConn, dom); err != nil {
+			return
+		}
+		bndAddr = append(l, dom...)
 	} else if replyHeader[3] == 4 {
 		bndAddr = make([]byte, 16)
 	}
 	if len(bndAddr) > 0 {
-		io.ReadFull(realConn, bndAddr)
+		// ATYP=3 already populated bndAddr above (length+domain); reading
+		// again here would consume the port bytes and desync the framing.
+		if replyHeader[3] != 3 {
+			if _, err := io.ReadFull(realConn, bndAddr); err != nil {
+				return
+			}
+		}
 		conn.Write(bndAddr)
 	}
 
 	bndPort := make([]byte, 2)
-	io.ReadFull(realConn, bndPort)
+	if _, err := io.ReadFull(realConn, bndPort); err != nil {
+		return
+	}
 	conn.Write(bndPort)
 
 	go io.Copy(realConn, conn)
