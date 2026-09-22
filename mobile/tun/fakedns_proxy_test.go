@@ -2,9 +2,11 @@ package tun
 
 import (
 	"encoding/binary"
+	"io"
 	"net"
 	"strings"
 	"testing"
+	"time"
 )
 
 // helper: build a DNS query for a hostname like "example.com"
@@ -237,5 +239,91 @@ func TestHandleUDPResponseBuildDoesNotReuseReceiveBuffer(t *testing.T) {
 		if buf[headerOffset+i] != b {
 			t.Fatalf("iter2: buf[%d] = 0x%02X, fix aliases buf (want 0x%02X)", headerOffset+i, buf[headerOffset+i], b)
 		}
+	}
+}
+
+func TestTCPRelayForwardsDomainTypedReplyIntact(t *testing.T) {
+	upstream, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatalf("upstream listen: %v", err)
+	}
+	defer upstream.Close()
+
+	go func() {
+		c, err := upstream.Accept()
+		if err != nil {
+			return
+		}
+		defer c.Close()
+		greeting := make([]byte, 3)
+		io.ReadFull(c, greeting)
+		c.Write([]byte{5, 0})
+		req := make([]byte, 10)
+		io.ReadFull(c, req)
+		// Domain-typed bind reply: 05 00 00 03 0B "example.com" 1F 90
+		c.Write(append([]byte{5, 0, 0, 3, 11}, append([]byte("example.com"), 0x1F, 0x90)...))
+		// Daemon-style: block until the test closes the stub.
+		buf := make([]byte, 512)
+		for {
+			if _, err := c.Read(buf); err != nil {
+				return
+			}
+		}
+	}()
+
+	// plan 028 override: production always passes a real mapper (tun_api.go), so the test must too — nil would panic at fakedns_proxy.go:130.
+	dnsMap := NewDNSMapper()
+	proxy := NewFakeDNSProxy(upstream.Addr().String(), dnsMap)
+	addr, err := proxy.Start()
+	if err != nil {
+		t.Fatalf("proxy.Start: %v", err)
+	}
+	defer proxy.Stop()
+
+	c, err := net.Dial("tcp", addr)
+	if err != nil {
+		t.Fatalf("dial proxy: %v", err)
+	}
+	defer c.Close()
+	_ = c.SetDeadline(time.Now().Add(5 * time.Second))
+
+	if _, err := c.Write([]byte{5, 1, 0}); err != nil {
+		t.Fatalf("write greeting: %v", err)
+	}
+	auth := make([]byte, 2)
+	if _, err := io.ReadFull(c, auth); err != nil {
+		t.Fatalf("read auth: %v", err)
+	}
+	if _, err := c.Write([]byte{5, 1, 0, 1, 8, 8, 8, 8, 0x1F, 0x90}); err != nil {
+		t.Fatalf("write request: %v", err)
+	}
+
+	reply := make([]byte, 4)
+	if _, err := io.ReadFull(c, reply); err != nil {
+		t.Fatalf("read reply header: %v", err)
+	}
+	if reply[3] != 3 {
+		t.Fatalf("reply ATYP = %d, want 3", reply[3])
+	}
+	l := make([]byte, 1)
+	if _, err := io.ReadFull(c, l); err != nil {
+		t.Fatalf("read length byte: %v", err)
+	}
+	if l[0] != 11 {
+		t.Fatalf("domain length byte = %d, want 11 (buggy code returns 'e'=101)", l[0])
+	}
+	dom := make([]byte, 11)
+	if _, err := io.ReadFull(c, dom); err != nil {
+		t.Fatalf("read domain: %v", err)
+	}
+	if string(dom) != "example.com" {
+		t.Fatalf("domain = %q, want example.com", dom)
+	}
+	port := make([]byte, 2)
+	if _, err := io.ReadFull(c, port); err != nil {
+		t.Fatalf("read port: %v", err)
+	}
+	if port[0] != 0x1F || port[1] != 0x90 {
+		t.Fatalf("port bytes = %02X %02X, want 1F 90", port[0], port[1])
 	}
 }
