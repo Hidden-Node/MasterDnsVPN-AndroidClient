@@ -904,73 +904,77 @@ class MasterDnsVpnService : VpnService() {
                 )
             }
             val authEnabled = !userBlank && !passBlank
+            if (socksPort == httpPort) {
+                throw IllegalStateException(
+                    "SOCKS5 and HTTP sharing ports must differ. Change one in Settings."
+                )
+            }
             ensureSharingPortFree(socksPort, coreSocksPort)
             ensureSharingPortFree(httpPort, coreSocksPort)
 
             val myGeneration = sharingGeneration.get()
+
+            val socksServer = java.net.ServerSocket().apply {
+                reuseAddress = true
+                bind(InetSocketAddress(InetAddress.getByName("0.0.0.0"), socksPort), 50)
+            }
+            val httpServer = try {
+                java.net.ServerSocket().apply {
+                    reuseAddress = true
+                    bind(InetSocketAddress(InetAddress.getByName("0.0.0.0"), httpPort), 50)
+                }
+            } catch (e: Exception) {
+                runCatching { socksServer.close() }
+                throw e
+            }
+            // A stop raced the synchronous binds: bail with both closed.
+            if (sharingGeneration.get() != myGeneration) {
+                runCatching { socksServer.close() }
+                runCatching { httpServer.close() }
+                return
+            }
+            sharingSocksServer = socksServer
+            sharingHttpServer = httpServer
+            VpnManager.appendLog(
+                "Sharing SOCKS5 proxy ready on 0.0.0.0:$socksPort" +
+                    if (authEnabled) " (auth enabled)" else " (open, no auth)"
+            )
+            VpnManager.appendLog(
+                "HTTP proxy ready on 0.0.0.0:$httpPort" +
+                    if (authEnabled) " (auth enabled)" else " (open, no auth)"
+            )
+
             sharingSocksJob = serviceScope.launch {
-                try {
-                    val server = java.net.ServerSocket().apply {
-                        reuseAddress = true
-                        bind(InetSocketAddress(InetAddress.getByName("0.0.0.0"), socksPort), 50)
-                    }
-                    if (sharingGeneration.get() != myGeneration) { runCatching { server.close() }; return@launch }
-                    sharingSocksServer = server
-                    VpnManager.appendLog(
-                        "Sharing SOCKS5 proxy ready on 0.0.0.0:$socksPort" +
-                            if (authEnabled) " (auth enabled)" else " (open, no auth)"
-                    )
-                    while (isActive) {
-                        val client = server.accept()
-                        if (!isActive) { runCatching { client.close() }; break }
-                        sharingPermits.acquire()
-                        launch(Dispatchers.IO) {
-                            sharingConnections.add(client)
-                            try {
-                                handleSharingSocksClient(client, coreSocksPort, username, password)
-                            } finally {
-                                sharingPermits.release()
-                                sharingConnections.remove(client)
-                            }
+                while (isActive) {
+                    val client = socksServer.accept()
+                    if (!isActive) { runCatching { client.close() }; break }
+                    sharingPermits.acquire()
+                    launch(Dispatchers.IO) {
+                        sharingConnections.add(client)
+                        try {
+                            handleSharingSocksClient(client, coreSocksPort, username, password)
+                        } finally {
+                            sharingPermits.release()
+                            sharingConnections.remove(client)
                         }
                     }
-                } catch (e: Exception) {
-                    if (e is CancellationException) throw e
-                    Log.e(TAG, "Sharing SOCKS5 proxy error", e)
-                    VpnManager.appendLog("Sharing SOCKS5 proxy error: ${e.message}")
                 }
             }
 
             sharingHttpJob = serviceScope.launch {
-                try {
-                    val server = java.net.ServerSocket().apply {
-                        reuseAddress = true
-                        bind(InetSocketAddress(InetAddress.getByName("0.0.0.0"), httpPort), 50)
-                    }
-                    if (sharingGeneration.get() != myGeneration) { runCatching { server.close() }; return@launch }
-                    sharingHttpServer = server
-                    VpnManager.appendLog(
-                        "HTTP proxy ready on 0.0.0.0:$httpPort" +
-                            if (authEnabled) " (auth enabled)" else " (open, no auth)"
-                    )
-                    while (isActive) {
-                        val client = server.accept()
-                        if (!isActive) { runCatching { client.close() }; break }
-                        sharingPermits.acquire()
-                        launch(Dispatchers.IO) {
-                            sharingConnections.add(client)
-                            try {
-                                handleHttpProxyClient(client, coreSocksPort, username, password)
-                            } finally {
-                                sharingPermits.release()
-                                sharingConnections.remove(client)
-                            }
+                while (isActive) {
+                    val client = httpServer.accept()
+                    if (!isActive) { runCatching { client.close() }; break }
+                    sharingPermits.acquire()
+                    launch(Dispatchers.IO) {
+                        sharingConnections.add(client)
+                        try {
+                            handleHttpProxyClient(client, coreSocksPort, username, password)
+                        } finally {
+                            sharingPermits.release()
+                            sharingConnections.remove(client)
                         }
                     }
-                } catch (e: Exception) {
-                    if (e is CancellationException) throw e
-                    Log.e(TAG, "HTTP proxy error", e)
-                    VpnManager.appendLog("HTTP proxy error: ${e.message}")
                 }
             }
         }
