@@ -945,36 +945,66 @@ class MasterDnsVpnService : VpnService() {
             )
 
             sharingSocksJob = serviceScope.launch {
-                while (isActive) {
-                    val client = socksServer.accept()
-                    if (!isActive) { runCatching { client.close() }; break }
-                    sharingPermits.acquire()
-                    launch(Dispatchers.IO) {
-                        sharingConnections.add(client)
-                        try {
-                            SharingServer.handleSocksClient(client, coreSocksPort, username, password)
-                        } finally {
+                try {
+                    while (isActive) {
+                        val client = socksServer.accept()
+                        if (!isActive) { runCatching { client.close() }; break }
+                        sharingPermits.acquire()
+                        if (!isActive) {
+                            // A stop raced a freshly-acquired permit: release
+                            // it and bail before launching a child whose body
+                            // (and finally) would never run.
                             sharingPermits.release()
-                            sharingConnections.remove(client)
+                            runCatching { client.close() }
+                            break
+                        }
+                        launch(Dispatchers.IO) {
+                            sharingConnections.add(client)
+                            try {
+                                SharingServer.handleSocksClient(client, coreSocksPort, username, password)
+                            } finally {
+                                sharingPermits.release()
+                                sharingConnections.remove(client)
+                            }
                         }
                     }
+                } catch (e: CancellationException) {
+                    throw e
+                } catch (e: Exception) {
+                    Log.e(TAG, "Sharing SOCKS5 accept error", e)
+                    VpnManager.appendLog("Sharing SOCKS5 accept error: ${e.message}")
                 }
             }
 
             sharingHttpJob = serviceScope.launch {
-                while (isActive) {
-                    val client = httpServer.accept()
-                    if (!isActive) { runCatching { client.close() }; break }
-                    sharingPermits.acquire()
-                    launch(Dispatchers.IO) {
-                        sharingConnections.add(client)
-                        try {
-                            SharingServer.handleHttpClient(client, coreSocksPort, username, password)
-                        } finally {
+                try {
+                    while (isActive) {
+                        val client = httpServer.accept()
+                        if (!isActive) { runCatching { client.close() }; break }
+                        sharingPermits.acquire()
+                        if (!isActive) {
+                            // A stop raced a freshly-acquired permit: release
+                            // it and bail before launching a child whose body
+                            // (and finally) would never run.
                             sharingPermits.release()
-                            sharingConnections.remove(client)
+                            runCatching { client.close() }
+                            break
+                        }
+                        launch(Dispatchers.IO) {
+                            sharingConnections.add(client)
+                            try {
+                                SharingServer.handleHttpClient(client, coreSocksPort, username, password)
+                            } finally {
+                                sharingPermits.release()
+                                sharingConnections.remove(client)
+                            }
                         }
                     }
+                } catch (e: CancellationException) {
+                    throw e
+                } catch (e: Exception) {
+                    Log.e(TAG, "Sharing HTTP accept error", e)
+                    VpnManager.appendLog("Sharing HTTP accept error: ${e.message}")
                 }
             }
         }
