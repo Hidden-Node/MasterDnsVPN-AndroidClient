@@ -4,6 +4,7 @@ import android.content.Context
 import androidx.test.core.app.ApplicationProvider
 import java.io.File
 import org.junit.Assert.assertFalse
+import org.junit.Assert.assertTrue
 import org.junit.Test
 import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
@@ -21,9 +22,12 @@ class LegacyCredentialCleanupTest {
         context.getSharedPreferences("masterdns_migration", Context.MODE_PRIVATE)
             .edit().putBoolean("credentials_migrated_v1", true).commit()
 
+        val dir = File(context.applicationInfo.dataDir, "shared_prefs")
+        assertTrue(File(dir, "masterdns_credentials.xml").exists())
+        assertTrue(File(dir, "masterdns_migration.xml").exists())
+
         cleanLegacyCredentialFiles(context)
 
-        val dir = File(context.applicationInfo.dataDir, "shared_prefs")
         assertFalse(File(dir, "masterdns_credentials.xml").exists())
         assertFalse(File(dir, "masterdns_migration.xml").exists())
     }
