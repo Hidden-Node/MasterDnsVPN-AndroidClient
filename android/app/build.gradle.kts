@@ -170,7 +170,7 @@ dependencies {
     testImplementation("androidx.test:core:1.6.1")
     testImplementation("org.jetbrains.kotlinx:kotlinx-coroutines-test:1.9.0")
 
-    // Robolectric - JVM tests that need a real SQLite DB (ProfileSelectionTransactionTest, SqlcipherFileDetectorTest)
+    // Robolectric - JVM tests that need a real SQLite DB (ProfileMigrationsTest, ProfileSelectionTransactionTest, Migration1To2Test)
     testImplementation("org.robolectric:robolectric:4.13")
 
     // Instrumented tests (configure the runner so connectedAndroidTest doesn't NPE)

@@ -50,9 +50,6 @@ abstract class AppDatabase : RoomDatabase() {
                 AppDatabase::class.java,
                 "masterdns_vpn.db"
             )
-            // If this install still carries an SQLCipher-encrypted DB (plan 011 era),
-            // move it aside; Room cannot open it without the (removed) native library.
-            SqlcipherFileDetector.quarantineEncryptedDb(context, "masterdns_vpn.db")
             builder.addMigrations(*ProfileMigrations.ALL)
             // Downgrading the app (e.g. rolling back an update) would
             // otherwise crash on every launch; profiles are cheap to
