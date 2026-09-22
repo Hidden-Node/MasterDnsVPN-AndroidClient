@@ -949,7 +949,12 @@ class MasterDnsVpnService : VpnService() {
                     while (isActive) {
                         val client = socksServer.accept()
                         if (!isActive) { runCatching { client.close() }; break }
-                        sharingPermits.acquire()
+                        try {
+                            sharingPermits.acquire()
+                        } catch (e: CancellationException) {
+                            runCatching { client.close() }
+                            throw e
+                        }
                         if (!isActive) {
                             // A stop raced a freshly-acquired permit: release
                             // it and bail before launching a child whose body
@@ -981,7 +986,12 @@ class MasterDnsVpnService : VpnService() {
                     while (isActive) {
                         val client = httpServer.accept()
                         if (!isActive) { runCatching { client.close() }; break }
-                        sharingPermits.acquire()
+                        try {
+                            sharingPermits.acquire()
+                        } catch (e: CancellationException) {
+                            runCatching { client.close() }
+                            throw e
+                        }
                         if (!isActive) {
                             // A stop raced a freshly-acquired permit: release
                             // it and bail before launching a child whose body
