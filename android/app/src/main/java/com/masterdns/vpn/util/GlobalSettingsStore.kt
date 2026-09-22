@@ -9,7 +9,7 @@ import androidx.datastore.preferences.core.stringPreferencesKey
 import androidx.datastore.preferences.preferencesDataStore
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.first
-import kotlinx.coroutines.flow.flow
+import kotlinx.coroutines.flow.map
 
 enum class SplitTunnelMode { INCLUDE, EXCLUDE }
 
@@ -41,32 +41,15 @@ object GlobalSettingsStore {
     private val KEY_INTERNET_SHARING_ENABLED = booleanPreferencesKey("internet_sharing_enabled")
     private val KEY_INTERNET_SHARING_SOCKS_PORT = intPreferencesKey("internet_sharing_socks_port_v2")
     private val KEY_INTERNET_SHARING_HTTP_PORT = intPreferencesKey("internet_sharing_http_port_v2")
+    private val KEY_INTERNET_SHARING_USER = stringPreferencesKey("internet_sharing_user")
+    private val KEY_INTERNET_SHARING_PASS = stringPreferencesKey("internet_sharing_pass")
 
     fun observe(context: Context): Flow<GlobalSettings> {
-        return flow {
-            val prefs = context.dataStore.data.first()
-            val model = prefs.toModel().copy(
-                internetSharingUser = SecureCredentialStore.getUser(context),
-                internetSharingPass = SecureCredentialStore.getPass(context)
-            )
-            emit(model)
-            context.dataStore.data.collect { updated ->
-                emit(
-                    updated.toModel().copy(
-                        internetSharingUser = SecureCredentialStore.getUser(context),
-                        internetSharingPass = SecureCredentialStore.getPass(context)
-                    )
-                )
-            }
-        }
+        return context.dataStore.data.map { prefs -> prefs.toModel() }
     }
 
     suspend fun load(context: Context): GlobalSettings {
-        val prefs = context.dataStore.data.first()
-        return prefs.toModel().copy(
-            internetSharingUser = SecureCredentialStore.getUser(context),
-            internetSharingPass = SecureCredentialStore.getPass(context)
-        )
+        return context.dataStore.data.first().toModel()
     }
 
     @androidx.annotation.VisibleForTesting
@@ -85,9 +68,9 @@ object GlobalSettingsStore {
             prefs[KEY_INTERNET_SHARING_ENABLED] = settings.internetSharingEnabled
             prefs[KEY_INTERNET_SHARING_SOCKS_PORT] = settings.internetSharingSocksPort.coerceIn(1025, 65535)
             prefs[KEY_INTERNET_SHARING_HTTP_PORT] = settings.internetSharingHttpPort.coerceIn(1025, 65535)
+            prefs[KEY_INTERNET_SHARING_USER] = settings.internetSharingUser
+            prefs[KEY_INTERNET_SHARING_PASS] = settings.internetSharingPass
         }
-        SecureCredentialStore.setUser(context, settings.internetSharingUser)
-        SecureCredentialStore.setPass(context, settings.internetSharingPass)
     }
 
     private fun Preferences.toModel(): GlobalSettings {
@@ -102,8 +85,8 @@ object GlobalSettingsStore {
             internetSharingEnabled = this[KEY_INTERNET_SHARING_ENABLED] ?: false,
             internetSharingSocksPort = this[KEY_INTERNET_SHARING_SOCKS_PORT] ?: 8090,
             internetSharingHttpPort = this[KEY_INTERNET_SHARING_HTTP_PORT] ?: 8091,
-            internetSharingUser = "",
-            internetSharingPass = ""
+            internetSharingUser = this[KEY_INTERNET_SHARING_USER] ?: "",
+            internetSharingPass = this[KEY_INTERNET_SHARING_PASS] ?: ""
         )
     }
 }
