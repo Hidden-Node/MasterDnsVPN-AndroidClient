@@ -128,15 +128,6 @@ object ProfileMigrations {
             add("profiles", gson.toJsonTree(rows))
         }
 
-    private fun existingColumns(db: SupportSQLiteDatabase): Set<String> {
-        val columns = mutableSetOf<String>()
-        db.query("PRAGMA table_info(profiles)").use { c ->
-            val nameIdx = c.getColumnIndex("name")
-            while (c.moveToNext()) columns.add(c.getString(nameIdx))
-        }
-        return columns
-    }
-
     // v1 -> v2: storage-layer bump (SQLCipher removal, plan 025). No columns
     // changed; existing v1 installs keep their migration path.
     val MIGRATION_1_2 = object : Migration(1, 2) {

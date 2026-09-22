@@ -7,6 +7,7 @@ import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Test
 import org.junit.runner.RunWith
+import org.junit.After
 import org.robolectric.RobolectricTestRunner
 import org.robolectric.annotation.Config
 import java.io.File
@@ -15,6 +16,12 @@ import java.io.File
 @Config(sdk = [33])
 class SqlcipherFileDetectorTest {
     private val context: Context get() = ApplicationProvider.getApplicationContext()
+
+    @After
+    fun cleanUpQuarantinedFiles() {
+        val parent = context.getDatabasePath("masterdns_vpn.db").parentFile
+        parent.listFiles { f -> f.name.contains(".encrypted.") }?.forEach { it.delete() }
+    }
 
     private fun tempDbDir(): File {
         val dir = File(context.cacheDir, "sqlcipher-detector-${System.nanoTime()}")

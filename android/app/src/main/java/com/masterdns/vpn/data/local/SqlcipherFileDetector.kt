@@ -17,7 +17,15 @@ internal object SqlcipherFileDetector {
     fun isSqlcipherFile(file: File): Boolean {
         if (!file.exists() || file.length() < 16) return false
         val header = ByteArray(16)
-        file.inputStream().use { readFully(it, header) }
+        // Fail safe: a file that disappears or truncates mid-read is treated
+        // as unknown (not cipher) so the detector can never crash startup.
+        val ok = runCatching {
+            file.inputStream().use { readFully(it, header) }
+        }.isSuccess
+        if (!ok) {
+            Log.w(TAG, "Could not read db header; treating as plaintext")
+            return false
+        }
         return !header.contentEquals(SQLITE_MAGIC)
     }
 
@@ -27,12 +35,19 @@ internal object SqlcipherFileDetector {
         if (!isSqlcipherFile(main)) return false
         val stamp = System.currentTimeMillis()
         val parent = main.parentFile
-        main.renameTo(File(parent, "$name.encrypted.$stamp.bak"))
+        // Fail closed: only report success if the main file actually moved,
+        // otherwise Room would still open the encrypted file and crash-loop.
+        if (!main.renameTo(File(parent, "$name.encrypted.$stamp.bak"))) {
+            Log.e(TAG, "Could not quarantine encrypted db; leaving it in place")
+            return false
+        }
         // Sidecars belong to the old (encrypted) connection; move them too so
         // the fresh plaintext DB starts clean.
         listOf("$name-wal", "$name-shm", "$name-journal").forEach { side ->
             val f = File(parent, side)
-            if (f.exists()) f.renameTo(File(parent, "$side.encrypted.$stamp.bak"))
+            if (f.exists() && !f.renameTo(File(parent, "$side.encrypted.$stamp.bak"))) {
+                Log.w(TAG, "Could not quarantine sidecar $side")
+            }
         }
         Log.w(TAG, "Encrypted DB quarantined as *.encrypted.$stamp.bak; starting a fresh plaintext DB")
         return true

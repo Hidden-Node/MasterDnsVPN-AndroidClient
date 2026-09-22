@@ -921,7 +921,7 @@ class MasterDnsVpnService : VpnService() {
                         launch(Dispatchers.IO) {
                             sharingConnections.add(client)
                             try {
-                                handleSharingSocksClient(client, username, password)
+                                handleSharingSocksClient(client, coreSocksPort, username, password)
                             } finally {
                                 sharingConnections.remove(client)
                             }
@@ -1001,7 +1001,7 @@ class MasterDnsVpnService : VpnService() {
         )
     }
 
-    private suspend fun handleSharingSocksClient(client: java.net.Socket, username: String, password: String) {
+    private suspend fun handleSharingSocksClient(client: java.net.Socket, coreSocksPort: Int, username: String, password: String) {
         var upstream: java.net.Socket? = null
         try {
             client.soTimeout = 15000
@@ -1061,7 +1061,7 @@ class MasterDnsVpnService : VpnService() {
             val portBytes = ByteArray(2); readFully(input, portBytes, 0, 2)
             val port = ((portBytes[0].toInt() and 0xFF) shl 8) or (portBytes[1].toInt() and 0xFF)
 
-            upstream = try { createSocks5Tunnel(activeLocalSocksPort, host, port) } catch (e: Exception) {
+            upstream = try { createSocks5Tunnel(coreSocksPort, host, port) } catch (e: Exception) {
                 VpnManager.appendLog("Sharing SOCKS5 upstream to $host:$port failed: ${e.message}")
                 output.write(byteArrayOf(0x05, 0x01, 0x00, 0x01, 0, 0, 0, 0, 0, 0)); output.flush()
                 return
