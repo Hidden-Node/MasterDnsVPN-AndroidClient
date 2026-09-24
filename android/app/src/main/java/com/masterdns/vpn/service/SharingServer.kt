@@ -211,39 +211,34 @@ internal object SharingServer {
         }
     }
 
+    private suspend fun kotlinx.coroutines.CoroutineScope.pump(
+        source: java.net.Socket,
+        dest: java.net.Socket,
+        shutdownTarget: java.net.Socket
+    ) {
+        val buffer = ByteArray(8192)
+        try {
+            val input = source.getInputStream()
+            val output = dest.getOutputStream()
+            while (isActive && !source.isClosed && !dest.isClosed) {
+                val read = input.read(buffer)
+                if (read <= 0) break
+                output.write(buffer, 0, read)
+                output.flush()
+            }
+        } catch (_: Exception) {
+        } finally {
+            runCatching { shutdownTarget.shutdownOutput() }
+        }
+    }
+
     suspend fun bridgeBidirectional(client: java.net.Socket, upstream: java.net.Socket) = coroutineScope {
         val upToClient = launch(Dispatchers.IO) {
-            val buffer = ByteArray(8192)
-            try {
-                val input = upstream.getInputStream()
-                val output = client.getOutputStream()
-                while (isActive && !client.isClosed && !upstream.isClosed) {
-                    val read = input.read(buffer)
-                    if (read <= 0) break
-                    output.write(buffer, 0, read)
-                    output.flush()
-                }
-            } catch (_: Exception) {
-            } finally {
-                runCatching { client.shutdownOutput() }
-            }
+            pump(upstream, client, client)
         }
 
         val clientToUp = launch(Dispatchers.IO) {
-            val buffer = ByteArray(8192)
-            try {
-                val input = client.getInputStream()
-                val output = upstream.getOutputStream()
-                while (isActive && !client.isClosed && !upstream.isClosed) {
-                    val read = input.read(buffer)
-                    if (read <= 0) break
-                    output.write(buffer, 0, read)
-                    output.flush()
-                }
-            } catch (_: Exception) {
-            } finally {
-                runCatching { upstream.shutdownOutput() }
-            }
+            pump(client, upstream, upstream)
         }
 
         joinAll(upToClient, clientToUp)
