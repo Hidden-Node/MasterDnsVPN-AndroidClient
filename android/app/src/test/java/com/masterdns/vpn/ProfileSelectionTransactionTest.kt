@@ -6,6 +6,7 @@ import androidx.test.core.app.ApplicationProvider
 import com.masterdns.vpn.data.local.AppDatabase
 import com.masterdns.vpn.data.local.ProfileDao
 import com.masterdns.vpn.data.local.ProfileEntity
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.test.runTest
 import org.junit.After
 import org.junit.Assert.assertEquals
@@ -76,7 +77,7 @@ class ProfileSelectionTransactionTest {
     fun deletingOnlyProfileLeavesTableEmptyWithNoSelection() = runTest {
         val a = dao.insertProfileAndSelectIfFirst(profile("a", 1))
         dao.deleteProfileAndReselect(dao.getProfileById(a)!!)
-        assertTrue(dao.getAllOnce().isEmpty())
+        assertTrue(dao.getAllProfiles().first().isEmpty())
         assertNull(dao.getSelectedProfile())
     }
 }
