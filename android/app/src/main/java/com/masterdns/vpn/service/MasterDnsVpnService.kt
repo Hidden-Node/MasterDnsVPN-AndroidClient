@@ -85,8 +85,6 @@ class MasterDnsVpnService : VpnService() {
     private var mtuExportTargetUri: String? = null
     private var mtuConfigDir: File? = null
     @Volatile
-    private var tunBridgeActive = false
-    @Volatile
     private var isStopping = false
 
     // Incremented by every connect; lets a finishing stopVpn detect that a
@@ -116,7 +114,6 @@ class MasterDnsVpnService : VpnService() {
         val stale = vpnInterface ?: return
         VpnManager.appendLog("Closing stale TUN interface from previous session (fd=${stale.fd})")
         vpnInterface = null
-        tunBridgeActive = false
         runCatching { stale.close() }
     }
 
@@ -452,7 +449,6 @@ class MasterDnsVpnService : VpnService() {
             runCatching {
                 mobile.Mobile.startTunBridge(vpnInterface!!.fd.toLong(), 1400L, "127.0.0.1:${inputs.socksPort}")
             }.onSuccess {
-                tunBridgeActive = true
                 VpnManager.appendLog("DNS-aware TUN bridge started")
             }.onFailure { e ->
                 VpnManager.appendLog("DNS-aware TUN bridge failed: ${e.message}")
@@ -510,7 +506,6 @@ class MasterDnsVpnService : VpnService() {
             try {
                 connectJob?.cancel()
                 VpnManager.appendLog("VPN stop requested")
-                tunBridgeActive = false
 
                 // Stop everything in Go layer via a single stopClient() call.
                 // Go's StopClient() internally handles StopTun/StopTunBridge
