@@ -25,17 +25,11 @@ import (
 	"github.com/xjasonlyu/tun2socks/v2/engine"
 )
 
-// LogCallback is an interface for receiving log messages in Kotlin/Java.
-type LogCallback interface {
-	OnLog(level string, message string)
-}
-
 var (
 	mu               sync.Mutex
 	vpnClient        *client.Client
 	cancelFunc       context.CancelFunc
 	running          bool
-	logCb            LogCallback
 	tunRunning       bool
 	tunBridgeRunning bool
 	clientDone       chan struct{} // closed when app.Run(ctx) returns
@@ -129,13 +123,6 @@ func handleTracking(c net.Conn, realProxyAddr string) {
 type Bandwidth struct {
 	Up   int64
 	Down int64
-}
-
-// SetLogCallback sets a callback that receives Go core log messages.
-func SetLogCallback(cb LogCallback) {
-	mu.Lock()
-	defer mu.Unlock()
-	logCb = cb
 }
 
 // StartClient starts the MasterDnsVPN client with the given config and log paths.

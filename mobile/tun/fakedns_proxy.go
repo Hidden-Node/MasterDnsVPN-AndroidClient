@@ -10,7 +10,6 @@ import (
 
 type FakeDNSProxy struct {
 	RealSocksAddr string
-	LocalPort     int
 	dnsMap        *DNSMapper
 	listener      net.Listener
 	ctx           context.Context
@@ -34,7 +33,6 @@ func (p *FakeDNSProxy) Start() (string, error) {
 		return "", err
 	}
 	p.listener = l
-	p.LocalPort = l.Addr().(*net.TCPAddr).Port
 
 	p.wg.Add(1)
 	go p.acceptLoop()
