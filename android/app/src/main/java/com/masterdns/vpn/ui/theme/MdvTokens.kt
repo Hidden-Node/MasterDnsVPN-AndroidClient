@@ -2,7 +2,6 @@ package com.masterdns.vpn.ui.theme
 
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
 
 object MdvColor {
     val Background = Color(0xFF10141A)
@@ -44,32 +43,5 @@ object MdvRadius {
     val Md = 12.dp
     val Lg = 16.dp
     val Xl = 20.dp
-}
-
-object MdvElevation {
-    val E0 = 0.dp
-    val E1 = 2.dp
-    val E2 = 6.dp
-    val E3 = 12.dp
-    val Focus = 18.dp
-}
-
-object MdvMotion {
-    const val FastMs = 160
-    const val NormalMs = 280
-    const val SlowMs = 420
-    const val PulseMs = 820
-}
-
-object MdvType {
-    val DisplayLg = 34.sp
-    val HeadlineMd = 28.sp
-    val TitleLg = 22.sp
-    val TitleMd = 18.sp
-    val BodyLg = 16.sp
-    val BodyMd = 14.sp
-    val BodySm = 12.sp
-    val LabelMd = 11.sp
-    val LabelSm = 10.sp
 }
 
