@@ -1,8 +1,5 @@
 package com.masterdns.vpn.ui.profiles
 
-import android.content.Context
-import android.net.Uri
-import android.provider.OpenableColumns
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.*
@@ -36,6 +33,9 @@ import com.masterdns.vpn.ui.theme.MdvSpace
 import com.masterdns.vpn.util.ResolverAnalyzer
 import com.masterdns.vpn.util.ResolverImportResult
 import com.masterdns.vpn.util.ResolverImportStats
+import com.masterdns.vpn.util.parseDomainsJson
+import com.masterdns.vpn.util.readDisplayName
+import com.masterdns.vpn.util.readTextFromUri
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -65,9 +65,9 @@ fun ProfilesScreen(
         ActivityResultContracts.OpenDocument()
     ) { uri ->
         if (uri == null) return@rememberLauncherForActivityResult
-        val text = readTextFromUri(context, uri)
+        val text = context.readTextFromUri(uri)
         val draft = parseProfileTomlForImport(
-            fileName = readDisplayName(context, uri) ?: context.getString(R.string.profiles_imported_profile_default),
+            fileName = context.readDisplayName(uri) ?: context.getString(R.string.profiles_imported_profile_default),
             tomlContent = text
         )
         if (draft == null) {
@@ -84,8 +84,8 @@ fun ProfilesScreen(
     ) { uri ->
         if (uri == null) return@rememberLauncherForActivityResult
         scope.launch {
-            val fileName = readDisplayName(context, uri) ?: "client_resolvers.txt"
-            val text = withContext(Dispatchers.IO) { readTextFromUri(context, uri) }
+            val fileName = context.readDisplayName(uri) ?: "client_resolvers.txt"
+            val text = withContext(Dispatchers.IO) { context.readTextFromUri(uri) }
             val result = withContext(Dispatchers.Default) {
                 ResolverAnalyzer.analyzeAndNormalize(text, fileName)
             }
@@ -287,11 +287,7 @@ fun ProfileCard(
                     text = profile.name,
                     style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.SemiBold)
                 )
-                val domainsList = try {
-                    gson.fromJson<List<String>>(profile.domains, object : com.google.gson.reflect.TypeToken<List<String>>() {}.type)
-                } catch (e: Exception) {
-                    profile.domains.removePrefix("[").removeSuffix("]").split(",").map { it.trim().removeSurrounding("\"") }.filter { it.isNotEmpty() }
-                }
+                val domainsList = parseDomainsJson(profile.domains)
                 Text(
                     text = domainsList.joinToString(", "),
                     style = MaterialTheme.typography.bodySmall,
@@ -328,11 +324,7 @@ private fun ProfileEditorDialog(
         androidx.compose.runtime.mutableStateListOf<String>().apply {
             val domainsJson = profile?.domains
             if (!domainsJson.isNullOrBlank()) {
-                val parsed = try {
-                    gson.fromJson<List<String>>(domainsJson, object : com.google.gson.reflect.TypeToken<List<String>>() {}.type)
-                } catch (e: Exception) {
-                    domainsJson.removePrefix("[").removeSuffix("]").split(",").map { it.trim().removeSurrounding("\"") }.filter { it.isNotEmpty() }
-                }
+                val parsed = parseDomainsJson(domainsJson)
                 addAll(parsed)
             }
         }
@@ -355,11 +347,7 @@ private fun ProfileEditorDialog(
         if (profile != null) {
             name = profile.name
             domainList.clear()
-            val parsed = try {
-                gson.fromJson<List<String>>(profile.domains, object : com.google.gson.reflect.TypeToken<List<String>>() {}.type)
-            } catch (e: Exception) {
-                profile.domains.removePrefix("[").removeSuffix("]").split(",").map { it.trim().removeSurrounding("\"") }.filter { it.isNotEmpty() }
-            }
+            val parsed = parseDomainsJson(profile.domains)
             domainList.addAll(parsed)
             encryptionKey = profile.encryptionKey
             resolvers = profile.resolvers
@@ -702,18 +690,6 @@ private fun ResolverImportStatsCard(stats: ResolverImportStats) {
 }
 
 private val gson = Gson()
-
-private fun readTextFromUri(context: Context, uri: Uri): String {
-    return context.contentResolver.openInputStream(uri)?.bufferedReader()?.use { it.readText() }.orEmpty()
-}
-
-private fun readDisplayName(context: Context, uri: Uri): String? {
-    return context.contentResolver.query(uri, null, null, null, null)?.use { cursor ->
-        val nameIndex = cursor.getColumnIndex(OpenableColumns.DISPLAY_NAME)
-        if (nameIndex < 0 || !cursor.moveToFirst()) return@use null
-        cursor.getString(nameIndex)
-    }?.substringBeforeLast(".")?.trim()?.takeIf { it.isNotEmpty() }
-}
 
 private fun parseProfileTomlForImport(fileName: String, tomlContent: String): ImportedProfileDraft? {
     val values = mutableMapOf<String, String>()

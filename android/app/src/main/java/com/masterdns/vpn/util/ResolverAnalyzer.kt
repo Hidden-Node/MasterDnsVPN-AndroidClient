@@ -1,7 +1,6 @@
 package com.masterdns.vpn.util
 
 import com.google.gson.Gson
-import com.google.gson.reflect.TypeToken
 import com.masterdns.vpn.data.local.ProfileEntity
 import java.math.BigInteger
 import java.net.InetAddress
@@ -152,14 +151,14 @@ object ResolverAnalyzer {
     }
 
     fun withImportStats(profile: ProfileEntity, stats: ResolverImportStats): ProfileEntity {
-        val advanced = parseAdvanced(profile.advancedJson).toMutableMap()
+        val advanced = parseAdvancedJson(profile.advancedJson).toMutableMap()
         advanced[SOURCE_ADVANCED_KEY] = SOURCE_INLINE_IMPORT
         advanced[STATS_ADVANCED_KEY] = gson.toJson(stats)
         return profile.copy(advancedJson = gson.toJson(advanced))
     }
 
     fun statsFromProfile(profile: ProfileEntity): ResolverImportStats? {
-        val json = parseAdvanced(profile.advancedJson)[STATS_ADVANCED_KEY] ?: return null
+        val json = parseAdvancedJson(profile.advancedJson)[STATS_ADVANCED_KEY] ?: return null
         return runCatching { gson.fromJson(json, ResolverImportStats::class.java) }.getOrNull()
     }
 
@@ -253,14 +252,5 @@ object ResolverAnalyzer {
     private fun formatRuntimeResolver(ip: String, port: Int): String {
         if (port == DEFAULT_PORT) return ip
         return if (":" in ip) "[$ip]:$port" else "$ip:$port"
-    }
-
-    private fun parseAdvanced(json: String): Map<String, String> {
-        return try {
-            val type = object : TypeToken<Map<String, String>>() {}.type
-            gson.fromJson<Map<String, String>>(json, type) ?: emptyMap()
-        } catch (_: Exception) {
-            emptyMap()
-        }
     }
 }

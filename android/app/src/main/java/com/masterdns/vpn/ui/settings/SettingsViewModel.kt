@@ -4,12 +4,12 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.SavedStateHandle
 import androidx.lifecycle.viewModelScope
 import com.google.gson.Gson
-import com.google.gson.reflect.TypeToken
 import com.masterdns.vpn.data.local.ProfileEntity
 import com.masterdns.vpn.data.repository.ProfileRepository
 import com.masterdns.vpn.util.ConfigGenerator
 import com.masterdns.vpn.util.ResolverAnalyzer
 import com.masterdns.vpn.util.ResolverImportResult
+import com.masterdns.vpn.util.parseAdvancedJson
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
@@ -82,15 +82,6 @@ class SettingsViewModel @Inject constructor(
         }
     }
 
-    private fun parseAdvanced(json: String): Map<String, String> {
-        return try {
-            val type = object : TypeToken<Map<String, String>>() {}.type
-            gson.fromJson<Map<String, String>>(json, type) ?: emptyMap()
-        } catch (_: Exception) {
-            emptyMap()
-        }
-    }
-
     private fun normalizeProtocol(value: String?, fallback: String): String {
         val normalized = value?.trim()?.uppercase()
         return when (normalized) {
@@ -100,7 +91,7 @@ class SettingsViewModel @Inject constructor(
     }
 
     private fun buildUpdatedProfile(profile: ProfileEntity, values: Map<String, String>): ProfileEntity {
-        val mergedAdvanced = parseAdvanced(profile.advancedJson).toMutableMap()
+        val mergedAdvanced = parseAdvancedJson(profile.advancedJson).toMutableMap()
         values.forEach { (key, value) ->
             if (key in ADVANCED_SETTING_KEYS) {
                 mergedAdvanced[key] = value.trim()

@@ -3,7 +3,6 @@ package com.masterdns.vpn.ui.settings
 import android.content.Context
 import android.content.Intent
 import android.net.Uri
-import android.provider.OpenableColumns
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.Arrangement
@@ -62,8 +61,6 @@ import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
-import com.google.gson.Gson
-import com.google.gson.reflect.TypeToken
 import com.masterdns.vpn.R
 import com.masterdns.vpn.data.local.ProfileEntity
 import com.masterdns.vpn.ui.components.mdv.cards.MdvSectionCard
@@ -74,6 +71,10 @@ import com.masterdns.vpn.ui.components.mdv.controls.MdvTopAppBar
 import com.masterdns.vpn.ui.theme.MdvColor
 import com.masterdns.vpn.ui.theme.MdvSpace
 import com.masterdns.vpn.util.ResolverAnalyzer
+import com.masterdns.vpn.util.parseAdvancedJson
+import com.masterdns.vpn.util.parseDomainsJson
+import com.masterdns.vpn.util.readDisplayName
+import com.masterdns.vpn.util.readTextFromUri
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -271,7 +272,7 @@ fun SettingsScreen(
         ActivityResultContracts.OpenDocument()
     ) { uri ->
         if (uri != null) {
-            val text = readTextFromUri(context, uri)
+            val text = context.readTextFromUri(uri)
             val updated = viewModel.importTomlValues(text, fieldsState.toMap())
             fieldsState.clear()
             fieldsState.putAll(updated)
@@ -284,8 +285,8 @@ fun SettingsScreen(
     ) { uri ->
         val selected = profile
         if (uri != null && selected != null) {
-            val text = readTextFromUri(context, uri)
-            val fileName = readDisplayName(context, uri) ?: "client_resolvers.txt"
+            val text = context.readTextFromUri(uri)
+            val fileName = context.readDisplayName(uri) ?: "client_resolvers.txt"
             scope.launch {
                 val result = withContext(Dispatchers.Default) {
                     ResolverAnalyzer.analyzeAndNormalize(text, fileName)
@@ -612,21 +613,6 @@ private fun ConfigFieldCard(
     }
 }
 
-private fun readTextFromUri(context: Context, uri: Uri): String {
-    return runCatching {
-        val stream = context.contentResolver.openInputStream(uri)
-        stream?.bufferedReader()?.use { it.readText() } ?: ""
-    }.getOrDefault("")
-}
-
-private fun readDisplayName(context: Context, uri: Uri): String? {
-    return context.contentResolver.query(uri, null, null, null, null)?.use { cursor ->
-        val nameIndex = cursor.getColumnIndex(OpenableColumns.DISPLAY_NAME)
-        if (nameIndex < 0 || !cursor.moveToFirst()) return@use null
-        cursor.getString(nameIndex)
-    }?.trim()?.takeIf { it.isNotEmpty() }
-}
-
 private fun writeTextToUri(context: Context, uri: Uri, content: String) {
     runCatching {
         context.contentResolver.openOutputStream(uri, "w")?.bufferedWriter()?.use {
@@ -636,13 +622,13 @@ private fun writeTextToUri(context: Context, uri: Uri, content: String) {
 }
 
 private fun defaultValuesFor(profile: ProfileEntity): Map<String, String> {
-    val advanced = parseAdvanced(profile.advancedJson)
+    val advanced = parseAdvancedJson(profile.advancedJson)
     fun adv(key: String, fallback: String): String {
         return advanced[key]?.trim().takeUnless { it.isNullOrEmpty() } ?: fallback
     }
 
     return buildMap {
-        put("DOMAINS", parseDomains(profile.domains).joinToString(", "))
+        put("DOMAINS", parseDomainsJson(profile.domains).joinToString(", "))
         put("DATA_ENCRYPTION_METHOD", profile.encryptionMethod.toString())
         put("ENCRYPTION_KEY", profile.encryptionKey)
         put("PROTOCOL_TYPE", profile.protocolType)
@@ -726,23 +712,5 @@ private fun defaultValuesFor(profile: ProfileEntity): Map<String, String> {
         put("ARQ_TERMINAL_DRAIN_TIMEOUT_SECONDS", adv("ARQ_TERMINAL_DRAIN_TIMEOUT_SECONDS", "120.0"))
         put("ARQ_TERMINAL_ACK_WAIT_TIMEOUT_SECONDS", adv("ARQ_TERMINAL_ACK_WAIT_TIMEOUT_SECONDS", "90.0"))
         put("LOG_LEVEL", profile.logLevel)
-    }
-}
-
-private fun parseAdvanced(json: String): Map<String, String> {
-    return try {
-        val type = object : TypeToken<Map<String, String>>() {}.type
-        Gson().fromJson<Map<String, String>>(json, type) ?: emptyMap()
-    } catch (_: Exception) {
-        emptyMap()
-    }
-}
-
-private fun parseDomains(json: String): List<String> {
-    return try {
-        val type = object : TypeToken<List<String>>() {}.type
-        Gson().fromJson<List<String>>(json, type) ?: emptyList()
-    } catch (_: Exception) {
-        listOf(json.trim().removeSurrounding("\"")).filter { it.isNotBlank() }
     }
 }

@@ -11,7 +11,6 @@ import android.os.PowerManager
 import android.util.Log
 import androidx.core.app.NotificationCompat
 import com.google.gson.Gson
-import com.google.gson.reflect.TypeToken
 import com.masterdns.vpn.App
 import com.masterdns.vpn.MainActivity
 import com.masterdns.vpn.R
@@ -19,6 +18,7 @@ import com.masterdns.vpn.data.repository.ProfileRepository
 import com.masterdns.vpn.util.ConfigGenerator
 import com.masterdns.vpn.util.GlobalSettingsStore
 import com.masterdns.vpn.util.VpnManager
+import com.masterdns.vpn.util.parseAdvancedJson
 import dagger.hilt.android.AndroidEntryPoint
 import kotlinx.coroutines.*
 import kotlinx.coroutines.sync.withLock
@@ -240,7 +240,7 @@ class MasterDnsVpnService : VpnService() {
         activeLocalSocksPort = socksPort
         val globalSettings = GlobalSettingsStore.load(this)
         val proxyMode = globalSettings.connectionMode.equals("PROXY", ignoreCase = true)
-        val localDnsEnabled = parseAdvanced(profile.advancedJson)["LOCAL_DNS_ENABLED"].equals("true", ignoreCase = true)
+        val localDnsEnabled = parseAdvancedJson(profile.advancedJson)["LOCAL_DNS_ENABLED"].equals("true", ignoreCase = true)
         return ConnectInputs(profile, socksPort, globalSettings, proxyMode, localDnsEnabled)
     }
 
@@ -252,7 +252,7 @@ class MasterDnsVpnService : VpnService() {
         val resolversFile = File(configDir, "client_resolvers.txt")
         mtuExportTargetUri = null
         mtuConfigDir = null
-        val advanced = parseAdvanced(inputs.profile.advancedJson)
+        val advanced = parseAdvancedJson(inputs.profile.advancedJson)
         val saveMtuToFile = advanced["SAVE_MTU_SERVERS_TO_FILE"].equals("true", ignoreCase = true)
         var runtimeProfile = inputs.profile
         if (saveMtuToFile) {
@@ -276,7 +276,7 @@ class MasterDnsVpnService : VpnService() {
             }
         }
 
-        val advancedForDns = parseAdvanced(runtimeProfile.advancedJson)
+        val advancedForDns = parseAdvancedJson(runtimeProfile.advancedJson)
         val localDnsEnabled = advancedForDns["LOCAL_DNS_ENABLED"].equals("true", ignoreCase = true)
         val localDnsPort = advancedForDns["LOCAL_DNS_PORT"]?.toIntOrNull() ?: 53
         val safeDnsPort: Int? = if (!inputs.proxyMode && localDnsEnabled && localDnsPort <= 1024) {
@@ -670,15 +670,6 @@ class MasterDnsVpnService : VpnService() {
             }
         } catch (_: Exception) {
             false
-        }
-    }
-
-    private fun parseAdvanced(json: String): Map<String, String> {
-        return try {
-            val type = object : TypeToken<Map<String, String>>() {}.type
-            Gson().fromJson<Map<String, String>>(json, type) ?: emptyMap()
-        } catch (_: Exception) {
-            emptyMap()
         }
     }
 

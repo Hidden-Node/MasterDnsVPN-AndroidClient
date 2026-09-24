@@ -3,7 +3,6 @@ package com.masterdns.vpn
 import android.content.Intent
 import android.net.Uri
 import android.os.Bundle
-import android.provider.OpenableColumns
 import android.widget.Toast
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
@@ -17,6 +16,8 @@ import com.masterdns.vpn.data.local.ProfileEntity
 import com.masterdns.vpn.data.repository.ProfileRepository
 import com.masterdns.vpn.ui.navigation.AppNavigation
 import com.masterdns.vpn.ui.theme.MasterDnsVPNTheme
+import com.masterdns.vpn.util.readDisplayName
+import com.masterdns.vpn.util.readTextFromUri
 import dagger.hilt.android.AndroidEntryPoint
 import kotlinx.coroutines.launch
 import javax.inject.Inject
@@ -103,12 +104,6 @@ class MainActivity : ComponentActivity() {
         }
     }
 
-    private fun readTextFromUri(uri: Uri): String {
-        return contentResolver.openInputStream(uri)?.use { stream ->
-            stream.bufferedReader(Charsets.UTF_8).use { it.readText() }
-        }.orEmpty()
-    }
-
     private fun parseImportedProfile(uri: Uri, tomlContent: String): ProfileEntity? {
         val values = parseTomlValues(tomlContent)
         val parsedDomain = values["DOMAINS"]?.takeIf { it.isNotBlank() } ?: values["DOMAIN"]?.takeIf { it.isNotBlank() } ?: return null
@@ -139,19 +134,6 @@ class MainActivity : ComponentActivity() {
             resolvers = "8.8.8.8",
             advancedJson = gson.toJson(advanced)
         )
-    }
-
-    private fun readDisplayName(uri: Uri): String? {
-        return runCatching {
-            contentResolver.query(uri, null, null, null, null)?.use { cursor ->
-                val idx = cursor.getColumnIndex(OpenableColumns.DISPLAY_NAME)
-                if (idx < 0 || !cursor.moveToFirst()) return@use null
-                cursor.getString(idx)
-            }
-        }.getOrNull()
-            ?.substringBeforeLast(".")
-            ?.trim()
-            ?.takeIf { it.isNotEmpty() }
     }
 
     private fun parseTomlValues(tomlContent: String): Map<String, String> =

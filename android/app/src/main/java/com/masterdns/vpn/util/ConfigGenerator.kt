@@ -1,8 +1,6 @@
 package com.masterdns.vpn.util
 
 import com.masterdns.vpn.data.local.ProfileEntity
-import com.google.gson.Gson
-import com.google.gson.reflect.TypeToken
 import java.util.Locale
 
 /**
@@ -10,8 +8,6 @@ import java.util.Locale
  * Output matches the exact format expected by the Go client core.
  */
 object ConfigGenerator {
-
-    private val gson = Gson()
 
     /**
      * Generate client_config.toml content from a ProfileEntity.
@@ -25,10 +21,10 @@ object ConfigGenerator {
         localDnsIpOverride: String? = null,
         localDnsPortOverride: Int? = null
     ): String {
-        val domains = parseDomains(profile.domains)
+        val domains = parseDomainsJson(profile.domains)
         val domainsStr = domains.joinToString(", ") { "\"$it\"" }
 
-        val advanced = parseAdvanced(profile.advancedJson)
+        val advanced = parseAdvancedJson(profile.advancedJson)
         fun cfg(key: String, fallback: String): String {
             val value = advanced[key]?.trim()
             return if (value.isNullOrEmpty()) fallback else value
@@ -194,25 +190,6 @@ object ConfigGenerator {
             colonCount == 0 -> "$value:53"
             colonCount == 1 -> value
             else -> "$value:53"
-        }
-    }
-
-    private fun parseDomains(json: String): List<String> {
-        return try {
-            val type = object : TypeToken<List<String>>() {}.type
-            gson.fromJson<List<String>>(json, type) ?: emptyList()
-        } catch (e: Exception) {
-            // Fallback: treat as single domain
-            listOf(json.trim().removeSurrounding("\""))
-        }
-    }
-
-    private fun parseAdvanced(json: String): Map<String, String> {
-        return try {
-            val type = object : TypeToken<Map<String, String>>() {}.type
-            gson.fromJson<Map<String, String>>(json, type) ?: emptyMap()
-        } catch (e: Exception) {
-            emptyMap()
         }
     }
 

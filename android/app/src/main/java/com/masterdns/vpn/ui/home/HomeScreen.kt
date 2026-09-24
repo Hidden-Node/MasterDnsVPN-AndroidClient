@@ -54,8 +54,6 @@ import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
-import com.google.gson.Gson
-import com.google.gson.reflect.TypeToken
 import com.masterdns.vpn.R
 import com.masterdns.vpn.ui.theme.ConnectedGreen
 import com.masterdns.vpn.ui.theme.ConnectingAmber
@@ -63,6 +61,7 @@ import com.masterdns.vpn.ui.theme.DisconnectedRed
 import com.masterdns.vpn.ui.theme.MdvColor
 import com.masterdns.vpn.ui.theme.MdvSpace
 import com.masterdns.vpn.util.VpnManager
+import com.masterdns.vpn.util.parseAdvancedJson
 
 private data class HomeLayoutMetrics(
     val horizontalPadding: androidx.compose.ui.unit.Dp,
@@ -89,7 +88,7 @@ fun HomeScreen(
     val context = LocalContext.current
 
     val advanced = remember(selectedProfile?.advancedJson) {
-        parseAdvanced(selectedProfile?.advancedJson.orEmpty())
+        parseAdvancedJson(selectedProfile?.advancedJson.orEmpty())
     }
     val proxyHost = advanced["LISTEN_IP"]?.trim().takeUnless { it.isNullOrEmpty() } ?: "127.0.0.1"
     val proxyPort = selectedProfile?.listenPort ?: 18000
@@ -353,15 +352,6 @@ fun HomeScreen(
 
     if (showHowToUse) {
         HowToUseDialog(onDismiss = { showHowToUse = false })
-    }
-}
-
-private fun parseAdvanced(json: String): Map<String, String> {
-    return try {
-        val type = object : TypeToken<Map<String, String>>() {}.type
-        Gson().fromJson<Map<String, String>>(json, type) ?: emptyMap()
-    } catch (_: Exception) {
-        emptyMap()
     }
 }
 
