@@ -2,7 +2,6 @@ package com.masterdns.vpn.util
 
 import android.content.Context
 import android.content.Intent
-import android.net.TrafficStats
 import androidx.core.content.ContextCompat
 import com.masterdns.vpn.data.local.ProfileEntity
 import com.masterdns.vpn.service.MasterDnsVpnService
@@ -47,8 +46,6 @@ object VpnManager {
     private val _state = MutableStateFlow(VpnState.DISCONNECTED)
     val state: StateFlow<VpnState> = _state.asStateFlow()
 
-    private val _logs = MutableStateFlow<List<String>>(emptyList())
-    val logs: StateFlow<List<String>> = _logs.asStateFlow()
     private val _logEntries = MutableStateFlow<List<LogEntry>>(emptyList())
     val logEntries: StateFlow<List<LogEntry>> = _logEntries.asStateFlow()
     private val _logCounters = MutableStateFlow(LogCounters())
@@ -198,7 +195,6 @@ object VpnManager {
         logEmitJob?.cancel()
         logEmitJob = null
         _logEntries.value = emptyList()
-        _logs.value = emptyList()
         _logCounters.value = LogCounters()
         _scanStatus.value = ScanStatus()
     }
@@ -225,7 +221,6 @@ object VpnManager {
             version = logBufferVersion
         }
         _logEntries.value = snapshot
-        _logs.value = snapshot.map { it.line }
         return version
     }
 
