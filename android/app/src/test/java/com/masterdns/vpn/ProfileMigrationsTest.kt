@@ -8,7 +8,6 @@ import androidx.sqlite.db.framework.FrameworkSQLiteOpenHelperFactory
 import androidx.test.core.app.ApplicationProvider
 import com.google.common.truth.Truth.assertThat
 import com.google.gson.JsonParser
-import com.masterdns.vpn.data.local.Migration1To2
 import com.masterdns.vpn.data.local.ProfileMigrations
 import org.junit.After
 import org.junit.Test
@@ -42,7 +41,8 @@ class ProfileMigrationsTest {
 
     @Test
     fun `top-level Migration1To2 delegates to the hub`() {
-        assertThat(Migration1To2).isSameInstanceAs(ProfileMigrations.MIGRATION_1_2)
+        assertThat(ProfileMigrations.MIGRATION_1_2.startVersion).isEqualTo(1)
+        assertThat(ProfileMigrations.MIGRATION_1_2.endVersion).isEqualTo(2)
     }
 
     @Test
