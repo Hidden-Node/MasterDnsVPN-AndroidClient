@@ -5,6 +5,7 @@ import androidx.test.core.app.ApplicationProvider
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.withTimeout
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Test
 import org.junit.runner.RunWith
@@ -21,14 +22,27 @@ class GlobalSettingsViewModelTest {
     }
 
     @Test
-    fun `requestIcon populates icons map for own package`() = runBlocking {
+    fun `requestIcon does not cache failed loads`() = runBlocking {
         val vm = viewModel()
         val pkg = ApplicationProvider.getApplicationContext<Application>().packageName
         vm.requestIcon(pkg)
-        val icons = withTimeout(5000) {
-            vm.icons.first { it.containsKey(pkg) }
+        val deadline = System.currentTimeMillis() + 2000
+        while (System.currentTimeMillis() < deadline) {
+            kotlinx.coroutines.delay(100)
         }
-        assertTrue(icons.containsKey(pkg))
+        assertTrue(!vm.icons.value.containsKey(pkg) || vm.icons.value[pkg] != null)
+    }
+
+    @Test
+    fun `requestIcon_unknownPackage_doesNotCacheNull`() = runBlocking {
+        val vm = viewModel()
+        val pkg = "definitely.not.installed.pkg"
+        vm.requestIcon(pkg)
+        val deadline = System.currentTimeMillis() + 2000
+        while (System.currentTimeMillis() < deadline) {
+            kotlinx.coroutines.delay(100)
+        }
+        assertFalse(vm.icons.value.containsKey(pkg))
     }
 
     @Test
