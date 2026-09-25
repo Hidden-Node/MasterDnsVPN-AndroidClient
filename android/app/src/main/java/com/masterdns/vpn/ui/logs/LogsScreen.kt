@@ -32,8 +32,13 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
@@ -106,38 +111,53 @@ fun LogsScreen(onBack: () -> Unit) {
             LogFilter.ANDROID -> logEntries.filter { it.source == VpnManager.LogSource.ANDROID }
         }
     }
-    val uiLogItems = remember(filteredLogs) { buildUiLogItems(filteredLogs) }
-    val stats = remember(uiLogItems, activeFilter, counters) {
-        if (activeFilter == LogFilter.ALL) {
-            LogStats(
-                total = counters.total,
-                errors = counters.errors,
-                warnings = counters.warnings
-            )
-        } else {
-            buildLogStats(uiLogItems)
+    val uiLogItems by produceState(initialValue = emptyList<UiLogItem>(), key1 = filteredLogs) {
+        value = withContext(Dispatchers.Default) { buildUiLogItems(filteredLogs) }
+    }
+    val stats by produceState(
+        initialValue = LogStats(total = 0L, errors = 0L, warnings = 0L),
+        key1 = uiLogItems,
+        key2 = activeFilter,
+        key3 = counters
+    ) {
+        value = withContext(Dispatchers.Default) {
+            if (activeFilter == LogFilter.ALL) {
+                LogStats(
+                    total = counters.total,
+                    errors = counters.errors,
+                    warnings = counters.warnings
+                )
+            } else {
+                buildLogStats(uiLogItems)
+            }
         }
     }
 
     val listState = rememberLazyListState()
     var autoScrollEnabled by remember { mutableStateOf(true) }
+    val scope = rememberCoroutineScope()
     val context = LocalContext.current
 
     val shareLogs: () -> Unit = {
         if (filteredLogs.isNotEmpty()) {
-            val content = filteredLogs.joinToString("\n") { it.line }
-            val intent = Intent(Intent.ACTION_SEND).apply {
-                type = "text/plain"
-                putExtra(Intent.EXTRA_SUBJECT, context.getString(R.string.logs_share_subject))
-                putExtra(Intent.EXTRA_TEXT, content)
+            scope.launch {
+                val content = withContext(Dispatchers.IO) {
+                    filteredLogs.joinToString("\n") { it.line }
+                }
+                val intent = Intent(Intent.ACTION_SEND).apply {
+                    type = "text/plain"
+                    putExtra(Intent.EXTRA_SUBJECT, context.getString(R.string.logs_share_subject))
+                    putExtra(Intent.EXTRA_TEXT, content)
+                }
+                context.startActivity(Intent.createChooser(intent, context.getString(R.string.logs_share_chooser)))
             }
-            context.startActivity(Intent.createChooser(intent, context.getString(R.string.logs_share_chooser)))
         }
     }
 
     LaunchedEffect(uiLogItems.size, activeFilter, autoScrollEnabled) {
         if (uiLogItems.isEmpty()) return@LaunchedEffect
-        if (autoScrollEnabled) {
+        val lastVisible = listState.layoutInfo.visibleItemsInfo.lastOrNull()?.index ?: 0
+        if (autoScrollEnabled && lastVisible >= uiLogItems.size - 3) {
             listState.scrollToItem(uiLogItems.size - 1)
         }
     }

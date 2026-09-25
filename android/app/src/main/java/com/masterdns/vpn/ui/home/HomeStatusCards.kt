@@ -11,6 +11,8 @@ import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
@@ -32,15 +34,6 @@ import com.masterdns.vpn.util.VpnManager
 @Composable
 fun MdvConnectionTelemetryCard(
     vpnState: VpnManager.VpnState,
-    scanStatus: VpnManager.ScanStatus,
-    scannedCount: Int,
-    totalResolvers: Int,
-    scanProgress: Float,
-    downBps: Long,
-    upBps: Long,
-    downloadTotalBytes: Long,
-    uploadTotalBytes: Long,
-    connectedDurationSeconds: Long,
     proxyHost: String,
     proxyPort: Int,
     socksAuthEnabled: Boolean,
@@ -49,6 +42,19 @@ fun MdvConnectionTelemetryCard(
     isConnecting: Boolean,
     connectionWarning: String? = null
 ) {
+    val scanStatus by VpnManager.scanStatus.collectAsState()
+    val upBps by VpnManager.uploadSpeedBps.collectAsState()
+    val downBps by VpnManager.downloadSpeedBps.collectAsState()
+    val uploadTotalBytes by VpnManager.uploadTotalBytes.collectAsState()
+    val downloadTotalBytes by VpnManager.downloadTotalBytes.collectAsState()
+    val connectedDurationSeconds by VpnManager.connectedDurationSeconds.collectAsState()
+    val totalResolvers = scanStatus.scanTotalFromCore
+    val scannedCount = scanStatus.validCount + scanStatus.rejectedCount
+    val scanProgress = if (totalResolvers > 0) {
+        (scannedCount.toFloat() / totalResolvers.toFloat()).coerceIn(0f, 1f)
+    } else {
+        0f
+    }
     MdvCardLow(modifier = Modifier.fillMaxWidth()) {
         Column(
             modifier = Modifier

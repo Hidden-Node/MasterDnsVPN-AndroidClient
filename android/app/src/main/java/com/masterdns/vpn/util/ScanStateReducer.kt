@@ -58,6 +58,11 @@ internal object ScanStateReducer {
     )
 
     internal fun reduce(prev: ScanStateBundle, line: String): ScanStateBundle {
+        if (listOf("accepted", "reactivated", "disabled", "totals:", "active resolvers",
+                "total", "valid", "pool", "scan", "remaining", "synced", "mtu",
+                "testing mtu sizes", "mtu testing completed",
+                "session initialized successfully", "backoff", "/")
+                .none { line.contains(it, ignoreCase = true) }) return prev
         var scanStatus = prev.scanStatus
         var activeResolvers = prev.activeResolvers
         var connectionWarning = prev.connectionWarning
