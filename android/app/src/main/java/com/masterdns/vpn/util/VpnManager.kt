@@ -94,6 +94,7 @@ object VpnManager {
     private val logBufferLock = Any()
     private val logBuffer = ArrayDeque<LogEntry>(MAX_LOG_LINES)
     private var logBufferVersion = 0L
+    private var lastEmittedLogVersion = -1L
 
     private val TIMESTAMP_CANDIDATES = listOf(
         TimestampCandidate(
@@ -201,13 +202,15 @@ object VpnManager {
     }
 
     fun clearLogs() {
-        synchronized(logBufferLock) {
+        val clearedVersion = synchronized(logBufferLock) {
             logBuffer.clear()
             logBufferVersion++
+            logBufferVersion
         }
         logEmitJob?.cancel()
         logEmitJob = null
         _logEntries.value = emptyList()
+        lastEmittedLogVersion = clearedVersion
         _logCounters.value = LogCounters()
         _scanStatus.value = ScanStatus()
     }
@@ -233,7 +236,9 @@ object VpnManager {
             snapshot = logBuffer.toList()
             version = logBufferVersion
         }
+        if (version == lastEmittedLogVersion) return version
         _logEntries.value = snapshot
+        lastEmittedLogVersion = version
         return version
     }
 
@@ -259,11 +264,16 @@ object VpnManager {
                 val dt = (now - prevTime).coerceAtLeast(1L)
                 val uploadDelta = (tx - prevTx).coerceAtLeast(0L)
                 val downloadDelta = (rx - prevRx).coerceAtLeast(0L)
-                _uploadSpeedBps.value = (uploadDelta * 1000L) / dt
-                _downloadSpeedBps.value = (downloadDelta * 1000L) / dt
-                _uploadTotalBytes.value = _uploadTotalBytes.value + uploadDelta
-                _downloadTotalBytes.value = _downloadTotalBytes.value + downloadDelta
-                _connectedDurationSeconds.value = ((now - startedAt) / 1000L).coerceAtLeast(0L)
+                val newUploadSpeed = (uploadDelta * 1000L) / dt
+                if (newUploadSpeed != _uploadSpeedBps.value) _uploadSpeedBps.value = newUploadSpeed
+                val newDownloadSpeed = (downloadDelta * 1000L) / dt
+                if (newDownloadSpeed != _downloadSpeedBps.value) _downloadSpeedBps.value = newDownloadSpeed
+                val newUploadTotal = _uploadTotalBytes.value + uploadDelta
+                if (newUploadTotal != _uploadTotalBytes.value) _uploadTotalBytes.value = newUploadTotal
+                val newDownloadTotal = _downloadTotalBytes.value + downloadDelta
+                if (newDownloadTotal != _downloadTotalBytes.value) _downloadTotalBytes.value = newDownloadTotal
+                val newDuration = ((now - startedAt) / 1000L).coerceAtLeast(0L)
+                if (newDuration != _connectedDurationSeconds.value) _connectedDurationSeconds.value = newDuration
                 prevTx = tx
                 prevRx = rx
                 prevTime = now
