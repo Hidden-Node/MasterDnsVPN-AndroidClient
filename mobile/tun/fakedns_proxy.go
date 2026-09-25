@@ -8,6 +8,14 @@ import (
 	"sync"
 )
 
+// relayBufPool provides 64KB-class scratch buffers for bulk TCP relay
+// (io.CopyBuffer) and for the UDP-associate receive loop. A single pool
+// serves both: 65535-byte slices are large enough for the 64KB UDP
+// datagrams and double as roomy copy buffers for the relay path.
+var relayBufPool = sync.Pool{
+	New: func() any { return make([]byte, 65535) },
+}
+
 type FakeDNSProxy struct {
 	RealSocksAddr string
 	dnsMap        *DNSMapper
@@ -68,14 +76,23 @@ func (p *FakeDNSProxy) acceptLoop() {
 func (p *FakeDNSProxy) handleConnection(conn net.Conn) {
 	defer conn.Close()
 
-	// Read greeting
-	header := make([]byte, 2)
-	if _, err := io.ReadFull(conn, header); err != nil {
+	// Read greeting (stack framing: 2-byte header, N methods).
+	var hdrBuf [2]byte
+	if _, err := io.ReadFull(conn, hdrBuf[:]); err != nil {
 		return
 	}
-	methods := make([]byte, header[1])
-	if _, err := io.ReadFull(conn, methods); err != nil {
-		return
+	nMethods := int(hdrBuf[1])
+	if nMethods > 0 {
+		var methodsBuf [256]byte
+		var methods []byte
+		if nMethods <= len(methodsBuf) {
+			methods = methodsBuf[:nMethods]
+		} else {
+			methods = make([]byte, nMethods)
+		}
+		if _, err := io.ReadFull(conn, methods); err != nil {
+			return
+		}
 	}
 
 	// Send auth response: NO_AUTH
@@ -83,44 +100,47 @@ func (p *FakeDNSProxy) handleConnection(conn net.Conn) {
 		return
 	}
 
-	// Read request
-	reqHeader := make([]byte, 4)
-	if _, err := io.ReadFull(conn, reqHeader); err != nil {
+	// Read request (stack framing: 4-byte header).
+	var reqHdrBuf [4]byte
+	if _, err := io.ReadFull(conn, reqHdrBuf[:]); err != nil {
 		return
 	}
 
-	cmd := reqHeader[1]
-	atyp := reqHeader[3]
+	cmd := reqHdrBuf[1]
+	atyp := reqHdrBuf[3]
 
 	var targetAddr []byte
+	var ipv4Buf [4]byte
+	var ipv6Buf [16]byte
+	var domLenBuf [1]byte
 	if atyp == 1 { // IPV4
-		ip := make([]byte, 4)
-		if _, err := io.ReadFull(conn, ip); err != nil {
+		if _, err := io.ReadFull(conn, ipv4Buf[:]); err != nil {
 			return
 		}
-		targetAddr = ip
+		targetAddr = ipv4Buf[:]
 	} else if atyp == 3 { // DOMAIN
-		l := make([]byte, 1)
-		if _, err := io.ReadFull(conn, l); err != nil {
+		if _, err := io.ReadFull(conn, domLenBuf[:]); err != nil {
 			return
 		}
-		dom := make([]byte, l[0])
+		dom := make([]byte, domLenBuf[0])
 		if _, err := io.ReadFull(conn, dom); err != nil {
 			return
 		}
-		targetAddr = append(l, dom...)
+		targetAddr = make([]byte, 1+len(dom))
+		targetAddr[0] = domLenBuf[0]
+		copy(targetAddr[1:], dom)
 	} else if atyp == 4 { // IPV6
-		ip := make([]byte, 16)
-		if _, err := io.ReadFull(conn, ip); err != nil {
+		if _, err := io.ReadFull(conn, ipv6Buf[:]); err != nil {
 			return
 		}
-		targetAddr = ip
+		targetAddr = ipv6Buf[:]
 	}
 
-	targetPort := make([]byte, 2)
-	if _, err := io.ReadFull(conn, targetPort); err != nil {
+	var portBuf [2]byte
+	if _, err := io.ReadFull(conn, portBuf[:]); err != nil {
 		return
 	}
+	targetPort := portBuf[:]
 
 	// FakeDNS Interception for TCP CONNECT
 	if cmd == 1 && atyp == 1 {
@@ -148,8 +168,8 @@ func (p *FakeDNSProxy) handleConnection(conn net.Conn) {
 	if _, err := realConn.Write([]byte{5, 1, 0}); err != nil {
 		return
 	}
-	authResp := make([]byte, 2)
-	if _, err := io.ReadFull(realConn, authResp); err != nil {
+	var authBuf [2]byte
+	if _, err := io.ReadFull(realConn, authBuf[:]); err != nil {
 		return
 	}
 
@@ -160,34 +180,39 @@ func (p *FakeDNSProxy) handleConnection(conn net.Conn) {
 		return
 	}
 
-	replyHeader := make([]byte, 4)
-	if _, err := io.ReadFull(realConn, replyHeader); err != nil {
+	var replyHdrBuf [4]byte
+	if _, err := io.ReadFull(realConn, replyHdrBuf[:]); err != nil {
 		return
 	}
-	if _, err := conn.Write(replyHeader); err != nil {
+	if _, err := conn.Write(replyHdrBuf[:]); err != nil {
 		return
 	}
 
 	var bndAddr []byte
-	if replyHeader[3] == 1 {
-		bndAddr = make([]byte, 4)
-	} else if replyHeader[3] == 3 {
-		l := make([]byte, 1)
-		if _, err := io.ReadFull(realConn, l); err != nil {
+	var bndIPv4Buf [4]byte
+	var bndIPv6Buf [16]byte
+	var bndDomLenBuf [1]byte
+	if replyHdrBuf[3] == 1 {
+		bndAddr = bndIPv4Buf[:]
+	} else if replyHdrBuf[3] == 3 {
+		if _, err := io.ReadFull(realConn, bndDomLenBuf[:]); err != nil {
 			return
 		}
-		dom := make([]byte, l[0])
+		dom := make([]byte, bndDomLenBuf[0])
 		if _, err := io.ReadFull(realConn, dom); err != nil {
 			return
 		}
-		bndAddr = append(l, dom...)
-	} else if replyHeader[3] == 4 {
-		bndAddr = make([]byte, 16)
+		combined := make([]byte, 1+len(dom))
+		combined[0] = bndDomLenBuf[0]
+		copy(combined[1:], dom)
+		bndAddr = combined
+	} else if replyHdrBuf[3] == 4 {
+		bndAddr = bndIPv6Buf[:]
 	}
 	if len(bndAddr) > 0 {
 		// ATYP=3 already populated bndAddr above (length+domain); reading
 		// again here would consume the port bytes and desync the framing.
-		if replyHeader[3] != 3 {
+		if replyHdrBuf[3] != 3 {
 			if _, err := io.ReadFull(realConn, bndAddr); err != nil {
 				return
 			}
@@ -195,14 +220,20 @@ func (p *FakeDNSProxy) handleConnection(conn net.Conn) {
 		conn.Write(bndAddr)
 	}
 
-	bndPort := make([]byte, 2)
-	if _, err := io.ReadFull(realConn, bndPort); err != nil {
+	var bndPortBuf [2]byte
+	if _, err := io.ReadFull(realConn, bndPortBuf[:]); err != nil {
 		return
 	}
-	conn.Write(bndPort)
+	conn.Write(bndPortBuf[:])
 
-	go io.Copy(realConn, conn)
-	io.Copy(conn, realConn)
+	relayUp := relayBufPool.Get().([]byte)
+	relayDown := relayBufPool.Get().([]byte)
+	go func() {
+		defer relayBufPool.Put(relayUp)
+		_, _ = io.CopyBuffer(realConn, conn, relayUp)
+	}()
+	defer relayBufPool.Put(relayDown)
+	_, _ = io.CopyBuffer(conn, realConn, relayDown)
 }
 
 func (p *FakeDNSProxy) handleUDPAssociate(tcpConn net.Conn, atyp byte, targetAddr []byte, targetPort []byte) {
@@ -216,8 +247,8 @@ func (p *FakeDNSProxy) handleUDPAssociate(tcpConn net.Conn, atyp byte, targetAdd
 	if _, err := realConn.Write([]byte{5, 1, 0}); err != nil {
 		return
 	}
-	authResp := make([]byte, 2)
-	if _, err := io.ReadFull(realConn, authResp); err != nil {
+	var udpAuthBuf [2]byte
+	if _, err := io.ReadFull(realConn, udpAuthBuf[:]); err != nil {
 		return
 	}
 
@@ -228,34 +259,40 @@ func (p *FakeDNSProxy) handleUDPAssociate(tcpConn net.Conn, atyp byte, targetAdd
 		return
 	}
 
-	replyHeader := make([]byte, 4)
-	if _, err := io.ReadFull(realConn, replyHeader); err != nil {
+	var udpReplyHdrBuf [4]byte
+	if _, err := io.ReadFull(realConn, udpReplyHdrBuf[:]); err != nil {
 		return
 	}
 
 	var bndAddr []byte
-	if replyHeader[3] == 1 {
-		bndAddr = make([]byte, 4)
-	} else if replyHeader[3] == 3 {
-		l := make([]byte, 1)
-		io.ReadFull(realConn, l)
-		dom := make([]byte, l[0])
+	var udpBndIPv4Buf [4]byte
+	var udpBndIPv6Buf [16]byte
+	var udpBndDomLenBuf [1]byte
+	if udpReplyHdrBuf[3] == 1 {
+		bndAddr = udpBndIPv4Buf[:]
+	} else if udpReplyHdrBuf[3] == 3 {
+		io.ReadFull(realConn, udpBndDomLenBuf[:])
+		dom := make([]byte, udpBndDomLenBuf[0])
 		io.ReadFull(realConn, dom)
-		bndAddr = append(l, dom...)
-	} else if replyHeader[3] == 4 {
-		bndAddr = make([]byte, 16)
+		combined := make([]byte, 1+len(dom))
+		combined[0] = udpBndDomLenBuf[0]
+		copy(combined[1:], dom)
+		bndAddr = combined
+	} else if udpReplyHdrBuf[3] == 4 {
+		bndAddr = udpBndIPv6Buf[:]
 	}
 	if len(bndAddr) > 0 {
 		io.ReadFull(realConn, bndAddr)
 	}
 
-	bndPortBuf := make([]byte, 2)
-	io.ReadFull(realConn, bndPortBuf)
+	var udpBndPortBuf [2]byte
+	io.ReadFull(realConn, udpBndPortBuf[:])
+	bndPortBuf := udpBndPortBuf[:]
 
 	var realUdpAddr *net.UDPAddr
-	if replyHeader[3] == 1 {
+	if udpReplyHdrBuf[3] == 1 {
 		realUdpAddr = &net.UDPAddr{IP: net.IP(bndAddr), Port: int(binary.BigEndian.Uint16(bndPortBuf))}
-	} else if replyHeader[3] == 4 {
+	} else if udpReplyHdrBuf[3] == 4 {
 		realUdpAddr = &net.UDPAddr{IP: net.IP(bndAddr), Port: int(binary.BigEndian.Uint16(bndPortBuf))}
 	}
 	if realUdpAddr != nil && realUdpAddr.IP.IsUnspecified() {
@@ -273,15 +310,21 @@ func (p *FakeDNSProxy) handleUDPAssociate(tcpConn net.Conn, atyp byte, targetAdd
 	localPort := localUdp.LocalAddr().(*net.UDPAddr).Port
 
 	reply := []byte{5, 0, 0, 1, 127, 0, 0, 1}
-	pBuf := make([]byte, 2)
-	binary.BigEndian.PutUint16(pBuf, uint16(localPort))
-	reply = append(reply, pBuf...)
+	var portScratch [2]byte
+	binary.BigEndian.PutUint16(portScratch[:], uint16(localPort))
+	reply = append(reply, portScratch[:]...)
 	if _, err := tcpConn.Write(reply); err != nil {
 		return
 	}
 
 	go func() {
-		buf := make([]byte, 65535)
+		buf := relayBufPool.Get().([]byte)
+		if len(buf) < 65535 {
+			buf = make([]byte, 65535)
+		} else {
+			buf = buf[:65535]
+		}
+		defer relayBufPool.Put(buf)
 		var tun2socksAddr *net.UDPAddr
 		for {
 			n, rAddr, err := localUdp.ReadFromUDP(buf)
@@ -338,7 +381,8 @@ func (p *FakeDNSProxy) handleUDPAssociate(tcpConn net.Conn, atyp byte, targetAdd
 				// the receive buffer's backing array. On the next ReadFromUDP,
 				// only `n` bytes overwrite buf, leaving stale response bytes
 				// past `n` — parseDNSQuery then read corrupted offsets from
-				// the previous iteration's reply. Build in a fresh slice.
+				// the previous iteration's reply. Build in a pooled scratch
+				// that is NOT the receive buffer (aliasing guard).
 				dnsQuery := make([]byte, n-offset)
 				copy(dnsQuery, buf[offset:n])
 				hostname := parseDNSQuery(dnsQuery)
@@ -346,10 +390,22 @@ func (p *FakeDNSProxy) handleUDPAssociate(tcpConn net.Conn, atyp byte, targetAdd
 					fakeIP := p.dnsMap.GetFakeIP(hostname)
 					resp := buildDNSResponse(dnsQuery, fakeIP)
 					if resp != nil {
-						fullResp := make([]byte, 0, offset+len(resp))
-						fullResp = append(fullResp, buf[:offset]...)
-						fullResp = append(fullResp, resp...)
+						need := offset + len(resp)
+						scratch := relayBufPool.Get().([]byte)
+						var fullResp []byte
+						if need <= len(scratch) {
+							fullResp = scratch[:need]
+						} else {
+							fullResp = make([]byte, need)
+							relayBufPool.Put(scratch)
+							scratch = nil
+						}
+						copy(fullResp, buf[:offset])
+						copy(fullResp[offset:], resp)
 						localUdp.WriteToUDP(fullResp, rAddr)
+						if scratch != nil {
+							relayBufPool.Put(scratch)
+						}
 					}
 				}
 				continue
@@ -371,8 +427,11 @@ func parseDNSQuery(query []byte) string {
 	if len(query) < 12 {
 		return ""
 	}
+	// First pass: validate bounds and measure the final hostname length
+	// (label bytes + one dot per gap). Single allocation below.
 	pos := 12
-	labels := []string{}
+	total := 0
+	labels := 0
 	for pos < len(query) {
 		length := int(query[pos])
 		if length == 0 {
@@ -381,22 +440,35 @@ func parseDNSQuery(query []byte) string {
 		if length > 63 || pos+1+length > len(query) {
 			return ""
 		}
-		pos++
-		label := string(query[pos : pos+length])
-		labels = append(labels, label)
-		pos += length
+		if labels > 0 {
+			total++ // dot separator
+		}
+		total += length
+		labels++
+		pos += 1 + length
 	}
-	if len(labels) == 0 {
+	if labels == 0 {
 		return ""
 	}
-	hostname := ""
-	for i, label := range labels {
-		if i > 0 {
-			hostname += "."
+	// Second pass: copy labels with dots into the single buffer.
+	out := make([]byte, total)
+	pos = 12
+	off := 0
+	for pos < len(query) {
+		length := int(query[pos])
+		if length == 0 {
+			break
 		}
-		hostname += label
+		pos++
+		if off > 0 {
+			out[off] = '.'
+			off++
+		}
+		copy(out[off:off+length], query[pos:pos+length])
+		off += length
+		pos += length
 	}
-	return hostname
+	return string(out)
 }
 
 func buildDNSResponse(query []byte, fakeIP string) []byte {
