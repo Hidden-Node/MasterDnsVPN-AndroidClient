@@ -57,12 +57,13 @@ internal object ScanStateReducer {
         RegexOption.IGNORE_CASE
     )
 
+    private val SCAN_PREFILTER_NEEDLES = listOf("accepted", "reactivated", "disabled", "totals:", "active resolvers",
+            "total", "valid", "pool", "scan", "remaining", "synced", "mtu",
+            "testing mtu sizes", "mtu testing completed",
+            "session initialized successfully", "backoff", "/")
+
     internal fun reduce(prev: ScanStateBundle, line: String): ScanStateBundle {
-        if (listOf("accepted", "reactivated", "disabled", "totals:", "active resolvers",
-                "total", "valid", "pool", "scan", "remaining", "synced", "mtu",
-                "testing mtu sizes", "mtu testing completed",
-                "session initialized successfully", "backoff", "/")
-                .none { line.contains(it, ignoreCase = true) }) return prev
+        if (SCAN_PREFILTER_NEEDLES.none { line.contains(it, ignoreCase = true) }) return prev
         var scanStatus = prev.scanStatus
         var activeResolvers = prev.activeResolvers
         var connectionWarning = prev.connectionWarning

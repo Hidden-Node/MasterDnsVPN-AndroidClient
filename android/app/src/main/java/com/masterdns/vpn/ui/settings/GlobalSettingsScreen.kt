@@ -86,6 +86,7 @@ fun GlobalSettingsScreen(vm: GlobalSettingsViewModel = viewModel()) {
     val current by vm.settings.collectAsState()
     val installedApps by vm.installedApps.collectAsState()
     val localIp by vm.localIp.collectAsState()
+    LaunchedEffect(Unit) { vm.refreshLocalIp() }
     var draft by remember(current) { mutableStateOf(current) }
     var sharingSocksPortText by remember(current.internetSharingSocksPort) {
         mutableStateOf(current.internetSharingSocksPort.toString())

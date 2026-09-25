@@ -44,6 +44,10 @@ class GlobalSettingsViewModel(app: Application) : AndroidViewModel(app) {
     val localIp: StateFlow<String?> = _localIp
 
     init {
+        refreshLocalIp()
+    }
+
+    fun refreshLocalIp() {
         viewModelScope.launch(Dispatchers.IO) {
             _localIp.value = getSystemLocalIp()
         }
@@ -101,8 +105,8 @@ class GlobalSettingsViewModel(app: Application) : AndroidViewModel(app) {
                 }.getOrNull()
                 if (bmp != null) {
                     iconCache.put(pkg, bmp)
+                    _icons.value = _icons.value + (pkg to bmp)
                 }
-                _icons.value = _icons.value + (pkg to bmp)
             } finally {
                 iconInFlight.remove(pkg)
             }
