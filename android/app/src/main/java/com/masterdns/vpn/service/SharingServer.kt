@@ -103,9 +103,9 @@ internal object SharingServer {
     ) {
         try {
             client.soTimeout = 15000
-            // Buffered: coalesces the per-byte read() syscalls in readLineUnbuffered.
-            // Buffered bytes past a newline are discarded on return — fine for
-            // header lines, wrong for pipelined bodies (no pipelining support).
+            // Buffered: coalesces per-byte read() syscalls. The SAME wrapper MUST
+            // reach the client->upstream pump (passed below): bytes already read
+            // past the headers belong to the tunnel/body, not to us.
             val input = java.io.BufferedInputStream(client.getInputStream())
             val output = client.getOutputStream().bufferedWriter()
 
@@ -166,7 +166,7 @@ internal object SharingServer {
                 client.soTimeout = 0
                 output.write("HTTP/1.1 200 Connection Established\r\n\r\n")
                 output.flush()
-                bridgeBidirectional(client, upstream)
+                bridgeBidirectional(client, upstream, input)
             } else {
                 val target = parseProxyTarget(method, url)
                 if (target == null) {
@@ -205,7 +205,7 @@ internal object SharingServer {
                 val upstreamOut = upstream.getOutputStream()
                 upstreamOut.write(rewritten.toByteArray(Charsets.ISO_8859_1))
                 upstreamOut.flush()
-                bridgeBidirectional(client, upstream)
+                bridgeBidirectional(client, upstream, input)
             }
         } catch (e: CancellationException) {
             throw e
@@ -219,12 +219,14 @@ internal object SharingServer {
     private suspend fun kotlinx.coroutines.CoroutineScope.pump(
         source: java.net.Socket,
         dest: java.net.Socket,
-        shutdownTarget: java.net.Socket
+        shutdownTarget: java.net.Socket,
+        sourceInput: java.io.InputStream? = null
     ) {
         val buffer = ByteArray(PUMP_BUFFER_SIZE)
-        val input = source.getInputStream()
-        val output = dest.getOutputStream()
+        var output: java.io.OutputStream? = null
         try {
+            val input = sourceInput ?: source.getInputStream()
+            output = dest.getOutputStream()
             while (isActive && !source.isClosed && !dest.isClosed) {
                 val read = input.read(buffer)
                 if (read <= 0) break
@@ -232,18 +234,22 @@ internal object SharingServer {
             }
         } catch (_: Exception) {
         } finally {
-            runCatching { output.flush() }
+            runCatching { output?.flush() }
             runCatching { shutdownTarget.shutdownOutput() }
         }
     }
 
-    suspend fun bridgeBidirectional(client: java.net.Socket, upstream: java.net.Socket) = coroutineScope {
+    suspend fun bridgeBidirectional(
+        client: java.net.Socket,
+        upstream: java.net.Socket,
+        clientInput: java.io.InputStream? = null
+    ) = coroutineScope {
         val upToClient = launch(Dispatchers.IO) {
             pump(upstream, client, client)
         }
 
         val clientToUp = launch(Dispatchers.IO) {
-            pump(client, upstream, upstream)
+            pump(client, upstream, upstream, clientInput)
         }
 
         joinAll(upToClient, clientToUp)
