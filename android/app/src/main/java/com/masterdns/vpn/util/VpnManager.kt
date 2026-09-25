@@ -19,6 +19,7 @@ import java.util.Date
 import java.util.Locale
 import java.util.TimeZone
 import java.util.ArrayDeque
+import kotlin.jvm.Volatile
 import mobile.Mobile
 
 /**
@@ -94,7 +95,7 @@ object VpnManager {
     private val logBufferLock = Any()
     private val logBuffer = ArrayDeque<LogEntry>(MAX_LOG_LINES)
     private var logBufferVersion = 0L
-    private var lastEmittedLogVersion = -1L
+    @Volatile private var lastEmittedLogVersion = -1L
 
     private val TIMESTAMP_CANDIDATES = listOf(
         TimestampCandidate(
