@@ -3,6 +3,7 @@ package com.masterdns.vpn
 import com.google.common.truth.Truth.assertThat
 import com.masterdns.vpn.service.SharingServer
 import kotlinx.coroutines.runBlocking
+import kotlinx.coroutines.withTimeout
 import org.junit.Test
 import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
@@ -10,6 +11,9 @@ import org.robolectric.annotation.Config
 import java.io.InputStream
 import java.io.OutputStream
 import java.util.Base64
+import java.util.concurrent.CountDownLatch
+import java.util.concurrent.TimeUnit
+import java.util.concurrent.atomic.AtomicReference
 
 @RunWith(RobolectricTestRunner::class)
 @Config(sdk = [33])
@@ -245,6 +249,105 @@ class SharingServerTest {
         assertThat(sent!!.startsWith("GET /path HTTP/1.1")).isTrue()
         assertThat(sent).contains("Host:")
         assertThat(sent.lines().none { it.startsWith("Proxy-Authorization:") }).isTrue()
+    }
+
+    @Test
+    fun httpConnect_coalescedClientHello_reachesUpstream() = runBlocking {
+        withTimeout(10000) {
+            val received = AtomicReference<ByteArray?>(null)
+            val latch = CountDownLatch(1)
+            // Same SOCKS5 handshake as socksUpstreamStub, then captures the
+            // 64 tunnel bytes that follow the CONNECT bridging.
+            val (stubPort, stub) = runStub { input, output ->
+                try {
+                    readExactly(input, 3)
+                    output.write(byteArrayOf(0x05, 0x00)); output.flush()
+                    readExactly(input, 4 + 1 + "example.com".length + 2)
+                    output.write(byteArrayOf(0x05, 0x00, 0x00, 0x01, 0, 0, 0, 0, 0, 0)); output.flush()
+                    received.set(readExactly(input, 64))
+                } finally {
+                    latch.countDown()
+                }
+                runCatching { readExactly(input, 1) } // hold until handler closes
+            }
+            val (c, s) = socketPair()
+            c.soTimeout = 10000
+            val h = runHandler { runBlocking { SharingServer.handleHttpClient(s, stubPort, "", "") } }
+            try {
+                val sentinel = ByteArray(64) { (0xA0 + it).toByte() }
+                val head = "CONNECT example.com:443 HTTP/1.1\r\nHost: example.com:443\r\n\r\n"
+                    .toByteArray(Charsets.ISO_8859_1)
+                // ONE write: forces headers + tunnel bytes into the same TCP
+                // segment so BufferedInputStream over-reads past the headers.
+                c.getOutputStream().write(head + sentinel)
+                c.getOutputStream().flush()
+                val resp = readUntilBlank(c)
+                assertThat(resp).startsWith("HTTP/1.1 200 Connection Established")
+                assertThat(latch.await(9, TimeUnit.SECONDS)).isTrue()
+                assertThat(received.get()).isEqualTo(sentinel)
+            } finally {
+                runCatching { c.close() }
+                joinHandler(h)
+                joinStub(stub)
+            }
+        }
+    }
+
+    @Test
+    fun httpPost_coalescedBody_forwardedIntact() = runBlocking {
+        withTimeout(10000) {
+            val bodySent = ByteArray(64) { ('A'.code + (it % 26)).toByte() }
+            val bodyReceived = AtomicReference<ByteArray?>(null)
+            val latch = CountDownLatch(1)
+            // Same SOCKS5 handshake as socksUpstreamStub, then reads the
+            // rewritten request headers byte-exact followed by the 64-byte body.
+            val (stubPort, stub) = runStub { input, output ->
+                try {
+                    readExactly(input, 3)
+                    output.write(byteArrayOf(0x05, 0x00)); output.flush()
+                    readExactly(input, 4 + 1 + "example.com".length + 2)
+                    output.write(byteArrayOf(0x05, 0x00, 0x00, 0x01, 0, 0, 0, 0, 0, 0)); output.flush()
+                    // Read rewritten headers byte-by-byte until blank line (no over-read).
+                    val hdr = java.io.ByteArrayOutputStream()
+                    val tail = ArrayDeque<Byte>()
+                    while (true) {
+                        val r = input.read()
+                        if (r < 0) throw IllegalStateException("stub EOF in headers")
+                        hdr.write(r)
+                        tail.addLast(r.toByte())
+                        if (tail.size > 4) tail.removeFirst()
+                        if (tail.size == 4 &&
+                            tail[0] == '\r'.code.toByte() && tail[1] == '\n'.code.toByte() &&
+                            tail[2] == '\r'.code.toByte() && tail[3] == '\n'.code.toByte()
+                        ) break
+                    }
+                    bodyReceived.set(readExactly(input, 64))
+                    output.write("HTTP/1.1 200 OK\r\n\r\n".toByteArray()); output.flush()
+                } finally {
+                    latch.countDown()
+                }
+                runCatching { readExactly(input, 1) } // hold until handler closes
+            }
+            val (c, s) = socketPair()
+            c.soTimeout = 10000
+            val h = runHandler { runBlocking { SharingServer.handleHttpClient(s, stubPort, "", "") } }
+            try {
+                val head = ("POST http://example.com/post HTTP/1.1\r\n" +
+                    "Host: example.com\r\n" +
+                    "Content-Length: 64\r\n\r\n").toByteArray(Charsets.ISO_8859_1)
+                // ONE write: headers + body coalesced, as real clients send them.
+                c.getOutputStream().write(head + bodySent)
+                c.getOutputStream().flush()
+                val resp = readUntilBlank(c)
+                assertThat(resp).startsWith("HTTP/1.1 200 OK")
+                assertThat(latch.await(9, TimeUnit.SECONDS)).isTrue()
+                assertThat(bodyReceived.get()).isEqualTo(bodySent)
+            } finally {
+                runCatching { c.close() }
+                joinHandler(h)
+                joinStub(stub)
+            }
+        }
     }
 
     @Test
