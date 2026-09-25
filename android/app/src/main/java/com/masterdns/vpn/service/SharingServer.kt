@@ -8,6 +8,8 @@ import kotlinx.coroutines.isActive
 import kotlinx.coroutines.joinAll
 import kotlinx.coroutines.launch
 
+private const val PUMP_BUFFER_SIZE = 32 * 1024
+
 internal object SharingServer {
     suspend fun handleSocksClient(
         client: java.net.Socket,
@@ -219,18 +221,18 @@ internal object SharingServer {
         dest: java.net.Socket,
         shutdownTarget: java.net.Socket
     ) {
-        val buffer = ByteArray(8192)
+        val buffer = ByteArray(PUMP_BUFFER_SIZE)
+        val input = source.getInputStream()
+        val output = dest.getOutputStream()
         try {
-            val input = source.getInputStream()
-            val output = dest.getOutputStream()
             while (isActive && !source.isClosed && !dest.isClosed) {
                 val read = input.read(buffer)
                 if (read <= 0) break
                 output.write(buffer, 0, read)
-                output.flush()
             }
         } catch (_: Exception) {
         } finally {
+            runCatching { output.flush() }
             runCatching { shutdownTarget.shutdownOutput() }
         }
     }

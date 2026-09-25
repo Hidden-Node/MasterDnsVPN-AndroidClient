@@ -246,4 +246,50 @@ class SharingServerTest {
         assertThat(sent).contains("Host:")
         assertThat(sent.lines().none { it.startsWith("Proxy-Authorization:") }).isTrue()
     }
+
+    @Test
+    fun bridgeBidirectional_relay1MB_byteIdenticalAndHalfClose() {
+        val (testA, handlerA) = socketPair()
+        val (testB, handlerB) = socketPair()
+        val h = runHandler { runBlocking { SharingServer.bridgeBidirectional(handlerA, handlerB) } }
+        try {
+            val payload = ByteArray(1024 * 1024) { (it and 0xFF).toByte() }
+            // Writer thread: a single 1 MB write could block on full socket
+            // buffers with nobody draining, so write concurrently with reading.
+            val writer = Thread {
+                runCatching {
+                    val out = testA.getOutputStream()
+                    var off = 0
+                    while (off < payload.size) {
+                        val n = minOf(65536, payload.size - off)
+                        out.write(payload, off, n)
+                        out.flush()
+                        off += n
+                    }
+                }
+            }
+            writer.isDaemon = true
+            writer.start()
+            testB.soTimeout = 10000
+            val received = ByteArray(payload.size)
+            var total = 0
+            val inB = testB.getInputStream()
+            while (total < received.size) {
+                val r = inB.read(received, total, received.size - total)
+                if (r < 0) throw IllegalStateException("early EOF after $total bytes")
+                total += r
+            }
+            writer.join(15000)
+            assertThat(writer.isAlive).isFalse()
+            assertThat(received).isEqualTo(payload)
+            // Half-close: A shuts down output -> the A-to-B pump must flush and
+            // half-close B, so the B reader observes EOF.
+            testA.shutdownOutput()
+            assertThat(inB.read()).isEqualTo(-1)
+        } finally {
+            runCatching { testB.close() }
+            runCatching { testA.close() }
+        }
+        joinHandler(h)
+    }
 }
