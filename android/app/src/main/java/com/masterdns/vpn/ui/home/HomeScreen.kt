@@ -76,12 +76,6 @@ fun HomeScreen(
     onOpenInfo: () -> Unit
 ) {
     val vpnState by VpnManager.state.collectAsState()
-    val upBps by VpnManager.uploadSpeedBps.collectAsState()
-    val downBps by VpnManager.downloadSpeedBps.collectAsState()
-    val uploadTotalBytes by VpnManager.uploadTotalBytes.collectAsState()
-    val downloadTotalBytes by VpnManager.downloadTotalBytes.collectAsState()
-    val connectedDurationSeconds by VpnManager.connectedDurationSeconds.collectAsState()
-    val scanStatus by VpnManager.scanStatus.collectAsState()
     val selectedProfile by viewModel.selectedProfile.collectAsState()
     val error by VpnManager.errorMessage.collectAsState()
     val connectionWarning by VpnManager.connectionWarning.collectAsState()
@@ -109,13 +103,6 @@ fun HomeScreen(
     val isConnected = vpnState == VpnManager.VpnState.CONNECTED
     val isConnecting = vpnState == VpnManager.VpnState.CONNECTING
     val isDisconnecting = vpnState == VpnManager.VpnState.DISCONNECTING
-    val totalResolvers = scanStatus.scanTotalFromCore
-    val scannedCount = scanStatus.validCount + scanStatus.rejectedCount
-    val scanProgress = if (totalResolvers > 0) {
-        (scannedCount.toFloat() / totalResolvers.toFloat()).coerceIn(0f, 1f)
-    } else {
-        0f
-    }
 
     val statusColor by animateColorAsState(
         targetValue = when (vpnState) {
@@ -240,15 +227,6 @@ fun HomeScreen(
                     ) {
                         MdvConnectionTelemetryCard(
                             vpnState = vpnState,
-                            scanStatus = scanStatus,
-                            scannedCount = scannedCount,
-                            totalResolvers = totalResolvers,
-                            scanProgress = scanProgress,
-                            downBps = downBps,
-                            upBps = upBps,
-                            downloadTotalBytes = downloadTotalBytes,
-                            uploadTotalBytes = uploadTotalBytes,
-                            connectedDurationSeconds = connectedDurationSeconds,
                             proxyHost = proxyHost,
                             proxyPort = proxyPort,
                             socksAuthEnabled = socksAuthEnabled,
@@ -315,15 +293,6 @@ fun HomeScreen(
 
                 MdvConnectionTelemetryCard(
                     vpnState = vpnState,
-                    scanStatus = scanStatus,
-                    scannedCount = scannedCount,
-                    totalResolvers = totalResolvers,
-                    scanProgress = scanProgress,
-                    downBps = downBps,
-                    upBps = upBps,
-                    downloadTotalBytes = downloadTotalBytes,
-                    uploadTotalBytes = uploadTotalBytes,
-                    connectedDurationSeconds = connectedDurationSeconds,
                     proxyHost = proxyHost,
                     proxyPort = proxyPort,
                     socksAuthEnabled = socksAuthEnabled,
