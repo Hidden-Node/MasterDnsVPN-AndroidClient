@@ -46,6 +46,7 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateMapOf
 import androidx.compose.runtime.mutableStateOf
@@ -500,9 +501,10 @@ fun SettingsScreen(
                             if ((field.key == "SOCKS5_USER" || field.key == "SOCKS5_PASS") && !socksAuthEnabled) {
                                 return@forEach
                             }
+                            val value by remember(field.key) { derivedStateOf { fieldsState[field.key].orEmpty() } }
                             ConfigFieldCard(
                                 field = field,
-                                value = fieldsState[field.key].orEmpty(),
+                                value = value,
                                 onChange = { fieldsState[field.key] = it }
                             )
                             Spacer(modifier = Modifier.height(MdvSpace.S2))
