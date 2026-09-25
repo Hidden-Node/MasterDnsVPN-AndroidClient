@@ -204,6 +204,7 @@ class MasterDnsVpnService : VpnService() {
                 if (inputs.proxyMode) {
                     VpnManager.appendLog("Proxy mode active: skipping Android VpnService TUN setup")
                     VpnManager.updateState(VpnManager.VpnState.CONNECTED)
+                    releaseWakeLock()
                     VpnManager.startTrafficMonitor(this@MasterDnsVpnService)
                     val notification = buildNotification("Proxy mode active on port ${inputs.socksPort}")
                     val manager = getSystemService(NOTIFICATION_SERVICE) as android.app.NotificationManager
@@ -215,6 +216,7 @@ class MasterDnsVpnService : VpnService() {
                 registerNetworkCallback()
 
                 VpnManager.updateState(VpnManager.VpnState.CONNECTED)
+                releaseWakeLock()
                 VpnManager.startTrafficMonitor(this@MasterDnsVpnService)
                 VpnManager.appendLog("VPN connected successfully!")
 
