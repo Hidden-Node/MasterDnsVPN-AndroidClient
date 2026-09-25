@@ -3,18 +3,18 @@ package com.masterdns.vpn.service
 internal class LineTooLongException : IllegalStateException("HTTP line exceeds 16384 bytes")
 
 internal fun readLineUnbuffered(input: java.io.InputStream): String? {
-    val bytes = ArrayList<Byte>(256)
+    val out = java.io.ByteArrayOutputStream(256)
     while (true) {
         val next = input.read()
         if (next < 0) {
-            if (bytes.isEmpty()) return null
+            if (out.size() == 0) return null
             break
         }
         if (next == '\n'.code) break
         if (next != '\r'.code) {
-            bytes.add(next.toByte())
-            if (bytes.size > 16384) throw LineTooLongException()
+            out.write(next)
+            if (out.size() > 16384) throw LineTooLongException()
         }
     }
-    return String(bytes.toByteArray(), Charsets.ISO_8859_1)
+    return String(out.toByteArray(), Charsets.ISO_8859_1)
 }
