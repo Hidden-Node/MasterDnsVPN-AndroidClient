@@ -90,6 +90,54 @@ func TestParseDNSQuery_CompressionPointerRejected(t *testing.T) {
 	}
 }
 
+// TestParseDNSQueryEquivalence is the plan 047 tripwire for the QNAME
+// parser rewrite: every input must produce a byte-identical result before
+// and after. Proven by running this test on the stashed baseline
+// (`git stash push -- mobile/tun/fakedns_proxy.go`) and on the rewritten
+// parser — it must PASS on both trees.
+func TestParseDNSQueryEquivalence(t *testing.T) {
+	long63 := strings.Repeat("a", 63)
+	long64 := strings.Repeat("b", 64)
+
+	valid := buildQuery(t, "example.com")
+	truncatedTail := valid[:15] // header + [7]ex: length 7 claims 7 bytes, 2 remain
+	noTerminator := append(append([]byte{}, valid[:12]...), 3, 'f', 'o', 'o')
+
+	overlong := make([]byte, 12)
+	binary.BigEndian.PutUint16(overlong[4:6], 1)
+	overlong = append(overlong, byte(64))
+	overlong = append(overlong, []byte(long64)...)
+	overlong = append(overlong, 0, 0, 1, 0, 1)
+
+	emptyQname := append(append([]byte{}, valid[:12]...), 0, 0, 1, 0, 1)
+
+	cases := []struct {
+		name  string
+		query []byte
+		want  string
+	}{
+		{"valid", valid, "example.com"},
+		{"multiLabel", buildQuery(t, "a.bb.ccc.dddd.example.com"), "a.bb.ccc.dddd.example.com"},
+		{"singleLabel", buildQuery(t, "localhost"), "localhost"},
+		{"empty", []byte{}, ""},
+		{"headerOnly", make([]byte, 12), ""},
+		{"tooShort", []byte{0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10}, ""},
+		{"truncatedTail", truncatedTail, ""},
+		{"truncatedNoTerminator", noTerminator, "foo"},
+		{"overlongLabel", overlong, ""},
+		{"label63OK", buildQuery(t, long63+".example"), long63 + ".example"},
+		{"emptyQname", emptyQname, ""},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			if got := parseDNSQuery(tc.query); got != tc.want {
+				t.Fatalf("parseDNSQuery(%s) = %q, want %q", tc.name, got, tc.want)
+			}
+		})
+	}
+}
+
 func TestBuildDNSResponse_ValidIPReturnsAResponse(t *testing.T) {
 	q := buildQuery(t, "example.com")
 	resp := buildDNSResponse(q, "198.18.0.5")

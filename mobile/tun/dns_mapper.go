@@ -4,7 +4,6 @@ import (
 	"fmt"
 	"log"
 	"sync"
-	"sync/atomic"
 )
 
 type DNSMapper struct {
@@ -23,16 +22,25 @@ func NewDNSMapper() *DNSMapper {
 }
 
 func (d *DNSMapper) GetFakeIP(hostname string) string {
-	d.mu.Lock()
-	defer d.mu.Unlock()
-
+	d.mu.RLock()
 	if ip, ok := d.hostnameToIP[hostname]; ok {
+		d.mu.RUnlock()
+		return ip
+	}
+	d.mu.RUnlock()
+
+	d.mu.Lock()
+	// Re-check under the write lock: another goroutine may have
+	// inserted this hostname while we upgraded from read to write.
+	if ip, ok := d.hostnameToIP[hostname]; ok {
+		d.mu.Unlock()
 		return ip
 	}
 
-	counter := atomic.AddUint32(&d.counter, 1)
+	d.counter++
+	counter := d.counter
 	if counter > 65535 {
-		atomic.StoreUint32(&d.counter, 1)
+		d.counter = 1
 		counter = 1
 	}
 
@@ -42,6 +50,7 @@ func (d *DNSMapper) GetFakeIP(hostname string) string {
 
 	d.hostnameToIP[hostname] = fakeIP
 	d.ipToHostname[fakeIP] = hostname
+	d.mu.Unlock()
 
 	log.Printf("[TUN-DNS] Mapped %s -> %s", hostname, fakeIP)
 	return fakeIP
