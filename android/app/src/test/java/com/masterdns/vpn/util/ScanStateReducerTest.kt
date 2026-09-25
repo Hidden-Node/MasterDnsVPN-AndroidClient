@@ -117,4 +117,42 @@ class ScanStateReducerTest {
         assertEquals(1280, result.scanStatus.syncedUploadMtu)
         assertEquals(1400, result.scanStatus.syncedDownloadMtu)
     }
+
+    @Test
+    fun guardPlainChattyCoreOutputReturnsPrevUnchanged() {
+        val prev = ScanStateBundle()
+        assertEquals(prev, ScanStateReducer.reduce(prev, "INFO: heartbeat tick ok"))
+        assertEquals(prev, ScanStateReducer.reduce(prev, "DEBUG dns query succeeded"))
+        assertEquals(prev, ScanStateReducer.reduce(prev, "INFO upstream endpoint ready"))
+    }
+
+    @Test
+    fun guardMtuNoiseWithoutPatternReturnsPrevUnchanged() {
+        val prev = ScanStateBundle()
+        val result = ScanStateReducer.reduce(prev, "INFO MTU probe size 1234 bytes done")
+        assertEquals(prev, result)
+    }
+
+    @Test
+    fun guardSlashNoiseWithoutProgressReturnsPrevUnchanged() {
+        val prev = ScanStateBundle()
+        val result = ScanStateReducer.reduce(prev, "INFO a/b experiment enabled")
+        assertEquals(prev, result)
+    }
+
+    @Test
+    fun guardKeywordFamiliesStillClassify() {
+        assertEquals(
+            7,
+            ScanStateReducer.reduce(empty, "total active: 7").scanStatus.activeResolvers
+        )
+        assertEquals(
+            4,
+            ScanStateReducer.reduce(empty, "remaining: 4").scanStatus.activeResolvers
+        )
+        assertEquals(
+            12,
+            ScanStateReducer.reduce(empty, "total resolvers 12").scanStatus.scanTotalFromCore
+        )
+    }
 }

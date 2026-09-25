@@ -129,6 +129,20 @@ object VpnManager {
         val outputPattern: String
     )
 
+    private val formatterCacheLock = Any()
+    private val formatterCache = mutableMapOf<String, ThreadLocal<SimpleDateFormat>>()
+
+    private fun cachedFormatter(pattern: String): SimpleDateFormat {
+        val holder: ThreadLocal<SimpleDateFormat> = synchronized(formatterCacheLock) {
+            formatterCache.getOrPut(pattern) {
+                ThreadLocal.withInitial {
+                    SimpleDateFormat(pattern, Locale.US).apply { isLenient = false }
+                }
+            }
+        }
+        return holder.get()!!
+    }
+
     fun updateState(newState: VpnState) {
         _state.value = newState
         if (newState == VpnState.CONNECTING) {
@@ -168,9 +182,8 @@ object VpnManager {
 
     private fun appendLogInternal(line: String, source: LogSource) {
         val normalizedLine = normalizeLogTimestampToLocal(line)
-        val upper = normalizedLine.uppercase()
-        val isError = upper.contains("[ERROR]") || upper.contains(" ERROR ")
-        val isWarn = upper.contains("[WARN]") || upper.contains(" WARNING ") || upper.contains(" WARN ")
+        val isError = normalizedLine.contains("[ERROR]", ignoreCase = true) || normalizedLine.contains(" ERROR ", ignoreCase = true)
+        val isWarn = normalizedLine.contains("[WARN]", ignoreCase = true) || normalizedLine.contains(" WARNING ", ignoreCase = true) || normalizedLine.contains(" WARN ", ignoreCase = true)
         _logCounters.value = _logCounters.value.copy(
             total = _logCounters.value.total + 1,
             errors = _logCounters.value.errors + if (isError) 1 else 0,
@@ -326,7 +339,13 @@ object VpnManager {
     private fun normalizeLogTimestampToLocal(line: String): String {
         if (!startsWithTimestamp(line)) return line
 
-        for (candidate in TIMESTAMP_CANDIDATES) {
+        for ((index, candidate) in TIMESTAMP_CANDIDATES.withIndex()) {
+            when (index) {
+                0, 1 -> if (!line.contains('T')) continue
+                2 -> if (!line.contains("UTC")) continue
+                3 -> if (!line.contains('-')) continue
+                4 -> if (!line.contains('/')) continue
+            }
             val match = candidate.regex.find(line) ?: continue
             val utcStamp = match.groupValues[1]
             val suffix = match.groupValues[2]
@@ -348,12 +367,11 @@ object VpnManager {
         outputPattern: String
     ): String? {
         return try {
-            val input = SimpleDateFormat(inputPattern, Locale.US).apply {
+            val input = cachedFormatter(inputPattern).apply {
                 timeZone = TimeZone.getTimeZone("UTC")
-                isLenient = false
             }
             val parsed: Date = input.parse(utcValue) ?: return null
-            val output = SimpleDateFormat(outputPattern, Locale.US).apply {
+            val output = cachedFormatter(outputPattern).apply {
                 timeZone = TimeZone.getDefault()
             }
             output.format(parsed)
