@@ -38,105 +38,7 @@ var (
 	trackedDown      int64
 	trackingListener net.Listener
 	trackingMu       sync.Mutex
-
-	// Plan 047 step 3: hop-free sharded counters run ALONGSIDE the
-	// tracking proxy as an A/B harness. 8 shards cut atomic contention;
-	// per-connection deltas flush every 32KB or on close.
-	directUp      [directShardCount]int64
-	directDown    [directShardCount]int64
-	directShardRR uint64
 )
-
-const (
-	directShardCount = 8
-	directFlushBytes = 32 * 1024
-)
-
-// resetDirectBandwidth zeroes the sharded counters. Called on every
-// start alongside the legacy trackedUp/trackedDown reset.
-func resetDirectBandwidth() {
-	for i := 0; i < directShardCount; i++ {
-		atomic.StoreInt64(&directUp[i], 0)
-		atomic.StoreInt64(&directDown[i], 0)
-	}
-	atomic.StoreUint64(&directShardRR, 0)
-}
-
-// getDirectBandwidth folds the 8 shards into totals.
-func getDirectBandwidth() (up, down int64) {
-	for i := 0; i < directShardCount; i++ {
-		up += atomic.LoadInt64(&directUp[i])
-		down += atomic.LoadInt64(&directDown[i])
-	}
-	return up, down
-}
-
-// directConn counts bytes without an extra hop: deltas accumulate locally
-// and flush to the assigned shard every 32KB or on Close. Read counts
-// upload (client->server), Write counts download (server->client),
-// mirroring trackingConn semantics for A/B parity.
-type directConn struct {
-	net.Conn
-	shard    int
-	upBuf    int64
-	downBuf  int64
-	closed   int32
-	flushMu  sync.Mutex
-}
-
-func newDirectConn(c net.Conn) *directConn {
-	shard := int(atomic.AddUint64(&directShardRR, 1) % directShardCount)
-	return &directConn{Conn: c, shard: shard}
-}
-
-func (d *directConn) flushLocked() {
-	if d.upBuf != 0 {
-		atomic.AddInt64(&directUp[d.shard], d.upBuf)
-		d.upBuf = 0
-	}
-	if d.downBuf != 0 {
-		atomic.AddInt64(&directDown[d.shard], d.downBuf)
-		d.downBuf = 0
-	}
-}
-
-func (d *directConn) Read(b []byte) (n int, err error) {
-	n, err = d.Conn.Read(b)
-	if n > 0 {
-		d.flushMu.Lock()
-		d.upBuf += int64(n)
-		if d.upBuf >= directFlushBytes {
-			atomic.AddInt64(&directUp[d.shard], d.upBuf)
-			d.upBuf = 0
-		}
-		d.flushMu.Unlock()
-	}
-	return n, err
-}
-
-func (d *directConn) Write(b []byte) (n int, err error) {
-	n, err = d.Conn.Write(b)
-	if n > 0 {
-		d.flushMu.Lock()
-		d.downBuf += int64(n)
-		if d.downBuf >= directFlushBytes {
-			atomic.AddInt64(&directDown[d.shard], d.downBuf)
-			d.downBuf = 0
-		}
-		d.flushMu.Unlock()
-	}
-	return n, err
-}
-
-func (d *directConn) Close() error {
-	err := d.Conn.Close()
-	if atomic.CompareAndSwapInt32(&d.closed, 0, 1) {
-		d.flushMu.Lock()
-		d.flushLocked()
-		d.flushMu.Unlock()
-	}
-	return err
-}
 
 type trackingConn struct {
 	net.Conn
@@ -170,7 +72,6 @@ func startTrackingProxy(realProxyAddr string) (string, error) {
 
 	atomic.StoreInt64(&trackedUp, 0)
 	atomic.StoreInt64(&trackedDown, 0)
-	resetDirectBandwidth()
 
 	l, err := net.Listen("tcp", "127.0.0.1:0")
 	if err != nil {
@@ -200,15 +101,8 @@ func handleTracking(c net.Conn, realProxyAddr string) {
 	}
 	defer server.Close()
 
-	// Plan 047 step 3 A/B: legacy per-byte atomics and the sharded
-	// 32KB-flush wrapper CHAINED on the client side so both observe the
-	// same bytes in the same direction (Read=up, Write=down).
-	// Parity harness proves equality before hop removal.
-	directClient := newDirectConn(c)
-	defer directClient.Close()
-
 	tcClient := &trackingConn{
-		Conn:    directClient,
+		Conn:    c,
 		onRead:  func(n int64) { atomic.AddInt64(&trackedUp, n) },
 		onWrite: func(n int64) { atomic.AddInt64(&trackedDown, n) },
 	}
