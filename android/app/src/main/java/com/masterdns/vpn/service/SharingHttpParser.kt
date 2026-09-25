@@ -7,6 +7,8 @@ package com.masterdns.vpn.service
  */
 internal data class ProxyTarget(val host: String, val port: Int, val path: String)
 
+private val ABSOLUTE_FORM_REGEX = Regex("^http://(\\[[0-9a-fA-F:.]+\\]|[^/:\\[\\]?]+)(?::(\\d+))?(/.*|\\?.*)?$", RegexOption.IGNORE_CASE)
+
 /**
  * Parses the target of a proxy request line.
  * - CONNECT: accepts "host:port", "host" (default port 443), and
@@ -38,7 +40,7 @@ internal fun parseProxyTarget(method: String, target: String): ProxyTarget? {
     // always arrives as CONNECT.
     if (!method.equals("GET", ignoreCase = true) && !method.equals("POST", ignoreCase = true) &&
         !method.equals("HEAD", ignoreCase = true)) return null
-    val m = Regex("^http://(\\[[0-9a-fA-F:.]+\\]|[^/:\\[\\]?]+)(?::(\\d+))?(/.*|\\?.*)?$", RegexOption.IGNORE_CASE).find(target) ?: return null
+    val m = ABSOLUTE_FORM_REGEX.find(target) ?: return null
     val rawHost = m.groupValues[1]
     if (rawHost.isBlank()) return null
     val host = if (rawHost.startsWith("[") && rawHost.endsWith("]")) rawHost.substring(1, rawHost.length - 1) else rawHost
