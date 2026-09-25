@@ -201,7 +201,7 @@ fun ProfilesScreen(
                 contentPadding = PaddingValues(MdvSpace.S4),
                 verticalArrangement = Arrangement.spacedBy(MdvSpace.S2)
             ) {
-                items(profiles) { profile ->
+                items(profiles, key = { it.id }, contentType = { "profile_card" }) { profile ->
                     ProfileCard(
                         profile = profile,
                         onSelect = { viewModel.selectProfile(profile.id) },
@@ -287,7 +287,7 @@ fun ProfileCard(
                     text = profile.name,
                     style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.SemiBold)
                 )
-                val domainsList = parseDomainsJson(profile.domains)
+                val domainsList = remember(profile.domains) { parseDomainsJson(profile.domains) }
                 Text(
                     text = domainsList.joinToString(", "),
                     style = MaterialTheme.typography.bodySmall,
@@ -357,7 +357,7 @@ private fun ProfileEditorDialog(
     }
 
     LaunchedEffect(resolvers) {
-        if (resolvers.isBlank()) {
+        if (resolvers.isBlank() || largeResolversText) {
             liveStats = null
             return@LaunchedEffect
         }

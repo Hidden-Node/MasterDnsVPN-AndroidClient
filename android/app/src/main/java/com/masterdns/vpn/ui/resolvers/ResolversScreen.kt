@@ -102,7 +102,7 @@ fun ResolversScreen() {
                 contentPadding = PaddingValues(bottom = MdvSpace.S6),
                 verticalArrangement = Arrangement.spacedBy(8.dp)
             ) {
-                items(activeResolvers) { resolver ->
+                items(activeResolvers, key = { it }, contentType = { "resolver" }) { resolver ->
                     ResolverItem(resolver)
                 }
             }

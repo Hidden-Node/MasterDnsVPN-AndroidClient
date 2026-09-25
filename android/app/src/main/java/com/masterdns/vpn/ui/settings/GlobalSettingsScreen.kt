@@ -66,7 +66,6 @@ import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Dialog
-import androidx.core.graphics.drawable.toBitmap
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.masterdns.vpn.R
 import com.masterdns.vpn.ui.components.mdv.controls.MdvFilterChip
@@ -78,8 +77,6 @@ import com.masterdns.vpn.util.GlobalSettings
 import com.masterdns.vpn.util.SplitTunnelMode
 import androidx.compose.ui.unit.Dp
 import kotlinx.coroutines.launch
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.withContext
 import androidx.compose.runtime.LaunchedEffect
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -88,6 +85,7 @@ fun GlobalSettingsScreen(vm: GlobalSettingsViewModel = viewModel()) {
     val context = LocalContext.current
     val current by vm.settings.collectAsState()
     val installedApps by vm.installedApps.collectAsState()
+    val localIp by vm.localIp.collectAsState()
     var draft by remember(current) { mutableStateOf(current) }
     var sharingSocksPortText by remember(current.internetSharingSocksPort) {
         mutableStateOf(current.internetSharingSocksPort.toString())
@@ -328,11 +326,10 @@ fun GlobalSettingsScreen(vm: GlobalSettingsViewModel = viewModel()) {
                         }
 
                         if (draft.internetSharingEnabled) {
-                            val localIp = remember { getSystemLocalIp() }
-
-                            if (localIp != null) {
+                            val ip = localIp
+                            if (ip != null) {
                                 Text(
-                                    stringResource(R.string.global_local_ip, localIp),
+                                    stringResource(R.string.global_local_ip, ip),
                                     style = MaterialTheme.typography.bodyMedium,
                                     fontWeight = FontWeight.Medium,
                                     color = MdvColor.PrimaryContainer
@@ -430,6 +427,7 @@ fun GlobalSettingsScreen(vm: GlobalSettingsViewModel = viewModel()) {
     }
 
     if (showAppPicker) {
+        val icons by vm.icons.collectAsState()
         val selectedApps by remember(installedApps, draftAppSelection) {
             derivedStateOf { installedApps.filter { draftAppSelection.contains(it.packageName) } }
         }
@@ -579,6 +577,8 @@ fun GlobalSettingsScreen(vm: GlobalSettingsViewModel = viewModel()) {
                                             AppRow(
                                                 app = app,
                                                 checked = draftAppSelection.contains(app.packageName),
+                                                appIconBitmap = icons[app.packageName],
+                                                onRequestIcon = { vm.requestIcon(app.packageName) },
                                                 onToggle = {
                                                     draftAppSelection = draftAppSelection.toMutableSet().apply {
                                                         if (!add(app.packageName)) remove(app.packageName)
@@ -630,14 +630,11 @@ fun GlobalSettingsScreen(vm: GlobalSettingsViewModel = viewModel()) {
 private fun AppRow(
     app: GlobalSettingsViewModel.AppEntry,
     checked: Boolean,
+    appIconBitmap: android.graphics.Bitmap?,
+    onRequestIcon: () -> Unit,
     onToggle: () -> Unit
 ) {
-    val context = LocalContext.current
-    val appIconBitmap = remember(app.packageName) {
-        runCatching {
-            context.packageManager.getApplicationIcon(app.packageName).toBitmap(32, 32)
-        }.getOrNull()
-    }
+    LaunchedEffect(app.packageName) { onRequestIcon() }
     Row(
         modifier = Modifier
             .fillMaxWidth()
@@ -709,21 +706,3 @@ private fun normalize(settings: GlobalSettings): GlobalSettings {
     )
 }
 
-private fun getSystemLocalIp(): String? {
-    return try {
-        val interfaces = java.net.NetworkInterface.getNetworkInterfaces()
-        while (interfaces.hasMoreElements()) {
-            val iface = interfaces.nextElement()
-            val addresses = iface.inetAddresses
-            while (addresses.hasMoreElements()) {
-                val addr = addresses.nextElement()
-                if (!addr.isLoopbackAddress && addr is java.net.Inet4Address) {
-                    return addr.hostAddress
-                }
-            }
-        }
-        null
-    } catch (_: Exception) {
-        null
-    }
-}

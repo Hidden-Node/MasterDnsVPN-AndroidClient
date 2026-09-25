@@ -204,6 +204,7 @@ class MasterDnsVpnService : VpnService() {
                 if (inputs.proxyMode) {
                     VpnManager.appendLog("Proxy mode active: skipping Android VpnService TUN setup")
                     VpnManager.updateState(VpnManager.VpnState.CONNECTED)
+                    releaseWakeLock()
                     VpnManager.startTrafficMonitor(this@MasterDnsVpnService)
                     val notification = buildNotification("Proxy mode active on port ${inputs.socksPort}")
                     val manager = getSystemService(NOTIFICATION_SERVICE) as android.app.NotificationManager
@@ -215,6 +216,7 @@ class MasterDnsVpnService : VpnService() {
                 registerNetworkCallback()
 
                 VpnManager.updateState(VpnManager.VpnState.CONNECTED)
+                releaseWakeLock()
                 VpnManager.startTrafficMonitor(this@MasterDnsVpnService)
                 VpnManager.appendLog("VPN connected successfully!")
 
@@ -510,17 +512,17 @@ class MasterDnsVpnService : VpnService() {
                 // Stop everything in Go layer via a single stopClient() call.
                 // Go's StopClient() internally handles StopTun/StopTunBridge
                 // with idempotent guards and panic recovery, so this is safe.
-                val stopThread = Thread {
-                    VpnManager.appendLog("Stopping Go core...")
-                    runCatching {
-                        mobile.Mobile.stopClient()
-                    }.onFailure { e ->
-                        VpnManager.appendLog("Go core stop error: ${e.message}")
+                val stopCompleted = withTimeoutOrNull(5000L) {
+                    withContext(Dispatchers.IO) {
+                        VpnManager.appendLog("Stopping Go core...")
+                        runCatching {
+                            mobile.Mobile.stopClient()
+                        }.onFailure { e ->
+                            VpnManager.appendLog("Go core stop error: ${e.message}")
+                        }
                     }
                 }
-                stopThread.start()
-                stopThread.join(5000L)
-                if (stopThread.isAlive) {
+                if (stopCompleted == null) {
                     VpnManager.appendLog("Go core stop timed out, proceeding anyway")
                 } else {
                     VpnManager.appendLog("Go core stopped successfully")
@@ -673,10 +675,10 @@ class MasterDnsVpnService : VpnService() {
         }
     }
 
-    private fun exportMtuResultsIfNeeded() {
+    private suspend fun exportMtuResultsIfNeeded() {
         val target = mtuExportTargetUri?.takeIf { it.isNotBlank() } ?: return
         val dir = mtuConfigDir ?: return
-        val sourceFile = resolveMtuResultsSourceFile(dir)
+        val sourceFile = findMtuResultsFile(dir)
         if (sourceFile == null) {
             VpnManager.appendLog("MTU export skipped: no results generated")
             return
@@ -705,20 +707,6 @@ class MasterDnsVpnService : VpnService() {
         }.onFailure {
             VpnManager.appendLog("MTU export failed: ${it.message}")
         }
-    }
-
-    private fun resolveMtuResultsSourceFile(dir: File): File? {
-        repeat(5) {
-            val sourceFile = dir.listFiles()
-                ?.asSequence()
-                ?.filter { it.isFile && it.name.startsWith("masterdnsvpn_success_test") && it.length() > 0L }
-                ?.maxByOrNull { it.lastModified() }
-            if (sourceFile != null) {
-                return sourceFile
-            }
-            Thread.sleep(200L)
-        }
-        return null
     }
 
     private suspend fun ensureSocksPortAvailable(port: Int) {
@@ -1052,4 +1040,18 @@ class MasterDnsVpnService : VpnService() {
         )
     }
 
+}
+
+internal suspend fun findMtuResultsFile(dir: java.io.File): java.io.File? {
+    repeat(5) {
+        val sourceFile = dir.listFiles()
+            ?.asSequence()
+            ?.filter { it.isFile && it.name.startsWith("masterdnsvpn_success_test") && it.length() > 0L }
+            ?.maxByOrNull { it.lastModified() }
+        if (sourceFile != null) {
+            return sourceFile
+        }
+        delay(200L)
+    }
+    return null
 }
