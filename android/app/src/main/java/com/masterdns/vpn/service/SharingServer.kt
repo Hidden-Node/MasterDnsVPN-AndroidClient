@@ -101,7 +101,10 @@ internal object SharingServer {
     ) {
         try {
             client.soTimeout = 15000
-            val input = client.getInputStream()
+            // Buffered: coalesces the per-byte read() syscalls in readLineUnbuffered.
+            // Buffered bytes past a newline are discarded on return — fine for
+            // header lines, wrong for pipelined bodies (no pipelining support).
+            val input = java.io.BufferedInputStream(client.getInputStream())
             val output = client.getOutputStream().bufferedWriter()
 
             val requestLine = readLineUnbuffered(input) ?: return
