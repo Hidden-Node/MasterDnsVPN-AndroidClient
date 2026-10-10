@@ -39,19 +39,58 @@ internal fun isValidBasicProxyAuth(
     return constantTimeEquals(decoded, "$username:$password".toByteArray(Charsets.UTF_8))
 }
 
-internal fun createSocks5Tunnel(socksPort: Int, targetHost: String, targetPort: Int): java.net.Socket {
+internal fun createSocks5Tunnel(
+    socksPort: Int,
+    targetHost: String,
+    targetPort: Int,
+    coreUser: String? = null,
+    corePass: String? = null
+): java.net.Socket {
     val socket = java.net.Socket("127.0.0.1", socksPort)
     try {
         socket.soTimeout = 15000
         val input = socket.getInputStream()
         val output = socket.getOutputStream()
 
-        output.write(byteArrayOf(0x05, 0x01, 0x00))
-        output.flush()
-        val greeting = ByteArray(2)
-        readFully(input, greeting, 0, greeting.size)
-        if (greeting[0] != 0x05.toByte() || greeting[1] != 0x00.toByte()) {
-            throw IllegalStateException("SOCKS5 upstream greeting failed")
+        if (!coreUser.isNullOrBlank() && !corePass.isNullOrBlank()) {
+            // The Go core enforces SOCKS5 user/pass auth when the profile sets
+            // SOCKS5_AUTH=true: offer both methods and speak RFC 1929 when asked.
+            output.write(byteArrayOf(0x05, 0x02, 0x00, 0x02))
+            output.flush()
+            val greeting = ByteArray(2)
+            readFully(input, greeting, 0, greeting.size)
+            if (greeting[0] != 0x05.toByte()) {
+                throw IllegalStateException("SOCKS5 upstream greeting failed")
+            }
+            when (greeting[1]) {
+                0x00.toByte() -> { /* server picked no-auth: proceed as below */ }
+                0x02.toByte() -> {
+                    val userBytes = coreUser.toByteArray(Charsets.UTF_8)
+                    val passBytes = corePass.toByteArray(Charsets.UTF_8)
+                    if (userBytes.size > 255 || passBytes.size > 255) {
+                        throw IllegalArgumentException("SOCKS5 upstream credentials are too long")
+                    }
+                    output.write(byteArrayOf(0x01, userBytes.size.toByte()))
+                    output.write(userBytes)
+                    output.write(byteArrayOf(passBytes.size.toByte()))
+                    output.write(passBytes)
+                    output.flush()
+                    val status = ByteArray(2)
+                    readFully(input, status, 0, status.size)
+                    if (status[1] != 0x00.toByte()) {
+                        throw IllegalStateException("SOCKS5 upstream authentication failed")
+                    }
+                }
+                else -> throw IllegalStateException("SOCKS5 upstream greeting failed")
+            }
+        } else {
+            output.write(byteArrayOf(0x05, 0x01, 0x00))
+            output.flush()
+            val greeting = ByteArray(2)
+            readFully(input, greeting, 0, greeting.size)
+            if (greeting[0] != 0x05.toByte() || greeting[1] != 0x00.toByte()) {
+                throw IllegalStateException("SOCKS5 upstream greeting failed")
+            }
         }
 
         val hostBytes = targetHost.toByteArray(Charsets.UTF_8)

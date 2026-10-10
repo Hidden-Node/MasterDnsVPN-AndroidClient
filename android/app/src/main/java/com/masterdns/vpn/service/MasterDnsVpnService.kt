@@ -192,12 +192,21 @@ class MasterDnsVpnService : VpnService() {
                 launchGoCoreAndWait(configPaths)
 
                 if (inputs.globalSettings.internetSharingEnabled) {
+                    // The Go core demands SOCKS5 user/pass auth on its local
+                    // listener when the profile sets SOCKS5_AUTH=true: thread
+                    // those creds to the sharing tunnel or it can't dial out.
+                    val coreAdvanced = parseAdvancedJson(inputs.profile.advancedJson)
+                    val coreAuthEnabled = coreAdvanced["SOCKS5_AUTH"].equals("true", ignoreCase = true)
+                    val coreSocksUser = coreAdvanced["SOCKS5_USER"]?.trim()?.takeIf { coreAuthEnabled }
+                    val coreSocksPass = coreAdvanced["SOCKS5_PASS"]?.trim()?.takeIf { coreAuthEnabled }
                     startInternetSharing(
                         inputs.globalSettings.internetSharingSocksPort,
                         inputs.globalSettings.internetSharingHttpPort,
                         inputs.socksPort,
                         inputs.globalSettings.internetSharingUser,
-                        inputs.globalSettings.internetSharingPass
+                        inputs.globalSettings.internetSharingPass,
+                        coreSocksUser,
+                        coreSocksPass
                     )
                 }
 
@@ -875,7 +884,9 @@ class MasterDnsVpnService : VpnService() {
         httpPort: Int,
         coreSocksPort: Int,
         username: String,
-        password: String
+        password: String,
+        coreSocksUser: String? = null,
+        coreSocksPass: String? = null
     ) {
         sharingStartStopMutex.withLock {
             stopSharingServers()
@@ -952,7 +963,7 @@ class MasterDnsVpnService : VpnService() {
                         launch(Dispatchers.IO) {
                             sharingConnections.add(client)
                             try {
-                                SharingServer.handleSocksClient(client, coreSocksPort, username, password)
+                                SharingServer.handleSocksClient(client, coreSocksPort, username, password, coreSocksUser, coreSocksPass)
                             } finally {
                                 sharingPermits.release()
                                 sharingConnections.remove(client)
@@ -989,7 +1000,7 @@ class MasterDnsVpnService : VpnService() {
                         launch(Dispatchers.IO) {
                             sharingConnections.add(client)
                             try {
-                                SharingServer.handleHttpClient(client, coreSocksPort, username, password)
+                                SharingServer.handleHttpClient(client, coreSocksPort, username, password, coreSocksUser, coreSocksPass)
                             } finally {
                                 sharingPermits.release()
                                 sharingConnections.remove(client)
