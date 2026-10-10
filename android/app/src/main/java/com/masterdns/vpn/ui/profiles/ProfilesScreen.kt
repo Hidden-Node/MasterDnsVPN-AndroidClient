@@ -13,6 +13,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
@@ -53,11 +54,12 @@ fun ProfilesScreen(
     onOpenSettings: (Long) -> Unit
 ) {
     val profiles by viewModel.profiles.collectAsState()
-    var showEditor by remember { mutableStateOf(false) }
-    var editingProfile by remember { mutableStateOf<ProfileEntity?>(null) }
+    var showEditor by rememberSaveable { mutableStateOf(false) }
+    var editingId by rememberSaveable { mutableStateOf<Long?>(null) }
+    val editingProfile: ProfileEntity? = editingId?.let { id -> profiles.find { it.id == id } }
     var importedDraft by remember { mutableStateOf<ImportedProfileDraft?>(null) }
     var importedResolvers by remember { mutableStateOf<ResolverImportResult?>(null) }
-    var profilePendingDelete by remember { mutableStateOf<ProfileEntity?>(null) }
+    var pendingDeleteId by rememberSaveable { mutableStateOf<Long?>(null) }
     val context = androidx.compose.ui.platform.LocalContext.current
     val snackbarHostState = remember { SnackbarHostState() }
     val scope = rememberCoroutineScope()
@@ -75,7 +77,7 @@ fun ProfilesScreen(
             return@rememberLauncherForActivityResult
         }
         importedDraft = draft
-        editingProfile = null
+        editingId = null
         showEditor = true
         scope.launch { snackbarHostState.showSnackbar(context.getString(R.string.profiles_toml_imported_msg)) }
     }
@@ -110,7 +112,7 @@ fun ProfilesScreen(
                 onBack = onBack,
                 actions = {
                     IconButton(onClick = {
-                        editingProfile = null
+                        editingId = null
                         importedDraft = null
                         importedResolvers = null
                         showEditor = true
@@ -153,13 +155,13 @@ fun ProfilesScreen(
                         viewModel.addProfile(profile)
                     }
                     showEditor = false
-                    editingProfile = null
+                    editingId = null
                     importedDraft = null
                     importedResolvers = null
                 },
                 onDismiss = {
                     showEditor = false
-                    editingProfile = null
+                    editingId = null
                     importedDraft = null
                     importedResolvers = null
                 }
@@ -186,7 +188,7 @@ fun ProfilesScreen(
                     )
                     Spacer(modifier = Modifier.height(8.dp))
                     FilledTonalButton(onClick = {
-                        editingProfile = null
+                        editingId = null
                         importedDraft = null
                         importedResolvers = null
                         showEditor = true
@@ -207,19 +209,19 @@ fun ProfilesScreen(
                         onSelect = { viewModel.selectProfile(profile.id) },
                         onSettings = { onOpenSettings(profile.id) },
                         onEdit = {
-                            editingProfile = profile
+                            editingId = profile.id
                             showEditor = true
                         },
-                        onDelete = { profilePendingDelete = profile }
+                        onDelete = { pendingDeleteId = profile.id }
                     )
                 }
             }
         }
     }
 
-    profilePendingDelete?.let { profile ->
+    pendingDeleteId?.let { id -> profiles.find { it.id == id } }?.let { profile ->
         AlertDialog(
-            onDismissRequest = { profilePendingDelete = null },
+            onDismissRequest = { pendingDeleteId = null },
             title = { Text(stringResource(R.string.profiles_delete_confirm_title)) },
             text = {
                 Text(
@@ -233,14 +235,14 @@ fun ProfilesScreen(
                 TextButton(
                     onClick = {
                         viewModel.deleteProfile(profile)
-                        profilePendingDelete = null
+                        pendingDeleteId = null
                     }
                 ) {
                     Text(stringResource(R.string.profiles_delete))
                 }
             },
             dismissButton = {
-                TextButton(onClick = { profilePendingDelete = null }) {
+                TextButton(onClick = { pendingDeleteId = null }) {
                     Text(stringResource(R.string.action_cancel))
                 }
             }
@@ -319,7 +321,7 @@ private fun ProfileEditorDialog(
     onSave: (ProfileEntity) -> Unit,
     onDismiss: () -> Unit
 ) {
-    var name by remember { mutableStateOf(profile?.name.orEmpty()) }
+    var name by rememberSaveable { mutableStateOf(profile?.name.orEmpty()) }
     val domainList = remember {
         androidx.compose.runtime.mutableStateListOf<String>().apply {
             val domainsJson = profile?.domains
@@ -329,14 +331,14 @@ private fun ProfileEditorDialog(
             }
         }
     }
-    var newDomainInput by remember { mutableStateOf("") }
+    var newDomainInput by rememberSaveable { mutableStateOf("") }
     var isDomainInputFocused by remember { mutableStateOf(false) }
-    var encryptionKey by remember { mutableStateOf(profile?.encryptionKey.orEmpty()) }
-    var resolvers by remember { mutableStateOf(profile?.resolvers.orEmpty()) }
+    var encryptionKey by rememberSaveable { mutableStateOf(profile?.encryptionKey.orEmpty()) }
+    var resolvers by rememberSaveable { mutableStateOf(profile?.resolvers.orEmpty()) }
     var liveStats by remember { mutableStateOf<ResolverImportStats?>(null) }
-    var validationMessage by remember { mutableStateOf<String?>(null) }
-    var showKey by remember { mutableStateOf(false) }
-    var showResolversEditor by remember { mutableStateOf(false) }
+    var validationMessage by rememberSaveable { mutableStateOf<String?>(null) }
+    var showKey by rememberSaveable { mutableStateOf(false) }
+    var showResolversEditor by rememberSaveable { mutableStateOf(false) }
     val largeResolversText = resolvers.length > 6000
     val nameRequiredMsg = stringResource(R.string.profiles_name_required_msg)
     val domainRequiredMsg = stringResource(R.string.profiles_domain_required_msg)
