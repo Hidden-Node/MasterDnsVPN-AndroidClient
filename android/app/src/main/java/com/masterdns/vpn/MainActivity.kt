@@ -16,6 +16,7 @@ import com.masterdns.vpn.data.local.ProfileEntity
 import com.masterdns.vpn.data.repository.ProfileRepository
 import com.masterdns.vpn.ui.navigation.AppNavigation
 import com.masterdns.vpn.ui.theme.MasterDnsVPNTheme
+import com.masterdns.vpn.util.ImportIntentGate
 import com.masterdns.vpn.util.readDisplayName
 import com.masterdns.vpn.util.readTextFromUri
 import dagger.hilt.android.AndroidEntryPoint
@@ -33,7 +34,10 @@ class MainActivity : ComponentActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        handleTomlImportIntent(intent)
+        lastHandledImportUri =
+            savedInstanceState?.getString(ImportIntentGate.KEY_LAST_HANDLED_URI)
+        if (savedInstanceState == null) handleTomlImportIntent(intent,
+            isFirstCreation = true)
         enableEdgeToEdge()
         setContent {
             CompositionLocalProvider(LocalLayoutDirection provides LayoutDirection.Ltr) {
@@ -44,13 +48,20 @@ class MainActivity : ComponentActivity() {
         }
     }
 
+    override fun onSaveInstanceState(outState: Bundle) {
+        super.onSaveInstanceState(outState)
+        outState.putString(ImportIntentGate.KEY_LAST_HANDLED_URI, lastHandledImportUri)
+    }
+
     override fun onNewIntent(intent: Intent) {
         super.onNewIntent(intent)
         setIntent(intent)
-        handleTomlImportIntent(intent)
+        handleTomlImportIntent(intent,
+            isFirstCreation = true)
     }
 
-    private fun handleTomlImportIntent(intent: Intent?) {
+    private fun handleTomlImportIntent(intent: Intent?,
+        isFirstCreation: Boolean) {
         val action = intent?.action ?: return
         if (action != Intent.ACTION_VIEW && action != Intent.ACTION_SEND) return
 
@@ -61,11 +72,13 @@ class MainActivity : ComponentActivity() {
         } ?: return
 
         val uriToken = uri.toString()
-        if (lastHandledImportUri == uriToken) return
-        val mime = intent.type.orEmpty()
-        val isTomlLike = mime.contains("toml", ignoreCase = true) ||
-            uri.toString().lowercase().endsWith(".toml")
-        if (!isTomlLike) return
+        if (!ImportIntentGate.shouldHandle(isFirstCreation, uriToken, lastHandledImportUri)) return
+        if (!ImportIntentGate.isTomlLike(intent.type, uri.toString())) return
+
+        lastHandledImportUri = uriToken
+        intent.action = null
+        intent.data = null
+        setIntent(intent)
 
         runCatching {
             contentResolver.takePersistableUriPermission(
@@ -93,7 +106,6 @@ class MainActivity : ComponentActivity() {
                 ).show()
                 return@launch
             }
-            lastHandledImportUri = uriToken
             val id = profileRepository.insertProfile(imported)
             profileRepository.setSelectedProfile(id)
             Toast.makeText(
