@@ -3,7 +3,7 @@ package com.masterdns.vpn.service
 /**
  * Parsed proxy-target from a request line.
  * For CONNECT: "host:port" (port optional, default 443 per convention here).
- * For absolute-form GET/POST: full URL is decomposed to host/port/path.
+ * For any non-CONNECT method, absolute-form only: full URL is decomposed to host/port/path.
  */
 internal data class ProxyTarget(val host: String, val port: Int, val path: String)
 
@@ -13,7 +13,7 @@ private val ABSOLUTE_FORM_REGEX = Regex("^http://(\\[[0-9a-fA-F:.]+\\]|[^/:\\[\\
  * Parses the target of a proxy request line.
  * - CONNECT: accepts "host:port", "host" (default port 443), and
  *   "[ipv6-literal]:port" / "[ipv6-literal]".
- * - GET/POST with absolute-form URL: "http://host[:port]/path".
+ * - Any non-CONNECT method, absolute-form only: "http://host[:port]/path".
  * Returns null when the line is not one of these shapes.
  */
 internal fun parseProxyTarget(method: String, target: String): ProxyTarget? {

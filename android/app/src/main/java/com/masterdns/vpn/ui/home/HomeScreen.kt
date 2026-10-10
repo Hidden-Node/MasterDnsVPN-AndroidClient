@@ -350,7 +350,7 @@ private fun HowToUseCard(onOpen: () -> Unit) {
 
 @Composable
 private fun HowToUseDialog(onDismiss: () -> Unit) {
-    var lang by rememberSaveable(saver = Saver<MutableState<HowToLang>, String>(save = { it.value.name }, restore = { mutableStateOf(HowToLang.valueOf(it)) })) { mutableStateOf(HowToLang.EN) }
+    var lang by rememberSaveable(saver = Saver<MutableState<HowToLang>, String>(save = { it.value.name }, restore = { mutableStateOf(runCatching { HowToLang.valueOf(it) }.getOrDefault(HowToLang.EN)) })) { mutableStateOf(HowToLang.EN) }
     val screenHeight = LocalConfiguration.current.screenHeightDp.dp
     val maxDialogContentHeight = (screenHeight * 0.65f)
     val textEn = """

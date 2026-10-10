@@ -77,7 +77,7 @@ internal fun createSocks5Tunnel(
                     output.flush()
                     val status = ByteArray(2)
                     readFully(input, status, 0, status.size)
-                    if (status[1] != 0x00.toByte()) {
+                    if (status[0] != 0x01.toByte() || status[1] != 0x00.toByte()) {
                         throw IllegalStateException("SOCKS5 upstream authentication failed")
                     }
                 }

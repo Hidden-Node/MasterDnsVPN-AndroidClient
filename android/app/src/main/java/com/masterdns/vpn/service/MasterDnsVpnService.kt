@@ -192,8 +192,8 @@ class MasterDnsVpnService : VpnService() {
                     // those creds to the sharing tunnel or it can't dial out.
                     val coreAdvanced = parseAdvancedJson(inputs.profile.advancedJson)
                     val coreAuthEnabled = coreAdvanced["SOCKS5_AUTH"].equals("true", ignoreCase = true)
-                    val coreSocksUser = coreAdvanced["SOCKS5_USER"]?.trim()?.takeIf { coreAuthEnabled }
-                    val coreSocksPass = coreAdvanced["SOCKS5_PASS"]?.trim()?.takeIf { coreAuthEnabled }
+                    val coreSocksUser = coreAdvanced["SOCKS5_USER"]?.takeIf { coreAuthEnabled }
+                    val coreSocksPass = coreAdvanced["SOCKS5_PASS"]?.takeIf { coreAuthEnabled }
                     startInternetSharing(
                         inputs.globalSettings.internetSharingSocksPort,
                         inputs.globalSettings.internetSharingHttpPort,

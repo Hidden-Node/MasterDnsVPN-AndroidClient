@@ -78,6 +78,8 @@ class MainActivity : ComponentActivity() {
         lastHandledImportUri = uriToken
         intent.action = null
         intent.data = null
+        intent.clipData = null
+        intent.type = null
         setIntent(intent)
 
         runCatching {
