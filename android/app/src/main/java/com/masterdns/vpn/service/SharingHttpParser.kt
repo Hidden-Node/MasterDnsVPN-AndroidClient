@@ -37,9 +37,8 @@ internal fun parseProxyTarget(method: String, target: String): ProxyTarget? {
         return ProxyTarget(host, port, "")
     }
     // absolute-form: scheme://host[:port]/path — only http accepted; https
-    // always arrives as CONNECT.
-    if (!method.equals("GET", ignoreCase = true) && !method.equals("POST", ignoreCase = true) &&
-        !method.equals("HEAD", ignoreCase = true)) return null
+    // always arrives as CONNECT. Any non-CONNECT method falls through here
+    // (CONNECT handled above).
     val m = ABSOLUTE_FORM_REGEX.find(target) ?: return null
     val rawHost = m.groupValues[1]
     if (rawHost.isBlank()) return null

@@ -15,7 +15,9 @@ internal object SharingServer {
         client: java.net.Socket,
         coreSocksPort: Int,
         username: String,
-        password: String
+        password: String,
+        coreSocksUser: String? = null,
+        coreSocksPass: String? = null
     ) {
         var upstream: java.net.Socket? = null
         try {
@@ -76,12 +78,14 @@ internal object SharingServer {
             val portBytes = ByteArray(2); readFully(input, portBytes, 0, 2)
             val port = ((portBytes[0].toInt() and 0xFF) shl 8) or (portBytes[1].toInt() and 0xFF)
 
-            upstream = try { createSocks5Tunnel(coreSocksPort, host, port) } catch (e: Exception) {
+            upstream = try { createSocks5Tunnel(coreSocksPort, host, port, coreSocksUser, coreSocksPass) } catch (e: Exception) {
                 VpnManager.appendLog("Sharing SOCKS5 upstream to $host:$port failed: ${e.message}")
                 output.write(byteArrayOf(0x05, 0x01, 0x00, 0x01, 0, 0, 0, 0, 0, 0)); output.flush()
                 return
             }
-            upstream.soTimeout = 30000
+            upstream.soTimeout = 0
+            upstream.keepAlive = true
+            client.keepAlive = true
             // 0x05 0x00 0x00 0x01 + 4-byte bind addr + 2-byte bind port
             output.write(byteArrayOf(0x05, 0x00, 0x00, 0x01, 0, 0, 0, 0, 0, 0)); output.flush()
 
@@ -99,7 +103,9 @@ internal object SharingServer {
         client: java.net.Socket,
         upstreamSocksPort: Int,
         username: String,
-        password: String
+        password: String,
+        coreSocksUser: String? = null,
+        coreSocksPass: String? = null
     ) {
         try {
             client.soTimeout = 15000
@@ -156,14 +162,16 @@ internal object SharingServer {
                     return
                 }
                 val upstream = try {
-                    createSocks5Tunnel(upstreamSocksPort, target.host, target.port)
+                    createSocks5Tunnel(upstreamSocksPort, target.host, target.port, coreSocksUser, coreSocksPass)
                 } catch (e: Exception) {
                     VpnManager.appendLog("Sharing HTTP CONNECT to ${target.host}:${target.port} failed: ${e.message}")
                     output.write("HTTP/1.1 502 Bad Gateway\r\n\r\n"); output.flush()
                     return
                 }
-                upstream.soTimeout = 30000
+                upstream.soTimeout = 0
                 client.soTimeout = 0
+                upstream.keepAlive = true
+                client.keepAlive = true
                 output.write("HTTP/1.1 200 Connection Established\r\n\r\n")
                 output.flush()
                 bridgeBidirectional(client, upstream, input)
@@ -174,14 +182,16 @@ internal object SharingServer {
                     return
                 }
                 val upstream = try {
-                    createSocks5Tunnel(upstreamSocksPort, target.host, target.port)
+                    createSocks5Tunnel(upstreamSocksPort, target.host, target.port, coreSocksUser, coreSocksPass)
                 } catch (e: Exception) {
                     VpnManager.appendLog("Sharing HTTP $method to ${target.host}:${target.port} failed: ${e.message}")
                     output.write("HTTP/1.1 502 Bad Gateway\r\nConnection: close\r\n\r\n"); output.flush()
                     return
                 }
-                upstream.soTimeout = 30000
+                upstream.soTimeout = 0
                 client.soTimeout = 0
+                upstream.keepAlive = true
+                client.keepAlive = true
                 // Re-emit the request with a relative path (origin-form) to
                 // the tunnel, then bridge; the tunnel's SOCKS5 target is
                 // already resolved by createSocks5Tunnel.
@@ -191,7 +201,9 @@ internal object SharingServer {
                         if (idx <= 0) return@filter true
                         val name = line.substring(0, idx).trim()
                         !name.equals("Host", ignoreCase = true) &&
-                            !name.equals("Proxy-Authorization", ignoreCase = true)
+                            !name.equals("Proxy-Authorization", ignoreCase = true) &&
+                            !name.equals("Connection", ignoreCase = true) &&
+                            !name.equals("Proxy-Connection", ignoreCase = true)
                     }
                     .joinToString("") { "$it\r\n" }
                 val rewritten = buildString {
@@ -199,6 +211,7 @@ internal object SharingServer {
                     append("Host: ").append(target.host)
                     if (target.port != 80) append(':').append(target.port)
                     append("\r\n")
+                    append("Connection: close\r\n")
                     append(forwardedHeaders)
                     append("\r\n")
                 }
@@ -235,7 +248,8 @@ internal object SharingServer {
         } catch (_: Exception) {
         } finally {
             runCatching { output?.flush() }
-            runCatching { shutdownTarget.shutdownOutput() }
+            runCatching { source.close() }
+            runCatching { dest.close() }
         }
     }
 
