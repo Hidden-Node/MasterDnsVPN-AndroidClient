@@ -117,4 +117,44 @@ class SharingTunnelTest {
         runCatching { s.close() }
         joinStub(t)
     }
+
+    @Test
+    fun `auth handshake succeeds when core requires user and pass`() {
+        val (port, t) = runStub { input, output ->
+            readExactly(input, 4) // 05 02 00 02 greeting offering no-auth + user/pass
+            output.write(byteArrayOf(0x05, 0x02)); output.flush() // core picks RFC 1929 auth
+            val authHead = readExactly(input, 2) // 01 + ulen
+            readExactly(input, authHead[1].toInt() and 0xFF) // user bytes
+            val plen = input.read()
+            readExactly(input, plen) // pass bytes
+            output.write(byteArrayOf(0x01, 0x00)); output.flush()
+            readExactly(input, 4 + 1 + "example.com".length + 2)
+            output.write(byteArrayOf(0x05, 0x00, 0x00, 0x01, 0, 0, 0, 0, 0, 0)); output.flush()
+            readExactly(input, 1) // hold until the test closes the socket -> stub EOF, thread exits
+        }
+        val s = createSocks5Tunnel(port, "example.com", 80, "user", "pass")
+        assertThat(s.isConnected).isTrue()
+        assertThat(s.isClosed).isFalse()
+        runCatching { s.close() }
+        joinStub(t)
+    }
+
+    @Test
+    fun `wrong core password throws and socket closed`() {
+        val eofSeen = AtomicInteger(-2)
+        val (port, t) = runStub { input, output ->
+            readExactly(input, 4) // 05 02 00 02 greeting offering no-auth + user/pass
+            output.write(byteArrayOf(0x05, 0x02)); output.flush() // core picks RFC 1929 auth
+            val authHead = readExactly(input, 2) // 01 + ulen
+            readExactly(input, authHead[1].toInt() and 0xFF) // user bytes
+            val plen = input.read()
+            readExactly(input, plen) // pass bytes
+            output.write(byteArrayOf(0x01, 0x01)); output.flush() // auth failed
+            eofSeen.set(input.read()) // -1 iff the tunnel closed its socket after throwing
+        }
+        val thrown = runCatching { createSocks5Tunnel(port, "example.com", 80, "user", "pass") }
+        assertThat(thrown.exceptionOrNull()).isInstanceOf(IllegalStateException::class.java)
+        joinStub(t)
+        assertThat(eofSeen.get()).isEqualTo(-1)
+    }
 }

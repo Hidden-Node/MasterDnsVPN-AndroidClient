@@ -41,6 +41,38 @@ class SharingHttpParserTest {
     }
 
     @Test
+    fun `absolute form PUT parses`() {
+        val t = parseProxyTarget("PUT", "http://example.com:8080/a/b?c=1")!!
+        assertThat(t.host).isEqualTo("example.com")
+        assertThat(t.port).isEqualTo(8080)
+        assertThat(t.path).isEqualTo("/a/b?c=1")
+    }
+
+    @Test
+    fun `absolute form DELETE parses`() {
+        val t = parseProxyTarget("DELETE", "http://example.com:8080/a/b?c=1")!!
+        assertThat(t.host).isEqualTo("example.com")
+        assertThat(t.port).isEqualTo(8080)
+        assertThat(t.path).isEqualTo("/a/b?c=1")
+    }
+
+    @Test
+    fun `absolute form PATCH parses`() {
+        val t = parseProxyTarget("PATCH", "http://example.com:8080/a/b?c=1")!!
+        assertThat(t.host).isEqualTo("example.com")
+        assertThat(t.port).isEqualTo(8080)
+        assertThat(t.path).isEqualTo("/a/b?c=1")
+    }
+
+    @Test
+    fun `absolute form OPTIONS parses`() {
+        val t = parseProxyTarget("OPTIONS", "http://example.com/x")!!
+        assertThat(t.host).isEqualTo("example.com")
+        assertThat(t.port).isEqualTo(80)
+        assertThat(t.path).isEqualTo("/x")
+    }
+
+    @Test
     fun `absolute form without path yields root`() {
         val t = parseProxyTarget("GET", "http://connectivitycheck.gstatic.com/generate_204")!!
         assertThat(t.port).isEqualTo(80)
