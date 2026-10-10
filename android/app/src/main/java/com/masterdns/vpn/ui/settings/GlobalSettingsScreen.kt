@@ -25,7 +25,6 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ArrowDropDown
-import androidx.compose.material.icons.filled.Save
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
@@ -40,9 +39,6 @@ import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
 import androidx.compose.foundation.text.KeyboardOptions
-import androidx.compose.material3.IconButton
-import androidx.compose.material3.SnackbarHost
-import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
@@ -54,7 +50,6 @@ import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.saveable.Saver
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
@@ -62,7 +57,6 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.asImageBitmap
-import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
@@ -72,20 +66,17 @@ import androidx.compose.ui.window.Dialog
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.masterdns.vpn.R
 import com.masterdns.vpn.ui.components.mdv.controls.MdvFilterChip
-import com.masterdns.vpn.ui.components.mdv.controls.MdvPrimaryActionButton
 import com.masterdns.vpn.ui.components.mdv.controls.MdvTopAppBar
 import com.masterdns.vpn.ui.theme.MdvColor
 import com.masterdns.vpn.ui.theme.MdvSpace
 import com.masterdns.vpn.util.GlobalSettings
 import com.masterdns.vpn.util.SplitTunnelMode
 import androidx.compose.ui.unit.Dp
-import kotlinx.coroutines.launch
 import androidx.compose.runtime.LaunchedEffect
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun GlobalSettingsScreen(vm: GlobalSettingsViewModel = viewModel()) {
-    val context = LocalContext.current
     val current by vm.settings.collectAsState()
     val installedApps by vm.installedApps.collectAsState()
     val localIp by vm.localIp.collectAsState()
@@ -103,8 +94,6 @@ fun GlobalSettingsScreen(vm: GlobalSettingsViewModel = viewModel()) {
     var selectedQuery by rememberSaveable(current) { mutableStateOf("") }
     var activeTab by rememberSaveable(current) { mutableStateOf("AVAILABLE") }
     var draftAppSelection by rememberSaveable(current, saver = Saver<MutableState<MutableSet<String>>, List<String>>(save = { it.value.toList() }, restore = { mutableStateOf(it.toMutableSet()) })) { mutableStateOf(parseCsv(current.splitPackagesCsv).toMutableSet()) }
-    val snackbarHostState = remember { SnackbarHostState() }
-    val scope = rememberCoroutineScope()
     val socksPortValue = sharingSocksPortText.toIntOrNull()
     val httpPortValue = sharingHttpPortText.toIntOrNull()
     val socksPortMissing = sharingSocksPortText.isBlank()
@@ -115,53 +104,19 @@ fun GlobalSettingsScreen(vm: GlobalSettingsViewModel = viewModel()) {
     val splitPackagesCount by remember(draft.splitPackagesCsv) {
         derivedStateOf { parseCsv(draft.splitPackagesCsv).size }
     }
-    fun saveGlobalSettings() {
-        if (socksPortMissing || httpPortMissing) {
-            scope.launch {
-                snackbarHostState.showSnackbar(context.getString(R.string.global_settings_ports_required_msg))
-            }
-            return
+    LaunchedEffect(draft) {
+        val normalized = normalize(draft)
+        if (normalized != current) {
+            vm.save(normalized)
         }
-        if (sharingPortsEqual) {
-            scope.launch {
-                snackbarHostState.showSnackbar(context.getString(R.string.global_sharing_ports_equal))
-            }
-            return
-        }
-        if (socksPortValue !in 1025..65535 || httpPortValue !in 1025..65535) {
-            scope.launch {
-                snackbarHostState.showSnackbar(context.getString(R.string.global_settings_ports_range_msg))
-            }
-            return
-        }
-        val safeSocksPort = socksPortValue ?: return
-        val safeHttpPort = httpPortValue ?: return
-        draft = draft.copy(
-            internetSharingSocksPort = safeSocksPort,
-            internetSharingHttpPort = safeHttpPort
-        )
-        vm.save(normalize(draft))
-        scope.launch { snackbarHostState.showSnackbar(context.getString(R.string.global_settings_saved_msg)) }
     }
-
     Scaffold(
         containerColor = MdvColor.Background,
         topBar = {
             MdvTopAppBar(
-                title = stringResource(R.string.settings_title),
-                actions = {
-                    IconButton(
-                        onClick = ::saveGlobalSettings
-                    ) {
-                        Icon(
-                            imageVector = Icons.Filled.Save,
-                            contentDescription = stringResource(R.string.action_save)
-                        )
-                    }
-                }
+                title = stringResource(R.string.settings_title)
             )
-        },
-        snackbarHost = { SnackbarHost(hostState = snackbarHostState) }
+        }
     ) { padding ->
         BoxWithConstraints(
             modifier = Modifier
@@ -417,13 +372,6 @@ fun GlobalSettingsScreen(vm: GlobalSettingsViewModel = viewModel()) {
                         }
                             }
                         }
-                    }
-                    item {
-                        MdvPrimaryActionButton(
-                            text = stringResource(R.string.global_settings_save_button),
-                            onClick = ::saveGlobalSettings,
-                            modifier = Modifier.fillMaxWidth()
-                        )
                     }
                 }
             }
@@ -699,8 +647,12 @@ internal fun sharingPortCollision(socks: Int?, http: Int?, sharingEnabled: Boole
     sharingEnabled && socks != null && http != null && socks == http
 
 private fun normalize(settings: GlobalSettings): GlobalSettings {
+    fun clampPort(p: Int, default: Int): Int =
+        if (p in 1025..65535) p else default
     return settings.copy(
         connectionMode = settings.connectionMode.uppercase(),
+        internetSharingSocksPort = clampPort(settings.internetSharingSocksPort, 8090),
+        internetSharingHttpPort = clampPort(settings.internetSharingHttpPort, 8091),
         splitPackagesCsv = settings.splitPackagesCsv
             .split(",")
             .map { it.trim() }
