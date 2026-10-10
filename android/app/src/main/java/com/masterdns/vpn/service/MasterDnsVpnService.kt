@@ -61,6 +61,19 @@ class MasterDnsVpnService : VpnService() {
         private val BROWSER_COMPANION_PACKAGES = setOf(
             "com.android.chrome" // system Chrome on some OEMs
         )
+
+        /**
+         * Core SOCKS5 creds for the sharing tunnel, mirroring ConfigGenerator.cfg()
+         * (ConfigGenerator.kt:28-31): missing/blank (after trim) falls back to
+         * "master_dns_vpn" for both USER and PASS (ConfigGenerator.kt:53-54).
+         * Returns (null, null) unless SOCKS5_AUTH equals "true" (ignoreCase).
+         */
+        internal fun coreTunnelCreds(advanced: Map<String, String>): Pair<String?, String?> {
+            if (!advanced["SOCKS5_AUTH"].equals("true", ignoreCase = true)) return null to null
+            val user = advanced["SOCKS5_USER"]?.trim().takeIf { !it.isNullOrEmpty() } ?: "master_dns_vpn"
+            val pass = advanced["SOCKS5_PASS"]?.trim().takeIf { !it.isNullOrEmpty() } ?: "master_dns_vpn"
+            return user to pass
+        }
     }
 
     private val serviceScope = CoroutineScope(Dispatchers.IO + SupervisorJob())
@@ -191,9 +204,7 @@ class MasterDnsVpnService : VpnService() {
                     // listener when the profile sets SOCKS5_AUTH=true: thread
                     // those creds to the sharing tunnel or it can't dial out.
                     val coreAdvanced = parseAdvancedJson(inputs.profile.advancedJson)
-                    val coreAuthEnabled = coreAdvanced["SOCKS5_AUTH"].equals("true", ignoreCase = true)
-                    val coreSocksUser = coreAdvanced["SOCKS5_USER"]?.takeIf { coreAuthEnabled }
-                    val coreSocksPass = coreAdvanced["SOCKS5_PASS"]?.takeIf { coreAuthEnabled }
+                    val (coreSocksUser, coreSocksPass) = coreTunnelCreds(coreAdvanced)
                     startInternetSharing(
                         inputs.globalSettings.internetSharingSocksPort,
                         inputs.globalSettings.internetSharingHttpPort,
