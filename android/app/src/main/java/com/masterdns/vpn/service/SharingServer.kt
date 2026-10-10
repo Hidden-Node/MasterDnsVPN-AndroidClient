@@ -88,6 +88,7 @@ internal object SharingServer {
             client.keepAlive = true
             // 0x05 0x00 0x00 0x01 + 4-byte bind addr + 2-byte bind port
             output.write(byteArrayOf(0x05, 0x00, 0x00, 0x01, 0, 0, 0, 0, 0, 0)); output.flush()
+            client.soTimeout = 0
 
             bridgeBidirectional(client, upstream)
         } catch (e: Exception) {
@@ -234,7 +235,6 @@ internal object SharingServer {
     private suspend fun kotlinx.coroutines.CoroutineScope.pump(
         source: java.net.Socket,
         dest: java.net.Socket,
-        shutdownTarget: java.net.Socket,
         sourceInput: java.io.InputStream? = null
     ) {
         val buffer = ByteArray(PUMP_BUFFER_SIZE)
@@ -261,11 +261,11 @@ internal object SharingServer {
         clientInput: java.io.InputStream? = null
     ) = coroutineScope {
         val upToClient = launch(Dispatchers.IO) {
-            pump(upstream, client, client)
+            pump(upstream, client)
         }
 
         val clientToUp = launch(Dispatchers.IO) {
-            pump(client, upstream, upstream, clientInput)
+            pump(client, upstream, clientInput)
         }
 
         joinAll(upToClient, clientToUp)

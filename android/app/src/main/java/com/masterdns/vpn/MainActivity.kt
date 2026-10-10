@@ -95,6 +95,7 @@ class MainActivity : ComponentActivity() {
                     getString(R.string.profiles_invalid_toml_msg),
                     Toast.LENGTH_LONG
                 ).show()
+                lastHandledImportUri = null
                 return@launch
             }
             val imported = parseImportedProfile(uri, content)
@@ -104,6 +105,7 @@ class MainActivity : ComponentActivity() {
                     getString(R.string.profiles_invalid_toml_msg),
                     Toast.LENGTH_LONG
                 ).show()
+                lastHandledImportUri = null
                 return@launch
             }
             val id = profileRepository.insertProfile(imported)
