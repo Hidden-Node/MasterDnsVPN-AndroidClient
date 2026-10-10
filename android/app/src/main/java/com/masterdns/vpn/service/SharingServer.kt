@@ -107,6 +107,7 @@ internal object SharingServer {
         coreSocksUser: String? = null,
         coreSocksPass: String? = null
     ) {
+        var upstream: java.net.Socket? = null
         try {
             client.soTimeout = 15000
             // Buffered: coalesces per-byte read() syscalls. The SAME wrapper MUST
@@ -161,7 +162,7 @@ internal object SharingServer {
                     output.write("HTTP/1.1 400 Bad Request\r\n\r\n"); output.flush()
                     return
                 }
-                val upstream = try {
+                upstream = try {
                     createSocks5Tunnel(upstreamSocksPort, target.host, target.port, coreSocksUser, coreSocksPass)
                 } catch (e: Exception) {
                     VpnManager.appendLog("Sharing HTTP CONNECT to ${target.host}:${target.port} failed: ${e.message}")
@@ -181,7 +182,7 @@ internal object SharingServer {
                     output.write("HTTP/1.1 400 Bad Request\r\nConnection: close\r\n\r\n"); output.flush()
                     return
                 }
-                val upstream = try {
+                upstream = try {
                     createSocks5Tunnel(upstreamSocksPort, target.host, target.port, coreSocksUser, coreSocksPass)
                 } catch (e: Exception) {
                     VpnManager.appendLog("Sharing HTTP $method to ${target.host}:${target.port} failed: ${e.message}")
@@ -225,6 +226,7 @@ internal object SharingServer {
         } catch (e: Exception) {
             VpnManager.appendLog("Sharing HTTP client error: ${e.message}")
         } finally {
+            runCatching { upstream?.close() }
             runCatching { client.close() }
         }
     }
