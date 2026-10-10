@@ -13,7 +13,10 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
+import androidx.compose.runtime.saveable.Saver
 import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.snapshots.SnapshotStateList
+import androidx.compose.runtime.toMutableStateList
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
@@ -322,7 +325,7 @@ private fun ProfileEditorDialog(
     onDismiss: () -> Unit
 ) {
     var name by rememberSaveable { mutableStateOf(profile?.name.orEmpty()) }
-    val domainList = remember {
+    val domainList = rememberSaveable(saver = Saver<SnapshotStateList<String>, ArrayList<String>>(save = { ArrayList(it) }, restore = { it.toMutableStateList() })) {
         androidx.compose.runtime.mutableStateListOf<String>().apply {
             val domainsJson = profile?.domains
             if (!domainsJson.isNullOrBlank()) {
