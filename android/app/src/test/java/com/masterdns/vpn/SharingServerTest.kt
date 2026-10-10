@@ -494,9 +494,10 @@ class SharingServerTest {
                 runCatching { c.shutdownOutput() }
                 joinHandler(h)
                 joinStub(stubThread)
-                assertThat(upstreamHeaders).contains("Connection: close")
-                assertThat(upstreamHeaders).doesNotContain("keep-alive")
-                assertThat(upstreamHeaders).doesNotContain("Proxy-Connection")
+                val headersLower = upstreamHeaders.lowercase(java.util.Locale.ROOT)
+                assertThat(headersLower).contains("connection: close")
+                assertThat(headersLower).doesNotContain("keep-alive")
+                assertThat(headersLower).doesNotContain("proxy-connection")
             } finally {
                 runCatching { c.close() }
             }

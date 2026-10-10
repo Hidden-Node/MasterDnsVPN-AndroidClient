@@ -646,7 +646,7 @@ private fun parseCsv(value: String): Set<String> {
 internal fun sharingPortCollision(socks: Int?, http: Int?, sharingEnabled: Boolean): Boolean =
     sharingEnabled && socks != null && http != null && socks == http
 
-private fun normalize(settings: GlobalSettings): GlobalSettings {
+internal fun normalize(settings: GlobalSettings): GlobalSettings {
     fun clampPort(p: Int, default: Int): Int =
         if (p in 1025..65535) p else default
     return settings.copy(
