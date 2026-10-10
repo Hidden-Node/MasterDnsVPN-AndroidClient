@@ -73,11 +73,6 @@ class MasterDnsVpnService : VpnService() {
     private var sharingSocksServer: java.net.ServerSocket? = null
     private var sharingHttpServer: java.net.ServerSocket? = null
     private val sharingConnections = java.util.Collections.synchronizedSet(mutableSetOf<java.net.Socket>())
-    // ponytail: cap of 64 concurrent sharing clients; a phone proxy serves a
-    // LAN, not the internet. Ceiling reached = accept loop suspends (backlog
-    // fills, clients time out) — upgrade path is an explicit error reply per
-    // protocol instead of backpressure.
-    private val sharingPermits = kotlinx.coroutines.sync.Semaphore(permits = 64)
     private val sharingStartStopMutex = kotlinx.coroutines.sync.Mutex()
     private val sharingGeneration = java.util.concurrent.atomic.AtomicInteger(0)
     private var logTailJob: Job? = null
@@ -946,26 +941,11 @@ class MasterDnsVpnService : VpnService() {
                     while (isActive) {
                         val client = socksServer.accept()
                         if (!isActive) { runCatching { client.close() }; break }
-                        try {
-                            sharingPermits.acquire()
-                        } catch (e: CancellationException) {
-                            runCatching { client.close() }
-                            throw e
-                        }
-                        if (!isActive) {
-                            // A stop raced a freshly-acquired permit: release
-                            // it and bail before launching a child whose body
-                            // (and finally) would never run.
-                            sharingPermits.release()
-                            runCatching { client.close() }
-                            break
-                        }
                         launch(Dispatchers.IO) {
                             sharingConnections.add(client)
                             try {
                                 SharingServer.handleSocksClient(client, coreSocksPort, username, password, coreSocksUser, coreSocksPass)
                             } finally {
-                                sharingPermits.release()
                                 sharingConnections.remove(client)
                             }
                         }
@@ -983,26 +963,11 @@ class MasterDnsVpnService : VpnService() {
                     while (isActive) {
                         val client = httpServer.accept()
                         if (!isActive) { runCatching { client.close() }; break }
-                        try {
-                            sharingPermits.acquire()
-                        } catch (e: CancellationException) {
-                            runCatching { client.close() }
-                            throw e
-                        }
-                        if (!isActive) {
-                            // A stop raced a freshly-acquired permit: release
-                            // it and bail before launching a child whose body
-                            // (and finally) would never run.
-                            sharingPermits.release()
-                            runCatching { client.close() }
-                            break
-                        }
                         launch(Dispatchers.IO) {
                             sharingConnections.add(client)
                             try {
                                 SharingServer.handleHttpClient(client, coreSocksPort, username, password, coreSocksUser, coreSocksPass)
                             } finally {
-                                sharingPermits.release()
                                 sharingConnections.remove(client)
                             }
                         }
