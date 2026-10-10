@@ -48,12 +48,15 @@ import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.MutableState
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.saveable.Saver
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -95,11 +98,11 @@ fun GlobalSettingsScreen(vm: GlobalSettingsViewModel = viewModel()) {
         mutableStateOf(current.internetSharingHttpPort.toString())
     }
     var modeExpanded by remember { mutableStateOf(false) }
-    var showAppPicker by remember { mutableStateOf(false) }
-    var availableQuery by remember { mutableStateOf("") }
-    var selectedQuery by remember { mutableStateOf("") }
-    var activeTab by remember { mutableStateOf("AVAILABLE") }
-    var draftAppSelection by remember { mutableStateOf(parseCsv(current.splitPackagesCsv).toMutableSet()) }
+    var showAppPicker by rememberSaveable(current) { mutableStateOf(false) }
+    var availableQuery by rememberSaveable(current) { mutableStateOf("") }
+    var selectedQuery by rememberSaveable(current) { mutableStateOf("") }
+    var activeTab by rememberSaveable(current) { mutableStateOf("AVAILABLE") }
+    var draftAppSelection by rememberSaveable(current, saver = Saver<MutableState<MutableSet<String>>, List<String>>(save = { it.value.toList() }, restore = { mutableStateOf(it.toMutableSet()) })) { mutableStateOf(parseCsv(current.splitPackagesCsv).toMutableSet()) }
     val snackbarHostState = remember { SnackbarHostState() }
     val scope = rememberCoroutineScope()
     val socksPortValue = sharingSocksPortText.toIntOrNull()
