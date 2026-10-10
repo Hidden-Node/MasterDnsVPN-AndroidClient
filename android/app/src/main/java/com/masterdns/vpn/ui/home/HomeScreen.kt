@@ -36,10 +36,13 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.runtime.MutableState
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.saveable.Saver
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -140,7 +143,7 @@ fun HomeScreen(
         VpnManager.VpnState.ERROR -> stringResource(R.string.home_state_error)
         else -> stringResource(R.string.home_state_disconnected)
     }
-    var showHowToUse by remember { mutableStateOf(false) }
+    var showHowToUse by rememberSaveable { mutableStateOf(false) }
 
     BoxWithConstraints(
         modifier = Modifier
@@ -347,7 +350,7 @@ private fun HowToUseCard(onOpen: () -> Unit) {
 
 @Composable
 private fun HowToUseDialog(onDismiss: () -> Unit) {
-    var lang by remember { mutableStateOf(HowToLang.EN) }
+    var lang by rememberSaveable(saver = Saver<MutableState<HowToLang>, String>(save = { it.value.name }, restore = { mutableStateOf(HowToLang.valueOf(it)) })) { mutableStateOf(HowToLang.EN) }
     val screenHeight = LocalConfiguration.current.screenHeightDp.dp
     val maxDialogContentHeight = (screenHeight * 0.65f)
     val textEn = """
