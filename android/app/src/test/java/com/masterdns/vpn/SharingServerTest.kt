@@ -395,4 +395,111 @@ class SharingServerTest {
         }
         joinHandler(h)
     }
+
+    @Test
+    fun httpConnect_oneSidedEof_drainsBridge() = runBlocking {
+        withTimeout(15000) {
+            // Upstream emulates a peer that SWALLOWS half-close (e.g. a VC layer
+            // not propagating FIN): ignore EOF and hold open until the socket
+            // itself errors or the test releases it. A plain `break`-on-EOF stub
+            // would exit on old shutdownOutput code and pass pre-053 — unpinned.
+            // `release` is harness-only teardown the handler never observes.
+            val release = java.util.concurrent.atomic.AtomicBoolean(false)
+            val (stubPort, stubThread) = runStub { input, output ->
+                readExactly(input, 3)
+                output.write(byteArrayOf(0x05, 0x00)); output.flush()
+                readExactly(input, 4 + 1 + "example.com".length + 2)
+                output.write(byteArrayOf(0x05, 0x00, 0x00, 0x01, 0, 0, 0, 0, 0, 0)); output.flush()
+                try {
+                    while (!release.get()) {
+                        val r = try {
+                            input.read()
+                        } catch (e: java.net.SocketTimeoutException) {
+                            continue // runStub's 3 s soTimeout: still holding, retry
+                        }
+                        if (r < 0) {
+                            Thread.sleep(200) // FIN ignored: hold open
+                            continue
+                        }
+                    }
+                } catch (_: Exception) {
+                    // Handler closed the socket: exit so joinStub passes.
+                }
+            }
+            val (c, s) = socketPair()
+            c.soTimeout = 10000
+            val h = runHandler { runBlocking { SharingServer.handleHttpClient(s, stubPort, "", "") } }
+            try {
+                c.getOutputStream().write(
+                    "CONNECT example.com:443 HTTP/1.1\r\nHost: example.com:443\r\n\r\n"
+                        .toByteArray(Charsets.ISO_8859_1)
+                )
+                c.getOutputStream().flush()
+                val resp = readUntilBlank(c)
+                assertThat(resp).startsWith("HTTP/1.1 200 Connection Established")
+                // LAN side half-closes; upstream still open. Old bridge
+                // (shutdownOutput + joinAll) hangs here forever; close-both drains.
+                c.shutdownOutput()
+                try {
+                    joinHandler(h)
+                } finally {
+                    release.set(true)
+                }
+                joinStub(stubThread)
+            } finally {
+                release.set(true)
+                runCatching { c.close() }
+            }
+        }
+    }
+
+    @Test
+    fun httpGet_keepAliveHeaders_rewrittenToClose() = runBlocking {
+        withTimeout(10000) {
+            var upstreamHeaders = ""
+            val (stubPort, stubThread) = runStub { input, output ->
+                readExactly(input, 3)
+                output.write(byteArrayOf(0x05, 0x00)); output.flush()
+                readExactly(input, 4 + 1 + "example.com".length + 2)
+                output.write(byteArrayOf(0x05, 0x00, 0x00, 0x01, 0, 0, 0, 0, 0, 0)); output.flush()
+                val sb = StringBuilder()
+                val inp = input
+                var prev = 0.toChar()
+                while (true) {
+                    val r = inp.read()
+                    if (r < 0) break
+                    val ch = r.toChar()
+                    sb.append(ch)
+                    if (prev == '\r' && ch == '\n' && sb.toString().endsWith("\r\n\r\n")) break
+                    prev = ch
+                }
+                upstreamHeaders = sb.toString()
+                output.write("HTTP/1.1 200 OK\r\nContent-Length: 0\r\n\r\n".toByteArray(Charsets.ISO_8859_1))
+                output.flush()
+            }
+            val (c, s) = socketPair()
+            c.soTimeout = 10000
+            val h = runHandler { runBlocking { SharingServer.handleHttpClient(s, stubPort, "", "") } }
+            try {
+                c.getOutputStream().write(
+                    ("GET http://example.com:8080/a HTTP/1.1\r\n" +
+                        "Host: example.com:8080\r\n" +
+                        "Connection: keep-alive\r\n" +
+                        "Proxy-Connection: keep-alive\r\n\r\n")
+                        .toByteArray(Charsets.ISO_8859_1)
+                )
+                c.getOutputStream().flush()
+                val resp = readUntilBlank(c)
+                assertThat(resp).startsWith("HTTP/1.1 200")
+                runCatching { c.shutdownOutput() }
+                joinHandler(h)
+                joinStub(stubThread)
+                assertThat(upstreamHeaders).contains("Connection: close")
+                assertThat(upstreamHeaders).doesNotContain("keep-alive")
+                assertThat(upstreamHeaders).doesNotContain("Proxy-Connection")
+            } finally {
+                runCatching { c.close() }
+            }
+        }
+    }
 }
