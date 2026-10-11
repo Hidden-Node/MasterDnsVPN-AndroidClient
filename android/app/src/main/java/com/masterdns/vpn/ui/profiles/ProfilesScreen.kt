@@ -348,8 +348,14 @@ private fun ProfileEditorDialog(
     val keyRequiredMsg = stringResource(R.string.profiles_encryption_key_required_msg)
     val resolverRequiredMsg = stringResource(R.string.profiles_resolvers_required_msg)
 
+    // Which profile id the dialog fields were last (re)loaded from. Without
+    // this, LaunchedEffect(profile?.id) below runs on every fresh composition
+    // (rotation included) and re-copies stored values over restored typing.
+    var lastLoadedId by rememberSaveable { mutableStateOf<Long?>(null) }
+
     LaunchedEffect(profile?.id) {
-        if (profile != null) {
+        if (profile != null && lastLoadedId != profile.id) {
+            lastLoadedId = profile.id
             name = profile.name
             domainList.clear()
             val parsed = parseDomainsJson(profile.domains)
@@ -388,7 +394,11 @@ private fun ProfileEditorDialog(
         if (importedResolvers != null) {
             resolvers = importedResolvers.normalizedText
         }
-        validationMessage = null
+        // Only a fresh import clears validation: post-rotation both imports
+        // are null (plain remember) and the restored message must survive.
+        if (importedDraft != null || importedResolvers != null) {
+            validationMessage = null
+        }
     }
 
     AlertDialog(
