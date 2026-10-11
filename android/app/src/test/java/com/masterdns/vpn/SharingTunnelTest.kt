@@ -157,4 +157,38 @@ class SharingTunnelTest {
         joinStub(t)
         assertThat(eofSeen.get()).isEqualTo(-1)
     }
+
+    @Test
+    fun `server picks no-auth when creds offered succeeds`() {
+        val (port, t) = runStub { input, output ->
+            val greeting = readExactly(input, 4)
+            assertThat(greeting).isEqualTo(byteArrayOf(0x05, 0x02, 0x00, 0x02))
+            output.write(byteArrayOf(0x05, 0x00)); output.flush()
+            readExactly(input, 4 + 1 + "example.com".length + 2)
+            output.write(byteArrayOf(0x05, 0x00, 0x00, 0x01, 0, 0, 0, 0, 0, 0)); output.flush()
+            readExactly(input, 1) // hold until the test closes the socket -> stub EOF, thread exits
+        }
+        val s = createSocks5Tunnel(port, "example.com", 80, "user", "pass")
+        assertThat(s.isConnected).isTrue()
+        assertThat(s.isClosed).isFalse()
+        runCatching { s.close() }
+        joinStub(t)
+    }
+
+    @Test
+    fun `blank creds use no-auth wire shape`() {
+        val (port, t) = runStub { input, output ->
+            val greeting = readExactly(input, 3)
+            assertThat(greeting).isEqualTo(byteArrayOf(0x05, 0x01, 0x00))
+            output.write(byteArrayOf(0x05, 0x00)); output.flush()
+            readExactly(input, 4 + 1 + "example.com".length + 2)
+            output.write(byteArrayOf(0x05, 0x00, 0x00, 0x01, 0, 0, 0, 0, 0, 0)); output.flush()
+            readExactly(input, 1) // hold until the test closes the socket -> stub EOF, thread exits
+        }
+        val s = createSocks5Tunnel(port, "example.com", 80, "", "")
+        assertThat(s.isConnected).isTrue()
+        assertThat(s.isClosed).isFalse()
+        runCatching { s.close() }
+        joinStub(t)
+    }
 }
