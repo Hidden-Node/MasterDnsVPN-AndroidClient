@@ -107,10 +107,9 @@ class SharingHttpUpstreamCloseTest {
     @Test
     fun `failed 200-write closes upstream tunnel`() = runBlocking {
         // Warm up VpnManager before the measured window: its first-ever
-        // appendLog pays one-time init (object init, coroutine scope, date
-        // formats) that stalls the handler's catch path ~100ms, during which
-        // the stub spuriously observes EOF even with the upstream leaked.
-        // Warmed, the catch returns instantly: pre-fix the leak stays open
+        // appendLog pays one-time init (~100ms) on the handler path, which
+        // in practice made the RED signal flaky (spurious -1 pre-fix).
+        // Warmed, the signal is stable: pre-fix the leak stays open
         // (stub read times out -> eofSeen -2 -> RED), post-fix the finally
         // closes it (EOF -> eofSeen -1 -> GREEN).
         VpnManager.appendLog("warmup plan-054")
