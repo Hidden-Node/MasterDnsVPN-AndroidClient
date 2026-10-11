@@ -100,6 +100,8 @@ fun GlobalSettingsScreen(vm: GlobalSettingsViewModel = viewModel()) {
     val httpPortMissing = sharingHttpPortText.isBlank()
     val socksPortRequiresRoot = socksPortValue != null && socksPortValue in 1..1024
     val httpPortRequiresRoot = httpPortValue != null && httpPortValue in 1..1024
+    val socksPortOutOfRange = socksPortValue != null && socksPortValue !in 1..65535
+    val httpPortOutOfRange = httpPortValue != null && httpPortValue !in 1..65535
     val sharingPortsEqual = sharingPortCollision(socksPortValue, httpPortValue, draft.internetSharingEnabled)
     val splitPackagesCount by remember(draft.splitPackagesCsv) {
         derivedStateOf { parseCsv(draft.splitPackagesCsv).size }
@@ -312,12 +314,13 @@ fun GlobalSettingsScreen(vm: GlobalSettingsViewModel = viewModel()) {
                                         }
                                     },
                                     label = { Text(stringResource(R.string.global_socks5_port)) },
-                                    isError = socksPortMissing || socksPortRequiresRoot || sharingPortsEqual,
+                                    isError = socksPortMissing || socksPortRequiresRoot || socksPortOutOfRange || sharingPortsEqual,
                                     supportingText = {
                                         when {
                                             sharingPortsEqual -> Text(stringResource(R.string.global_sharing_ports_equal), color = MaterialTheme.colorScheme.error)
                                             socksPortMissing -> Text(stringResource(R.string.global_socks5_port_required))
                                             socksPortRequiresRoot -> Text(stringResource(R.string.global_port_root_warning))
+                                            socksPortOutOfRange -> Text(stringResource(R.string.global_settings_ports_range_msg), color = MaterialTheme.colorScheme.error)
                                         }
                                     },
                                     keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
@@ -336,12 +339,13 @@ fun GlobalSettingsScreen(vm: GlobalSettingsViewModel = viewModel()) {
                                         }
                                     },
                                     label = { Text(stringResource(R.string.global_http_port)) },
-                                    isError = httpPortMissing || httpPortRequiresRoot || sharingPortsEqual,
+                                    isError = httpPortMissing || httpPortRequiresRoot || httpPortOutOfRange || sharingPortsEqual,
                                     supportingText = {
                                         when {
                                             sharingPortsEqual -> Text(stringResource(R.string.global_sharing_ports_equal), color = MaterialTheme.colorScheme.error)
                                             httpPortMissing -> Text(stringResource(R.string.global_http_port_required))
                                             httpPortRequiresRoot -> Text(stringResource(R.string.global_port_root_warning))
+                                            httpPortOutOfRange -> Text(stringResource(R.string.global_settings_ports_range_msg), color = MaterialTheme.colorScheme.error)
                                         }
                                     },
                                     keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
