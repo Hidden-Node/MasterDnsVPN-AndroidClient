@@ -466,7 +466,11 @@ class SharingServerTest {
                 val inp = input
                 var prev = 0.toChar()
                 while (true) {
-                    val r = inp.read()
+                    val r = try {
+                        inp.read()
+                    } catch (e: java.net.SocketTimeoutException) {
+                        continue // runStub's 3 s soTimeout: handler hasn't written yet, retry
+                    }
                     if (r < 0) break
                     val ch = r.toChar()
                     sb.append(ch)
