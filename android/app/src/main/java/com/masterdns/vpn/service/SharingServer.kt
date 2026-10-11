@@ -232,6 +232,11 @@ internal object SharingServer {
         }
     }
 
+    // Close-both (not half-close) on first EOF: this unblocks joinAll against
+    // FIN-swallowing peers (pinned by httpConnect_oneSidedEof_drainsBridge),
+    // at the cost of truncating in-flight reverse bytes when a peer
+    // half-closes while a response is still coming. Accepted LAN-proxy
+    // trade-off; do not restore shutdownOutput without re-solving the hang.
     private suspend fun kotlinx.coroutines.CoroutineScope.pump(
         source: java.net.Socket,
         dest: java.net.Socket,
