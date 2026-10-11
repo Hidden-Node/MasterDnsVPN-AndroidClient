@@ -93,7 +93,7 @@ fun GlobalSettingsScreen(vm: GlobalSettingsViewModel = viewModel()) {
     var availableQuery by rememberSaveable { mutableStateOf("") }
     var selectedQuery by rememberSaveable { mutableStateOf("") }
     var activeTab by rememberSaveable { mutableStateOf("AVAILABLE") }
-    var draftAppSelection by rememberSaveable(saver = Saver<MutableState<MutableSet<String>>, List<String>>(save = { it.value.toList() }, restore = { mutableStateOf(it.toMutableSet()) })) { mutableStateOf(parseCsv(current.splitPackagesCsv).toMutableSet()) }
+    var draftAppSelection by rememberSaveable(current.splitPackagesCsv, saver = Saver<MutableState<MutableSet<String>>, List<String>>(save = { it.value.toList() }, restore = { mutableStateOf(it.toMutableSet()) })) { mutableStateOf(parseCsv(current.splitPackagesCsv).toMutableSet()) }
     val socksPortValue = sharingSocksPortText.toIntOrNull()
     val httpPortValue = sharingHttpPortText.toIntOrNull()
     val socksPortMissing = sharingSocksPortText.isBlank()

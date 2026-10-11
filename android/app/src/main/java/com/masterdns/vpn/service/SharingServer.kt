@@ -247,6 +247,10 @@ internal object SharingServer {
                 if (read <= 0) break
                 output.write(buffer, 0, read)
             }
+        } catch (e: CancellationException) {
+            runCatching { source.close() }
+            runCatching { dest.close() }
+            throw e
         } catch (_: Exception) {
         } finally {
             runCatching { output?.flush() }

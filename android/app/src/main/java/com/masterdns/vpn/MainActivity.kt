@@ -20,7 +20,9 @@ import com.masterdns.vpn.util.ImportIntentGate
 import com.masterdns.vpn.util.readDisplayName
 import com.masterdns.vpn.util.readTextFromUri
 import dagger.hilt.android.AndroidEntryPoint
+import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import javax.inject.Inject
 
 @AndroidEntryPoint
@@ -90,6 +92,7 @@ class MainActivity : ComponentActivity() {
         }
 
         lifecycleScope.launch {
+            withContext(NonCancellable) {
             val content = readTextFromUri(uri)
             if (content.isBlank()) {
                 Toast.makeText(
@@ -98,7 +101,7 @@ class MainActivity : ComponentActivity() {
                     Toast.LENGTH_LONG
                 ).show()
                 lastHandledImportUri = null
-                return@launch
+                return@withContext
             }
             val imported = parseImportedProfile(uri, content)
             if (imported == null) {
@@ -108,7 +111,7 @@ class MainActivity : ComponentActivity() {
                     Toast.LENGTH_LONG
                 ).show()
                 lastHandledImportUri = null
-                return@launch
+                return@withContext
             }
             val id = profileRepository.insertProfile(imported)
             profileRepository.setSelectedProfile(id)
@@ -117,6 +120,7 @@ class MainActivity : ComponentActivity() {
                 getString(R.string.profiles_toml_imported_msg),
                 Toast.LENGTH_SHORT
             ).show()
+            }
         }
     }
 
