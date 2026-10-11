@@ -131,6 +131,7 @@ fun ProfilesScreen(
                 profile = editingProfile,
                 importedDraft = importedDraft,
                 importedResolvers = importedResolvers,
+                saveEnabled = editingId == null || editingProfile != null,
                 onImportToml = {
                     importLauncher.launch(
                         arrayOf(
@@ -319,6 +320,10 @@ private fun ProfileEditorDialog(
     profile: ProfileEntity?,
     importedDraft: ImportedProfileDraft?,
     importedResolvers: ResolverImportResult?,
+    // False while an existing profile (editingId != null) is still loading
+    // after process death: saving then would route to addProfile and duplicate
+    // the row (editingProfile null + id-0 entity). Re-enabled on load.
+    saveEnabled: Boolean,
     onImportToml: () -> Unit,
     onImportResolvers: () -> Unit,
     onSave: (ProfileEntity) -> Unit,
@@ -619,6 +624,7 @@ private fun ProfileEditorDialog(
         },
         confirmButton = {
             FilledTonalButton(
+                enabled = saveEnabled,
                 onClick = {
                     val d = newDomainInput.trim()
                     val finalDomainList = if (d.isNotEmpty() && !domainList.contains(d)) {
