@@ -579,10 +579,10 @@ func TestAWithOPTGetsStrippedValidA(t *testing.T) {
 	}
 }
 
-// proxyConnectV4 greets the proxy at proxyAddr and sends a TCP CONNECT to
-// 8.8.8.8:port (atyp v4), returning the raw SOCKS reply bytes. Modeled on
+// proxyConnectV4To greets the proxy at proxyAddr and sends a TCP CONNECT to
+// ip:port (atyp v4), returning the raw SOCKS reply bytes. Modeled on
 // TestTCPRelayForwardsDomainTypedReplyIntact; 5s deadlines throughout.
-func proxyConnectV4(t *testing.T, proxyAddr string, port uint16) []byte {
+func proxyConnectV4To(t *testing.T, proxyAddr string, ip net.IP, port uint16) []byte {
 	t.Helper()
 	c, err := net.Dial("tcp", proxyAddr)
 	if err != nil {
@@ -598,7 +598,11 @@ func proxyConnectV4(t *testing.T, proxyAddr string, port uint16) []byte {
 	if _, err := io.ReadFull(c, auth); err != nil {
 		t.Fatalf("read auth: %v", err)
 	}
-	req := []byte{5, 1, 0, 1, 8, 8, 8, 8, byte(port >> 8), byte(port)}
+	v4 := ip.To4()
+	if v4 == nil {
+		t.Fatalf("test ip %v is not IPv4", ip)
+	}
+	req := []byte{5, 1, 0, 1, v4[0], v4[1], v4[2], v4[3], byte(port >> 8), byte(port)}
 	if _, err := c.Write(req); err != nil {
 		t.Fatalf("write request: %v", err)
 	}
@@ -607,6 +611,12 @@ func proxyConnectV4(t *testing.T, proxyAddr string, port uint16) []byte {
 		t.Fatalf("read reply: %v", err)
 	}
 	return reply
+}
+
+// proxyConnectV4 is proxyConnectV4To fixed at 8.8.8.8 (pre-067 callers).
+func proxyConnectV4(t *testing.T, proxyAddr string, port uint16) []byte {
+	t.Helper()
+	return proxyConnectV4To(t, proxyAddr, net.ParseIP("8.8.8.8"), port)
 }
 
 func TestTCPDNSPort53FailsFast(t *testing.T) {
@@ -730,5 +740,119 @@ func TestTCP443StillForwards(t *testing.T) {
 	}
 	if n := atomic.LoadInt64(&dials); n != 1 {
 		t.Fatalf("upstream dials = %d, want 1 (port 443 must reach the stub)", n)
+	}
+}
+
+func TestBlockedSOCKSTargetTable(t *testing.T) {
+	cases := []struct {
+		host string
+		want bool
+	}{
+		{"10.10.34.35", true},
+		{"10.10.34.36", true},
+		{"192.168.1.1", true},
+		{"127.0.0.1", true},
+		{"0.0.0.0", true},
+		{"198.18.0.5", true},
+		{"100.64.0.1", true},
+		{"224.0.0.1", true},
+		{"::1", true},
+		{"8.8.8.8", false},
+		{"172.217.114.4", false},
+		{"m.youtube.com", false},
+		{"", true},
+		{"localhost", true},
+	}
+	for _, tc := range cases {
+		if got := isBlockedSOCKSTarget(tc.host); got != tc.want {
+			t.Errorf("isBlockedSOCKSTarget(%q) = %v, want %v", tc.host, got, tc.want)
+		}
+	}
+}
+
+func TestPoisonIPFailsWithoutUpstreamDial(t *testing.T) {
+	var dials int64
+	upstream, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatalf("upstream listen: %v", err)
+	}
+	defer upstream.Close()
+	go func() {
+		for {
+			c, err := upstream.Accept()
+			if err != nil {
+				return
+			}
+			atomic.AddInt64(&dials, 1)
+			c.Close()
+		}
+	}()
+
+	proxy := NewFakeDNSProxy(upstream.Addr().String(), NewDNSMapper())
+	addr, err := proxy.Start()
+	if err != nil {
+		t.Fatalf("proxy.Start: %v", err)
+	}
+	defer proxy.Stop()
+
+	reply := proxyConnectV4To(t, addr, net.ParseIP("10.10.34.35"), 443)
+	if reply[0] != 5 || reply[1] != 2 {
+		t.Fatalf("reply = %02X %02X, want 05 02 (ruleset denied)", reply[0], reply[1])
+	}
+	time.Sleep(200 * time.Millisecond)
+	if n := atomic.LoadInt64(&dials); n != 0 {
+		t.Fatalf("upstream dials = %d, want 0 (poison IP must fail before any net.Dial)", n)
+	}
+}
+
+func TestRealIPStillForwards(t *testing.T) {
+	var dials int64
+	upstream, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatalf("upstream listen: %v", err)
+	}
+	defer upstream.Close()
+	go func() {
+		c, err := upstream.Accept()
+		if err != nil {
+			return
+		}
+		defer c.Close()
+		atomic.AddInt64(&dials, 1)
+		greeting := make([]byte, 3)
+		if _, err := io.ReadFull(c, greeting); err != nil {
+			return
+		}
+		if _, err := c.Write([]byte{5, 0}); err != nil {
+			return
+		}
+		req := make([]byte, 10)
+		if _, err := io.ReadFull(c, req); err != nil {
+			return
+		}
+		if _, err := c.Write([]byte{5, 0, 0, 1, 0, 0, 0, 0, 0, 0}); err != nil {
+			return
+		}
+		buf := make([]byte, 512)
+		for {
+			if _, err := c.Read(buf); err != nil {
+				return
+			}
+		}
+	}()
+
+	proxy := NewFakeDNSProxy(upstream.Addr().String(), NewDNSMapper())
+	addr, err := proxy.Start()
+	if err != nil {
+		t.Fatalf("proxy.Start: %v", err)
+	}
+	defer proxy.Stop()
+
+	reply := proxyConnectV4To(t, addr, net.ParseIP("172.217.114.4"), 443)
+	if reply[0] != 5 || reply[1] != 0 {
+		t.Fatalf("reply = %02X %02X, want 05 00 (success — real IP must forward)", reply[0], reply[1])
+	}
+	if n := atomic.LoadInt64(&dials); n != 1 {
+		t.Fatalf("upstream dials = %d, want 1 (real IP must reach the stub)", n)
 	}
 }
