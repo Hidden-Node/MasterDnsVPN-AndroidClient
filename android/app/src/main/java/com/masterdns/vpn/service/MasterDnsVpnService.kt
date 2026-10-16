@@ -400,6 +400,19 @@ class MasterDnsVpnService : VpnService() {
             .addRoute("0.0.0.0", 0)
             .setBlocking(true)
 
+        // Dual-stack TUN so IPv6 does not bypass the VPN and leak DNS to the
+        // carrier (carrier IPv6 DNS returns poisoned 10.10.34.x answers).
+        // Best-effort: some OEM ROMs throw on addAddress/addRoute for v6.
+        // Log per-outcome (review finding): a single unconditional "ready"
+        // line would lie on ROMs where both calls threw, so each outcome logs
+        // for itself and no combined success line exists.
+        runCatching { builder.addAddress("fd00::1", 128) }
+            .onSuccess { VpnManager.appendLog("IPv6 TUN address added (fd00::1/128)") }
+            .onFailure { VpnManager.appendLog("IPv6 TUN address skipped: ${it.message}") }
+        runCatching { builder.addRoute("::", 0) }
+            .onSuccess { VpnManager.appendLog("IPv6 default route added (::/0)") }
+            .onFailure { VpnManager.appendLog("IPv6 route skipped: ${it.message}") }
+
         vpnDnsServers.forEach { builder.addDnsServer(it) }
         if (inputs.globalSettings.fakeDnsEnabled) {
             builder.addRoute("198.18.0.0", 16)
