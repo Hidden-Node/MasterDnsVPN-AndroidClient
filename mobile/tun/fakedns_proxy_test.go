@@ -5,6 +5,7 @@ import (
 	"io"
 	"net"
 	"strings"
+	"sync/atomic"
 	"testing"
 	"time"
 )
@@ -575,5 +576,159 @@ func TestAWithOPTGetsStrippedValidA(t *testing.T) {
 	}
 	if ip := net.IP(resp[len(resp)-4:]).String(); ip != fakeIP {
 		t.Fatalf("answer IP = %s, want %s", ip, fakeIP)
+	}
+}
+
+// proxyConnectV4 greets the proxy at proxyAddr and sends a TCP CONNECT to
+// 8.8.8.8:port (atyp v4), returning the raw SOCKS reply bytes. Modeled on
+// TestTCPRelayForwardsDomainTypedReplyIntact; 5s deadlines throughout.
+func proxyConnectV4(t *testing.T, proxyAddr string, port uint16) []byte {
+	t.Helper()
+	c, err := net.Dial("tcp", proxyAddr)
+	if err != nil {
+		t.Fatalf("dial proxy: %v", err)
+	}
+	defer c.Close()
+	_ = c.SetDeadline(time.Now().Add(5 * time.Second))
+
+	if _, err := c.Write([]byte{5, 1, 0}); err != nil {
+		t.Fatalf("write greeting: %v", err)
+	}
+	auth := make([]byte, 2)
+	if _, err := io.ReadFull(c, auth); err != nil {
+		t.Fatalf("read auth: %v", err)
+	}
+	req := []byte{5, 1, 0, 1, 8, 8, 8, 8, byte(port >> 8), byte(port)}
+	if _, err := c.Write(req); err != nil {
+		t.Fatalf("write request: %v", err)
+	}
+	reply := make([]byte, 10)
+	if _, err := io.ReadFull(c, reply); err != nil {
+		t.Fatalf("read reply: %v", err)
+	}
+	return reply
+}
+
+func TestTCPDNSPort53FailsFast(t *testing.T) {
+	var dials int64
+	upstream, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatalf("upstream listen: %v", err)
+	}
+	defer upstream.Close()
+	go func() {
+		for {
+			c, err := upstream.Accept()
+			if err != nil {
+				return
+			}
+			atomic.AddInt64(&dials, 1)
+			c.Close()
+		}
+	}()
+
+	proxy := NewFakeDNSProxy(upstream.Addr().String(), NewDNSMapper())
+	addr, err := proxy.Start()
+	if err != nil {
+		t.Fatalf("proxy.Start: %v", err)
+	}
+	defer proxy.Stop()
+
+	reply := proxyConnectV4(t, addr, 53)
+	if reply[0] != 5 || reply[1] != 1 {
+		t.Fatalf("reply = %02X %02X, want 05 01 (general SOCKS failure)", reply[0], reply[1])
+	}
+	// The guard returns before any net.Dial, so the stub must see nothing.
+	// Sleep past localhost accept latency to catch a late async dial.
+	time.Sleep(200 * time.Millisecond)
+	if n := atomic.LoadInt64(&dials); n != 0 {
+		t.Fatalf("upstream dials = %d, want 0 (port 53 must fail before any net.Dial)", n)
+	}
+}
+
+func TestTCPDotPort853FailsFast(t *testing.T) {
+	var dials int64
+	upstream, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatalf("upstream listen: %v", err)
+	}
+	defer upstream.Close()
+	go func() {
+		for {
+			c, err := upstream.Accept()
+			if err != nil {
+				return
+			}
+			atomic.AddInt64(&dials, 1)
+			c.Close()
+		}
+	}()
+
+	proxy := NewFakeDNSProxy(upstream.Addr().String(), NewDNSMapper())
+	addr, err := proxy.Start()
+	if err != nil {
+		t.Fatalf("proxy.Start: %v", err)
+	}
+	defer proxy.Stop()
+
+	reply := proxyConnectV4(t, addr, 853)
+	if reply[0] != 5 || reply[1] != 1 {
+		t.Fatalf("reply = %02X %02X, want 05 01 (general SOCKS failure)", reply[0], reply[1])
+	}
+	time.Sleep(200 * time.Millisecond)
+	if n := atomic.LoadInt64(&dials); n != 0 {
+		t.Fatalf("upstream dials = %d, want 0 (port 853 must fail before any net.Dial)", n)
+	}
+}
+
+func TestTCP443StillForwards(t *testing.T) {
+	var dials int64
+	upstream, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatalf("upstream listen: %v", err)
+	}
+	defer upstream.Close()
+	go func() {
+		c, err := upstream.Accept()
+		if err != nil {
+			return
+		}
+		defer c.Close()
+		atomic.AddInt64(&dials, 1)
+		greeting := make([]byte, 3)
+		if _, err := io.ReadFull(c, greeting); err != nil {
+			return
+		}
+		if _, err := c.Write([]byte{5, 0}); err != nil {
+			return
+		}
+		req := make([]byte, 10)
+		if _, err := io.ReadFull(c, req); err != nil {
+			return
+		}
+		if _, err := c.Write([]byte{5, 0, 0, 1, 0, 0, 0, 0, 0, 0}); err != nil {
+			return
+		}
+		buf := make([]byte, 512)
+		for {
+			if _, err := c.Read(buf); err != nil {
+				return
+			}
+		}
+	}()
+
+	proxy := NewFakeDNSProxy(upstream.Addr().String(), NewDNSMapper())
+	addr, err := proxy.Start()
+	if err != nil {
+		t.Fatalf("proxy.Start: %v", err)
+	}
+	defer proxy.Stop()
+
+	reply := proxyConnectV4(t, addr, 443)
+	if reply[0] != 5 || reply[1] != 0 {
+		t.Fatalf("reply = %02X %02X, want 05 00 (success — non-DNS ports must forward)", reply[0], reply[1])
+	}
+	if n := atomic.LoadInt64(&dials); n != 1 {
+		t.Fatalf("upstream dials = %d, want 1 (port 443 must reach the stub)", n)
 	}
 }
