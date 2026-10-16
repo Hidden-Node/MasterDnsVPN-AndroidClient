@@ -9,13 +9,13 @@ import (
 	"time"
 )
 
-// helper: build a DNS query for a hostname like "example.com"
-func buildQuery(t *testing.T, hostname string) []byte {
+// helper: build a DNS query for a hostname like "example.com" with an explicit QTYPE
+func buildQueryWithType(t *testing.T, hostname string, qtype uint16) []byte {
 	t.Helper()
 	// Header: 12 bytes (id, flags, qdcount=1, ancount=0, nscount=0, arcount=0)
 	q := make([]byte, 12)
 	binary.BigEndian.PutUint16(q[0:2], 0x1234) // id
-	binary.BigEndian.PutUint16(q[4:6], 1)       // qdcount = 1
+	binary.BigEndian.PutUint16(q[4:6], 1)      // qdcount = 1
 
 	// Question section
 	parts := strings.Split(hostname, ".")
@@ -26,9 +26,27 @@ func buildQuery(t *testing.T, hostname string) []byte {
 		q = append(q, byte(len(label)))
 		q = append(q, []byte(label)...)
 	}
-	q = append(q, 0)    // terminator
-	q = append(q, 0, 1) // QTYPE = A
-	q = append(q, 0, 1) // QCLASS = IN
+	q = append(q, 0)                           // terminator
+	q = append(q, byte(qtype>>8), byte(qtype)) // QTYPE
+	q = append(q, 0, 1)                        // QCLASS = IN
+	return q
+}
+
+// buildQuery builds a type-A query; thin wrapper over buildQueryWithType.
+func buildQuery(t *testing.T, hostname string) []byte {
+	t.Helper()
+	return buildQueryWithType(t, hostname, 1)
+}
+
+// buildQueryWithOPT appends a minimal EDNS OPT pseudo-record (TYPE 41) and
+// sets ARCOUNT=1, mimicking Android netd queries.
+func buildQueryWithOPT(t *testing.T, hostname string, qtype uint16) []byte {
+	t.Helper()
+	q := buildQueryWithType(t, hostname, qtype)
+	binary.BigEndian.PutUint16(q[10:12], 1) // arcount = 1
+	// Minimal OPT: NAME=root, TYPE=41, CLASS=4096 (requestor UDP size),
+	// TTL=0 (extended RCODE + flags), RDLEN=0.
+	q = append(q, 0, 0, 41, 16, 0, 0, 0, 0, 0, 0, 0)
 	return q
 }
 
@@ -373,5 +391,189 @@ func TestTCPRelayForwardsDomainTypedReplyIntact(t *testing.T) {
 	}
 	if port[0] != 0x1F || port[1] != 0x90 {
 		t.Fatalf("port bytes = %02X %02X, want 1F 90", port[0], port[1])
+	}
+}
+
+func TestDNSQuestionType_ParsesAAAAAndHTTPS(t *testing.T) {
+	for _, qtype := range []uint16{28, 65} {
+		q := buildQueryWithType(t, "example.com", qtype)
+		got, qEnd, ok := dnsQuestionType(q)
+		if !ok {
+			t.Fatalf("dnsQuestionType(qtype=%d): ok=false, want true", qtype)
+		}
+		if got != qtype {
+			t.Fatalf("dnsQuestionType(qtype=%d) = %d, want %d", qtype, got, qtype)
+		}
+		if qEnd != len(q) {
+			t.Fatalf("dnsQuestionType(qtype=%d): qEnd=%d, want len(query)=%d", qtype, qEnd, len(q))
+		}
+	}
+}
+
+func TestDNSQuestionType_RejectsTruncated(t *testing.T) {
+	valid := buildQuery(t, "example.com")
+
+	// Cut mid-QNAME: first label claims 7 bytes but only 2 remain.
+	if _, _, ok := dnsQuestionType(valid[:15]); ok {
+		t.Fatal("dnsQuestionType cut mid-QNAME: ok=true, want false")
+	}
+
+	// Terminator present but QTYPE/QCLASS truncated (1-3 trailing bytes).
+	term := 12
+	for valid[term] != 0 {
+		term += 1 + int(valid[term])
+	}
+	for _, trailing := range []int{1, 2, 3} {
+		if _, _, ok := dnsQuestionType(valid[:term+1+trailing]); ok {
+			t.Fatalf("dnsQuestionType truncated QTYPE/QCLASS (%d trailing bytes): ok=true, want false", trailing)
+		}
+	}
+
+	// QDCOUNT=0 and QDCOUNT=2 must not parse.
+	for _, qdcount := range []uint16{0, 2} {
+		bad := append([]byte{}, valid...)
+		binary.BigEndian.PutUint16(bad[4:6], qdcount)
+		if _, _, ok := dnsQuestionType(bad); ok {
+			t.Fatalf("dnsQuestionType QDCOUNT=%d: ok=true, want false", qdcount)
+		}
+	}
+}
+
+func TestDNSResponseKind_PinsAllThreeArms(t *testing.T) {
+	cases := []struct {
+		qtype uint16
+		ok    bool
+		want  string
+	}{
+		{1, true, "A"},
+		{28, true, "NODATA"},
+		{65, true, "NODATA"},
+		{1, false, "DROP"},
+		{0, false, "DROP"},
+	}
+	for _, tc := range cases {
+		if got := dnsResponseKind(tc.qtype, tc.ok); got != tc.want {
+			t.Fatalf("dnsResponseKind(%d, %v) = %q, want %q", tc.qtype, tc.ok, got, tc.want)
+		}
+	}
+}
+
+func TestBuildNODATAResponse_PreservesTxidAndOPT(t *testing.T) {
+	q := buildQueryWithOPT(t, "example.com", 28)
+	// RD=1, RCODE=3: the response must preserve RD while clearing RCODE.
+	binary.BigEndian.PutUint16(q[2:4], 0x0103)
+	resp := buildNODATAResponse(q)
+	if resp == nil {
+		t.Fatal("buildNODATAResponse returned nil for valid OPT query")
+	}
+	if len(resp) != len(q) {
+		t.Fatalf("len(resp)=%d, want len(query)=%d (no answer bytes appended)", len(resp), len(q))
+	}
+	if binary.BigEndian.Uint16(resp[0:2]) != binary.BigEndian.Uint16(q[0:2]) {
+		t.Fatal("buildNODATAResponse did not preserve TXID")
+	}
+	if flags := binary.BigEndian.Uint16(resp[2:4]); flags != 0x8180 {
+		t.Fatalf("response flags = 0x%04X, want 0x8180 (QR+RD+RA, RCODE cleared)", flags)
+	}
+	if ancount := binary.BigEndian.Uint16(resp[6:8]); ancount != 0 {
+		t.Fatalf("ANCOUNT = %d, want 0", ancount)
+	}
+	if arcount := binary.BigEndian.Uint16(resp[10:12]); arcount != 1 {
+		t.Fatalf("ARCOUNT = %d, want 1 (OPT preserved)", arcount)
+	}
+	if string(resp[4:]) != string(q[4:]) {
+		t.Fatal("buildNODATAResponse did not preserve question+OPT bytes verbatim")
+	}
+}
+
+func TestNonAQueriesGetNODATAEndToEnd(t *testing.T) {
+	for _, qtype := range []uint16{28, 65} {
+		q := buildQueryWithType(t, "example.com", qtype)
+		qt, _, ok := dnsQuestionType(q)
+		if kind := dnsResponseKind(qt, ok); kind != "NODATA" {
+			t.Fatalf("qtype=%d: kind = %q, want NODATA", qtype, kind)
+		}
+		resp := buildNODATAResponse(q)
+		if resp == nil {
+			t.Fatalf("qtype=%d: buildNODATAResponse returned nil", qtype)
+		}
+		if ancount := binary.BigEndian.Uint16(resp[6:8]); ancount != 0 {
+			t.Fatalf("qtype=%d: ANCOUNT = %d, want 0", qtype, ancount)
+		}
+	}
+
+	q := buildQuery(t, "example.com")
+	qt, _, ok := dnsQuestionType(q)
+	if kind := dnsResponseKind(qt, ok); kind != "A" {
+		t.Fatalf("qtype=A: kind = %q, want A", kind)
+	}
+	resp := buildDNSResponse(q, "198.18.0.5")
+	if resp == nil {
+		t.Fatal("qtype=A: buildDNSResponse returned nil")
+	}
+	if ancount := binary.BigEndian.Uint16(resp[6:8]); ancount != 1 {
+		t.Fatalf("qtype=A: ANCOUNT = %d, want 1", ancount)
+	}
+}
+
+func TestAAAAQueryDoesNotConsumeFakeIP(t *testing.T) {
+	dnsMap := NewDNSMapper()
+	q := buildQueryWithType(t, "example.com", 28)
+	qtype, _, ok := dnsQuestionType(q)
+	if kind := dnsResponseKind(qtype, ok); kind != "NODATA" {
+		t.Fatalf("AAAA query kind = %q, want NODATA", kind)
+	}
+	// The NODATA path answers from buildNODATAResponse without calling
+	// GetFakeIP, so the map must stay empty.
+	if resp := buildNODATAResponse(q); resp == nil {
+		t.Fatal("buildNODATAResponse returned nil for AAAA query")
+	}
+	dnsMap.mu.RLock()
+	size := len(dnsMap.hostnameToIP)
+	dnsMap.mu.RUnlock()
+	if size != 0 {
+		t.Fatalf("map size = %d, want 0 (AAAA decision allocates no fake IP)", size)
+	}
+}
+
+func TestAWithOPTGetsStrippedValidA(t *testing.T) {
+	dnsMap := NewDNSMapper()
+	q := buildQueryWithOPT(t, "example.com", 1)
+	// RD=1, RCODE=3: the stripped response must preserve RD, clear RCODE.
+	binary.BigEndian.PutUint16(q[2:4], 0x0103)
+	qtype, qEnd, ok := dnsQuestionType(q)
+	if !ok || qtype != 1 {
+		t.Fatalf("dnsQuestionType OPT A query: qtype=%d ok=%v, want 1 true", qtype, ok)
+	}
+	if kind := dnsResponseKind(qtype, ok); kind != "A" {
+		t.Fatalf("OPT A query kind = %q, want A", kind)
+	}
+	fakeIP := dnsMap.GetFakeIP("example.com")
+	resp := buildStrippedAResponse(q, qEnd, fakeIP)
+	if resp == nil {
+		t.Fatal("buildStrippedAResponse returned nil for OPT A query")
+	}
+	if len(resp) != qEnd+16 {
+		t.Fatalf("len(resp)=%d, want qEnd+16=%d", len(resp), qEnd+16)
+	}
+	if flags := binary.BigEndian.Uint16(resp[2:4]); flags != 0x8180 {
+		t.Fatalf("response flags = 0x%04X, want 0x8180 (QR+RD+RA, RCODE cleared)", flags)
+	}
+	if ancount := binary.BigEndian.Uint16(resp[6:8]); ancount != 1 {
+		t.Fatalf("ANCOUNT = %d, want 1", ancount)
+	}
+	if arcount := binary.BigEndian.Uint16(resp[10:12]); arcount != 0 {
+		t.Fatalf("ARCOUNT = %d, want 0 (OPT stripped)", arcount)
+	}
+	// Answer trailer: compression pointer + type A + class IN + ttl 60 +
+	// rdlen 4 + the allocated fake IP.
+	if resp[qEnd] != 0xC0 || resp[qEnd+1] != 0x0C {
+		t.Fatalf("answer pointer = 0x%02X%02X, want 0xC00C", resp[qEnd], resp[qEnd+1])
+	}
+	if answerType := binary.BigEndian.Uint16(resp[qEnd+2 : qEnd+4]); answerType != 1 {
+		t.Fatalf("answer type = %d, want 1 (A)", answerType)
+	}
+	if ip := net.IP(resp[len(resp)-4:]).String(); ip != fakeIP {
+		t.Fatalf("answer IP = %s, want %s", ip, fakeIP)
 	}
 }
