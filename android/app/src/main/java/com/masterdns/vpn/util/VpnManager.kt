@@ -289,6 +289,8 @@ object VpnManager {
         _downloadSpeedBps.value = 0L
     }
 
+    internal fun isPrivateDnsStrictBypass(mode: String?): Boolean = mode == "hostname"
+
     /**
      * Start the VPN service.
      */
@@ -296,6 +298,19 @@ object VpnManager {
         if (_state.value == VpnState.CONNECTED ||
             _state.value == VpnState.CONNECTING ||
             _state.value == VpnState.DISCONNECTING) return
+
+        if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.P) {
+            val mode = runCatching {
+                android.provider.Settings.Global.getString(context.contentResolver, "private_dns_mode")
+            }.getOrNull()
+            if (isPrivateDnsStrictBypass(mode)) {
+                val msg = "Android Private DNS (Strict mode) is active and will bypass VPN DNS (poisoned answers like 10.10.34.35). To fix: Settings → Network & Internet → Private DNS → Off, then reconnect."
+                appendLog(msg)
+                setError(msg)
+                updateState(VpnState.ERROR)
+                return
+            }
+        }
 
         updateState(VpnState.CONNECTING)
         clearError()
