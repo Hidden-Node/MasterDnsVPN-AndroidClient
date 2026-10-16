@@ -159,15 +159,16 @@ func TestParseDNSQueryEquivalence(t *testing.T) {
 
 func TestBuildDNSResponse_ValidIPReturnsAResponse(t *testing.T) {
 	q := buildQuery(t, "example.com")
+	// RD=1, RCODE=0 — mirrors the 065 tests' 0x0103 setup with a clear RCODE.
+	binary.BigEndian.PutUint16(q[2:4], 0x0100)
 	resp := buildDNSResponse(q, "198.18.0.5")
 	if resp == nil {
 		t.Fatal("buildDNSResponse returned nil for valid input")
 	}
 
-	// Response should be the query, with flags updated to 0x8400, ANCOUNT=1.
-	flags := binary.BigEndian.Uint16(resp[2:4])
-	if flags&0x8400 != 0x8400 {
-		t.Fatalf("response flags = 0x%04X, want 0x8400 bit set", flags)
+	// Unified synthetic-answer flags (plan 070): QR+RD+RA, RCODE cleared.
+	if flags := binary.BigEndian.Uint16(resp[2:4]); flags != 0x8180 {
+		t.Fatalf("response flags = 0x%04X, want 0x8180 (QR+RD+RA, RCODE cleared)", flags)
 	}
 	ancount := binary.BigEndian.Uint16(resp[6:8])
 	if ancount != 1 {
@@ -192,6 +193,23 @@ func TestBuildDNSResponse_ValidIPReturnsAResponse(t *testing.T) {
 	ip := net.IP(resp[answerStart+12 : answerStart+16]).String()
 	if ip != "198.18.0.5" {
 		t.Fatalf("answer IP = %s, want 198.18.0.5", ip)
+	}
+}
+
+func TestBuildDNSResponse_ClearsNonzeroRcode(t *testing.T) {
+	q := buildQuery(t, "example.com")
+	// RD=1, RCODE=3: the legacy OR-idiom echoed the nonzero
+	// RCODE; the unified idiom must clear it to 0x8180.
+	binary.BigEndian.PutUint16(q[2:4], 0x0103)
+	resp := buildDNSResponse(q, "198.18.0.5")
+	if resp == nil {
+		t.Fatal("buildDNSResponse returned nil for valid input")
+	}
+	if flags := binary.BigEndian.Uint16(resp[2:4]); flags != 0x8180 {
+		t.Fatalf("response flags = 0x%04X, want 0x8180 (QR+RD+RA, RCODE cleared)", flags)
+	}
+	if ancount := binary.BigEndian.Uint16(resp[6:8]); ancount != 1 {
+		t.Fatalf("ancount = %d, want 1", ancount)
 	}
 }
 

@@ -626,7 +626,10 @@ func buildDNSResponse(query []byte, fakeIP string) []byte {
 	response := make([]byte, len(query)+16)
 	copy(response, query)
 	flags := binary.BigEndian.Uint16(response[2:4])
-	flags |= 0x8400
+	// Unified synthetic-answer flags (plan 070): QR+RA set, RCODE cleared.
+	// Matches buildNODATAResponse and buildStrippedAResponse. AA is
+	// intentionally not set — this is a forging stub, not an authority.
+	flags = (flags | 0x8080) &^ 0x000F
 	binary.BigEndian.PutUint16(response[2:4], flags)
 	binary.BigEndian.PutUint16(response[6:8], 1)
 	pos := len(query)
