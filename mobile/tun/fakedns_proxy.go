@@ -387,8 +387,23 @@ func (p *FakeDNSProxy) handleUDPAssociate(tcpConn net.Conn, atyp byte, targetAdd
 				copy(dnsQuery, buf[offset:n])
 				hostname := parseDNSQuery(dnsQuery)
 				if hostname != "" {
-					fakeIP := p.dnsMap.GetFakeIP(hostname)
-					resp := buildDNSResponse(dnsQuery, fakeIP)
+					qtype, qEnd, ok := dnsQuestionType(dnsQuery)
+					var resp []byte
+					switch dnsResponseKind(qtype, ok) {
+					case "DROP":
+						// Malformed question: never answer with a forged record.
+					case "A":
+						fakeIP := p.dnsMap.GetFakeIP(hostname)
+						if binary.BigEndian.Uint16(dnsQuery[10:12]) > 0 {
+							// EDNS OPT additional section present: answer over
+							// the header+question prefix only, dropping OPT.
+							resp = buildStrippedAResponse(dnsQuery, qEnd, fakeIP)
+						} else {
+							resp = buildDNSResponse(dnsQuery, fakeIP)
+						}
+					case "NODATA":
+						resp = buildNODATAResponse(dnsQuery)
+					}
 					if resp != nil {
 						need := offset + len(resp)
 						scratch := relayBufPool.Get().([]byte)
@@ -471,6 +486,80 @@ func parseDNSQuery(query []byte) string {
 	return string(out)
 }
 
+// dnsQuestionType locates the first question's QTYPE in an uncompressed DNS
+// query and returns the QTYPE value along with qEnd, the offset just past
+// QTYPE/QCLASS. It follows the same bounds discipline as parseDNSQuery:
+// label lengths over 63 (including compression pointers with the 0xC0 top
+// bits set) and overruns are rejected, as are truncated QTYPE/QCLASS tails
+// and headers with QDCOUNT != 1. QCLASS is intentionally ignored. Pointers
+// are never followed.
+func dnsQuestionType(query []byte) (qtype uint16, qEnd int, ok bool) {
+	if len(query) < 12 {
+		return 0, 0, false
+	}
+	if binary.BigEndian.Uint16(query[4:6]) != 1 {
+		return 0, 0, false
+	}
+	pos := 12
+	labels := 0
+	for {
+		if pos >= len(query) {
+			return 0, 0, false
+		}
+		length := int(query[pos])
+		if length == 0 {
+			break
+		}
+		if length > 63 || pos+1+length > len(query) {
+			return 0, 0, false
+		}
+		labels++
+		pos += 1 + length
+	}
+	if labels == 0 {
+		return 0, 0, false
+	}
+	if pos+1+4 > len(query) {
+		return 0, 0, false
+	}
+	qtype = binary.BigEndian.Uint16(query[pos+1 : pos+3])
+	qEnd = pos + 1 + 4
+	return qtype, qEnd, true
+}
+
+// dnsResponseKind is the pure policy decision for the UDP intercept: DROP
+// malformed questions without a forged answer, answer A queries with a
+// forged A record, and answer everything else with an empty NODATA response.
+func dnsResponseKind(qtype uint16, ok bool) string {
+	if !ok {
+		return "DROP"
+	}
+	if qtype == 1 {
+		return "A"
+	}
+	return "NODATA"
+}
+
+// buildNODATAResponse copies the query bytes verbatim (preserving TXID, RD,
+// and any EDNS OPT record in the additional section) and marks them as an
+// empty NOERROR response: QR and RA set, RCODE cleared, ANCOUNT zeroed.
+// NSCOUNT and ARCOUNT are left as-is. No answer bytes are appended.
+func buildNODATAResponse(query []byte) []byte {
+	if len(query) < 12 {
+		return nil
+	}
+	if _, _, ok := dnsQuestionType(query); !ok {
+		return nil
+	}
+	response := make([]byte, len(query))
+	copy(response, query)
+	flags := binary.BigEndian.Uint16(response[2:4])
+	flags = (flags | 0x8080) &^ 0x000F
+	binary.BigEndian.PutUint16(response[2:4], flags)
+	binary.BigEndian.PutUint16(response[6:8], 0)
+	return response
+}
+
 func buildDNSResponse(query []byte, fakeIP string) []byte {
 	if len(query) < 12 {
 		return nil
@@ -499,4 +588,40 @@ func buildDNSResponse(query []byte, fakeIP string) []byte {
 	copy(response[pos:pos+4], ip)
 	pos += 4
 	return response[:pos]
+}
+
+// buildStrippedAResponse builds a forged A answer over the header+question
+// prefix query[:qEnd], dropping any EDNS OPT additional section (ARCOUNT=0).
+// A synthetic response MAY omit OPT; appending the answer after len(query)
+// would strand OPT mid-message and produce a malformed response. The 16-byte
+// answer trailer is identical to buildDNSResponse. Returns nil on short
+// input, an out-of-range qEnd, or a non-IPv4 fakeIP.
+func buildStrippedAResponse(query []byte, qEnd int, fakeIP string) []byte {
+	if len(query) < 12 || qEnd < 12 || qEnd > len(query) {
+		return nil
+	}
+	ip := net.ParseIP(fakeIP).To4()
+	if ip == nil {
+		return nil
+	}
+	response := make([]byte, qEnd+16)
+	copy(response, query[:qEnd])
+	flags := binary.BigEndian.Uint16(response[2:4])
+	flags = (flags | 0x8080) &^ 0x000F
+	binary.BigEndian.PutUint16(response[2:4], flags)
+	binary.BigEndian.PutUint16(response[6:8], 1)
+	binary.BigEndian.PutUint16(response[10:12], 0)
+	pos := qEnd
+	response[pos] = 0xC0
+	response[pos+1] = 0x0C
+	pos += 2
+	binary.BigEndian.PutUint16(response[pos:pos+2], 1)
+	binary.BigEndian.PutUint16(response[pos+2:pos+4], 1)
+	pos += 4
+	binary.BigEndian.PutUint32(response[pos:pos+4], 60)
+	pos += 4
+	binary.BigEndian.PutUint16(response[pos:pos+2], 4)
+	pos += 2
+	copy(response[pos:pos+4], ip)
+	return response
 }
