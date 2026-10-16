@@ -38,7 +38,7 @@ fun parseImportedSettings(raw: String): GlobalSettings? {
         connectionMode = str("connectionMode", defaults.connectionMode),
         splitTunnelingEnabled = bool("splitTunnelingEnabled", defaults.splitTunnelingEnabled),
         splitTunnelMode = runCatching {
-            SplitTunnelMode.valueOf(str("splitTunnelMode", defaults.splitTunnelMode.name))
+            SplitTunnelMode.valueOf(str("splitTunnelMode", defaults.splitTunnelMode.name).uppercase())
         }.getOrDefault(SplitTunnelMode.INCLUDE),
         splitPackagesCsv = str("splitPackagesCsv", defaults.splitPackagesCsv),
         customDnsServers = str("customDnsServers", defaults.customDnsServers),

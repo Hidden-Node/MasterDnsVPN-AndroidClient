@@ -91,4 +91,11 @@ class GlobalSettingsClipboardTest {
         assertThat(parseImportedSettings("")).isNull()
         assertThat(parseImportedSettings("   ")).isNull()
     }
+
+    @Test
+    fun import_lowercaseEnumValue_parsesCaseInsensitively() {
+        val parsed = parseImportedSettings("{\"splitTunnelMode\":\"exclude\"}")
+        assertThat(parsed).isNotNull()
+        assertThat(parsed!!.splitTunnelMode).isEqualTo(SplitTunnelMode.EXCLUDE)
+    }
 }
