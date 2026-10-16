@@ -25,6 +25,7 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ArrowDropDown
+import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
@@ -34,10 +35,13 @@ import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.ExposedDropdownMenuBox
 import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.SnackbarHost
+import androidx.compose.material3.SnackbarHostState
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Switch
@@ -50,6 +54,7 @@ import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.saveable.Saver
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
@@ -57,7 +62,9 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.asImageBitmap
+import androidx.compose.ui.platform.LocalClipboardManager
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.PasswordVisualTransformation
@@ -71,8 +78,11 @@ import com.masterdns.vpn.ui.theme.MdvColor
 import com.masterdns.vpn.ui.theme.MdvSpace
 import com.masterdns.vpn.util.GlobalSettings
 import com.masterdns.vpn.util.SplitTunnelMode
+import com.masterdns.vpn.util.parseImportedSettings
+import com.masterdns.vpn.util.toExportJson
 import androidx.compose.ui.unit.Dp
 import androidx.compose.runtime.LaunchedEffect
+import kotlinx.coroutines.launch
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -93,6 +103,10 @@ fun GlobalSettingsScreen(vm: GlobalSettingsViewModel = viewModel()) {
     var availableQuery by rememberSaveable { mutableStateOf("") }
     var selectedQuery by rememberSaveable { mutableStateOf("") }
     var activeTab by rememberSaveable { mutableStateOf("AVAILABLE") }
+    val snackbarHostState = remember { SnackbarHostState() }
+    val scope = rememberCoroutineScope()
+    val clipboardManager = LocalClipboardManager.current
+    var menuExpanded by remember { mutableStateOf(false) }
     var draftAppSelection by rememberSaveable(current.splitPackagesCsv, saver = Saver<MutableState<MutableSet<String>>, List<String>>(save = { it.value.toList() }, restore = { mutableStateOf(it.toMutableSet()) })) { mutableStateOf(parseCsv(current.splitPackagesCsv).toMutableSet()) }
     val socksPortValue = sharingSocksPortText.toIntOrNull()
     val httpPortValue = sharingHttpPortText.toIntOrNull()
@@ -116,9 +130,48 @@ fun GlobalSettingsScreen(vm: GlobalSettingsViewModel = viewModel()) {
         containerColor = MdvColor.Background,
         topBar = {
             MdvTopAppBar(
-                title = stringResource(R.string.settings_title)
+                title = stringResource(R.string.settings_title),
+                actions = {
+                    Box {
+                        IconButton(onClick = { menuExpanded = true }) {
+                            Icon(imageVector = Icons.Filled.MoreVert, contentDescription = "More")
+                        }
+                        DropdownMenu(
+                            expanded = menuExpanded,
+                            onDismissRequest = { menuExpanded = false }
+                        ) {
+                            DropdownMenuItem(
+                                text = { Text("Export to Clipboard") },
+                                onClick = {
+                                    menuExpanded = false
+                                    clipboardManager.setText(AnnotatedString(draft.toExportJson()))
+                                    scope.launch { snackbarHostState.showSnackbar("Settings copied (credentials excluded)") }
+                                }
+                            )
+                            DropdownMenuItem(
+                                text = { Text("Import from Clipboard") },
+                                onClick = {
+                                    menuExpanded = false
+                                    val text = clipboardManager.getText()?.text
+                                    if (!text.isNullOrBlank()) {
+                                        val imported = parseImportedSettings(text)
+                                        if (imported != null) {
+                                            draft = imported
+                                            scope.launch { snackbarHostState.showSnackbar("Settings imported from clipboard") }
+                                        } else {
+                                            scope.launch { snackbarHostState.showSnackbar("Failed to parse settings JSON") }
+                                        }
+                                    } else {
+                                        scope.launch { snackbarHostState.showSnackbar("Clipboard is empty") }
+                                    }
+                                }
+                            )
+                        }
+                    }
+                }
             )
-        }
+        },
+        snackbarHost = { SnackbarHost(hostState = snackbarHostState) }
     ) { padding ->
         BoxWithConstraints(
             modifier = Modifier
