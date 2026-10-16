@@ -152,6 +152,17 @@ func (p *FakeDNSProxy) handleConnection(conn net.Conn) {
 		}
 	}
 
+	if cmd == 1 {
+		port := binary.BigEndian.Uint16(targetPort)
+		if port == 53 || port == 853 {
+			// DNS-over-TCP / DoT cannot be served: the engine resolves DNS
+			// in-process over UDP only; forwarding stalls for seconds.
+			// Fail fast so the client falls back to UDP/53.
+			_, _ = conn.Write([]byte{5, 1, 0, 1, 0, 0, 0, 0, 0, 0})
+			return
+		}
+	}
+
 	if cmd == 3 { // UDP ASSOCIATE
 		p.handleUDPAssociate(conn, atyp, targetAddr, targetPort)
 		return
@@ -426,11 +437,13 @@ func (p *FakeDNSProxy) handleUDPAssociate(tcpConn net.Conn, atyp byte, targetAdd
 				continue
 			}
 
-			// ponytail: non-DNS UDP (QUIC, etc.) dropped, not forwarded.
-			// Upstream SOCKS5 UDP_ASSOCIATE rejects non-53 targets
-			// (socks_manager.go:665), forwarding would close the association
-			// and break subsequent DNS queries. Dropping lets the browser's
-			// QUIC probe time out fast and fall back to TCP (issue #32).
+			// Contract: non-DNS UDP (QUIC, etc.) is dropped with no reply.
+			// Rationale: the upstream Go core rejects non-53 UDP ASSOCIATE targets
+			// (internal/client/socks_manager.go:665) and closes the association on
+			// forward; dropping keeps the DNS association alive and lets the QUIC
+			// probe time out and fall back to TCP. This proxy has no TUN access and
+			// cannot emit ICMP Port Unreachable itself (unlike a gVisor forwarder);
+			// the drop IS the fast-fail mechanism here. Do not "fix" by forwarding.
 		}
 	}()
 
