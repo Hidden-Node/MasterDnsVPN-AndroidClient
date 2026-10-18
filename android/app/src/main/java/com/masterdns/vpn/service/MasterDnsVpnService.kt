@@ -74,6 +74,23 @@ class MasterDnsVpnService : VpnService() {
             val pass = advanced["SOCKS5_PASS"]?.trim().takeIf { !it.isNullOrEmpty() } ?: "master_dns_vpn"
             return user to pass
         }
+
+        /**
+         * Per session exactly ONE TUN engine starts: gVisor when opted in
+         * (wins over FakeDNS), the DNS-aware bridge under FakeDNS, raw
+         * tun2socks otherwise. Whichever one started is reaped Go-side by
+         * StopClient() — see the stop-path comments at MasterDnsVpnService
+         * :540/:651 — so Kotlin never stops the engine directly.
+         */
+        internal enum class Engine { GVISOR, BRIDGE, TUN2SOCKS }
+
+        internal fun selectEngine(gvisorEnabled: Boolean, fakeDnsEnabled: Boolean): Engine {
+            return when {
+                gvisorEnabled -> Engine.GVISOR
+                fakeDnsEnabled -> Engine.BRIDGE
+                else -> Engine.TUN2SOCKS
+            }
+        }
     }
 
     private val serviceScope = CoroutineScope(Dispatchers.IO + SupervisorJob())
@@ -227,7 +244,7 @@ class MasterDnsVpnService : VpnService() {
                     return@launch
                 }
 
-                establishVpnInterface(inputs)
+                establishVpnInterface(inputs, configPaths)
                 registerNetworkCallback()
 
                 VpnManager.updateState(VpnManager.VpnState.CONNECTED)
@@ -372,7 +389,7 @@ class MasterDnsVpnService : VpnService() {
         VpnManager.appendLog("SOCKS5 proxy is ready on 127.0.0.1:$activeLocalSocksPort")
     }
 
-    private fun establishVpnInterface(inputs: ConnectInputs) {
+    private fun establishVpnInterface(inputs: ConnectInputs, configPaths: ConfigPaths) {
         val vpnDnsServers = if (inputs.globalSettings.customDnsServers.isNotBlank()) {
             inputs.globalSettings.customDnsServers
                 .split(",")
@@ -414,7 +431,16 @@ class MasterDnsVpnService : VpnService() {
             .onFailure { VpnManager.appendLog("IPv6 route skipped: ${it.message}") }
 
         vpnDnsServers.forEach { builder.addDnsServer(it) }
-        if (inputs.globalSettings.fakeDnsEnabled) {
+        // The fake-IP range route only makes sense for the DNS-aware bridge
+        // arm: under the gVisor engine the fake route is useless (every
+        // UDP/53 datagram reaching the TUN fd is answered regardless), and
+        // under raw tun2socks FakeDNS is off. selectEngine picks exactly one
+        // arm per session, so the route stays exclusive to BRIDGE.
+        if (selectEngine(
+                inputs.globalSettings.gvisorEngineEnabled,
+                inputs.globalSettings.fakeDnsEnabled
+            ) == Engine.BRIDGE
+        ) {
             builder.addRoute("198.18.0.0", 16)
             VpnManager.appendLog("Added fake DNS route: 198.18.0.0/16")
         }
@@ -474,23 +500,48 @@ class MasterDnsVpnService : VpnService() {
 
         VpnManager.appendLog("TUN interface established (fd=${vpnInterface!!.fd})")
 
-        if (inputs.globalSettings.fakeDnsEnabled) {
-            VpnManager.appendLog("Starting DNS-aware TUN bridge...")
-            runCatching {
-                mobile.Mobile.startTunBridge(vpnInterface!!.fd.toLong(), 1400L, "127.0.0.1:${inputs.socksPort}")
-            }.onSuccess {
-                VpnManager.appendLog("DNS-aware TUN bridge started")
-            }.onFailure { e ->
-                VpnManager.appendLog("DNS-aware TUN bridge failed: ${e.message}")
-                throw IllegalStateException("TUN bridge start failed: ${e.message}", e)
+        when (selectEngine(
+            inputs.globalSettings.gvisorEngineEnabled,
+            inputs.globalSettings.fakeDnsEnabled
+        )) {
+            Engine.GVISOR -> {
+                VpnManager.appendLog("Starting gVisor TUN bridge...")
+                runCatching {
+                    val (socksUser, socksPass) = coreTunnelCreds(parseAdvancedJson(inputs.profile.advancedJson))
+                    mobile.Mobile.startTunGvisor(
+                        vpnInterface!!.fd.toLong(),
+                        1400L,
+                        "127.0.0.1:${inputs.socksPort}",
+                        socksUser ?: "",
+                        socksPass ?: "",
+                        configPaths.logFile.absolutePath
+                    )
+                }.onSuccess {
+                    VpnManager.appendLog("gVisor TUN bridge started")
+                }.onFailure { e ->
+                    VpnManager.appendLog("gVisor TUN bridge failed: ${e.message}")
+                    throw IllegalStateException("gVisor TUN bridge start failed: ${e.message}", e)
+                }
             }
-        } else {
-            VpnManager.appendLog("Starting tun2socks bridge: TUN fd -> socks5://127.0.0.1:${inputs.socksPort}")
-            runCatching {
-                mobile.Mobile.startTun(vpnInterface!!.fd.toLong(), "127.0.0.1:${inputs.socksPort}")
-            }.onFailure { e ->
-                VpnManager.appendLog("tun2socks bridge failed: ${e.message}")
-                throw IllegalStateException("TUN start failed: ${e.message}", e)
+            Engine.BRIDGE -> {
+                VpnManager.appendLog("Starting DNS-aware TUN bridge...")
+                runCatching {
+                    mobile.Mobile.startTunBridge(vpnInterface!!.fd.toLong(), 1400L, "127.0.0.1:${inputs.socksPort}")
+                }.onSuccess {
+                    VpnManager.appendLog("DNS-aware TUN bridge started")
+                }.onFailure { e ->
+                    VpnManager.appendLog("DNS-aware TUN bridge failed: ${e.message}")
+                    throw IllegalStateException("TUN bridge start failed: ${e.message}", e)
+                }
+            }
+            Engine.TUN2SOCKS -> {
+                VpnManager.appendLog("Starting tun2socks bridge: TUN fd -> socks5://127.0.0.1:${inputs.socksPort}")
+                runCatching {
+                    mobile.Mobile.startTun(vpnInterface!!.fd.toLong(), "127.0.0.1:${inputs.socksPort}")
+                }.onFailure { e ->
+                    VpnManager.appendLog("tun2socks bridge failed: ${e.message}")
+                    throw IllegalStateException("TUN start failed: ${e.message}", e)
+                }
             }
         }
     }

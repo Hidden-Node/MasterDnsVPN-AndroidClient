@@ -248,7 +248,7 @@ object VpnManager {
         val uid = appContext.applicationInfo.uid
         trafficMonitorJob?.cancel()
         trafficMonitorJob = monitorScope.launch {
-            val initialBw = Mobile.getTunBandwidth()
+            val initialBw = if (Mobile.isTunGvisorRunning()) Mobile.getGvisorBandwidth() else Mobile.getTunBandwidth()
             var prevTx = initialBw.up.coerceAtLeast(0L)
             var prevRx = initialBw.down.coerceAtLeast(0L)
             var prevTime = System.currentTimeMillis()
@@ -259,7 +259,7 @@ object VpnManager {
             while (isActive) {
                 delay(1000L)
                 val now = System.currentTimeMillis()
-                val bw = Mobile.getTunBandwidth()
+                val bw = if (Mobile.isTunGvisorRunning()) Mobile.getGvisorBandwidth() else Mobile.getTunBandwidth()
                 val tx = bw.up.coerceAtLeast(0L)
                 val rx = bw.down.coerceAtLeast(0L)
                 val dt = (now - prevTime).coerceAtLeast(1L)
