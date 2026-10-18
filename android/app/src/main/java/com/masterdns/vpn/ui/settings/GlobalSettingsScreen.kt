@@ -318,6 +318,21 @@ fun GlobalSettingsScreen(vm: GlobalSettingsViewModel = viewModel()) {
                             )
                         }
 
+                        RowSwitch(
+                            title = "gVisor engine (experimental)",
+                            checked = draft.gvisorEngineEnabled,
+                            onChecked = { draft = draft.copy(gvisorEngineEnabled = it) }
+                        )
+
+                        if (draft.gvisorEngineEnabled) {
+                            Text(
+                                "Use the in-process gVisor TUN engine instead of tun2socks+FakeDNS. Same tunnel and server; faster first-visit and QUIC fallback. Default off.",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MdvColor.OnSurfaceVariant,
+                                modifier = Modifier.padding(start = MdvSpace.S3)
+                            )
+                        }
+
                             }
                         }
                     }
