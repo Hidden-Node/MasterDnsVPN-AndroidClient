@@ -481,6 +481,155 @@ func TestGvisorSocks5Handshake(t *testing.T) {
 			t.Fatalf("unexpected CONNECT target at far end: %q", res.target)
 		}
 	})
+
+	t.Run("fragmented_method_selection_still_authenticates", func(t *testing.T) {
+		clientPipe, serverPipe := net.Pipe()
+		t.Cleanup(func() {
+			_ = clientPipe.Close()
+			_ = serverPipe.Close()
+		})
+		out := make(chan gvisorTestSocksResult, 1)
+		go func() {
+			defer func() { _ = serverPipe.Close() }()
+			res := gvisorTestSocksResult{}
+
+			// Greeting read + validation, mirroring gvisorTestPipeServer.
+			greet := make([]byte, 3)
+			if n, err := io.ReadFull(serverPipe, greet); n != 3 || err != nil {
+				res.err = fmt.Sprintf("greeting: read %d: %v", n, err)
+				out <- res
+				return
+			}
+			if greet[0] != 0x05 || greet[1] != 0x01 {
+				res.err = fmt.Sprintf("greeting: ver=%d nmeth=%d", greet[0], greet[1])
+				out <- res
+				return
+			}
+			if greet[2] != 0x00 && greet[2] != 0x02 {
+				res.err = fmt.Sprintf("greeting: unexpected method offered 0x%02x", greet[2])
+				out <- res
+				return
+			}
+
+			// Fragment the method selection across two separate single-byte
+			// writes — legal TCP segmentation (e.g. two loopback segments).
+			if _, err := serverPipe.Write([]byte{0x05}); err != nil {
+				res.err = "method write: " + err.Error()
+				out <- res
+				return
+			}
+			if _, err := serverPipe.Write([]byte{0x02}); err != nil {
+				res.err = "method write: " + err.Error()
+				out <- res
+				return
+			}
+
+			// USER_PASS sub-negotiation, mirroring gvisorTestPipeServer.
+			var ver [1]byte
+			if _, err := io.ReadFull(serverPipe, ver[:]); err != nil {
+				res.err = "auth ver: " + err.Error()
+				out <- res
+				return
+			}
+			var ulen [1]byte
+			if _, err := io.ReadFull(serverPipe, ulen[:]); err != nil {
+				res.err = "auth ulen: " + err.Error()
+				out <- res
+				return
+			}
+			ub := make([]byte, int(ulen[0]))
+			if _, err := io.ReadFull(serverPipe, ub); err != nil {
+				res.err = "auth user: " + err.Error()
+				out <- res
+				return
+			}
+			var plen [1]byte
+			if _, err := io.ReadFull(serverPipe, plen[:]); err != nil {
+				res.err = "auth plen: " + err.Error()
+				out <- res
+				return
+			}
+			pb := make([]byte, int(plen[0]))
+			if _, err := io.ReadFull(serverPipe, pb); err != nil {
+				res.err = "auth pass: " + err.Error()
+				out <- res
+				return
+			}
+			res.creds = string(ub) + "/" + string(pb)
+			if string(ub) != "u" || string(pb) != "p" {
+				_, _ = serverPipe.Write([]byte{0x01, 0x01})
+				out <- res
+				return
+			}
+			if _, err := serverPipe.Write([]byte{0x01, 0x00}); err != nil {
+				res.err = "auth reply write: " + err.Error()
+				out <- res
+				return
+			}
+
+			// CONNECT: VER CMD RSV ATYP then address then port.
+			hdr := make([]byte, 4)
+			if _, err := io.ReadFull(serverPipe, hdr); err != nil {
+				res.err = "connect hdr: " + err.Error()
+				out <- res
+				return
+			}
+			if hdr[3] != 0x03 {
+				res.err = fmt.Sprintf("connect atyp: %d", hdr[3])
+				out <- res
+				return
+			}
+			lb := make([]byte, 1)
+			if _, err := io.ReadFull(serverPipe, lb); err != nil {
+				res.err = "connect domlen: " + err.Error()
+				out <- res
+				return
+			}
+			dn := make([]byte, int(lb[0]))
+			if _, err := io.ReadFull(serverPipe, dn); err != nil {
+				res.err = "connect domain: " + err.Error()
+				out <- res
+				return
+			}
+			portBuf := make([]byte, 2)
+			if _, err := io.ReadFull(serverPipe, portBuf); err != nil {
+				res.err = "connect port: " + err.Error()
+				out <- res
+				return
+			}
+			res.target = net.JoinHostPort(string(dn), strconv.Itoa(int(binary.BigEndian.Uint16(portBuf))))
+
+			if _, werr := serverPipe.Write(successReply); werr != nil {
+				res.err = "connect reply write: " + werr.Error()
+				out <- res
+				return
+			}
+			out <- res
+		}()
+
+		conn := &gvisorSocksAuthConn{Conn: clientPipe, cred: gvisorSocksCred{user: "u", pass: "p"}}
+		clientErr := gvisorSocks5ConnectTCP(conn, "example.com", 443)
+		_ = clientPipe.Close()
+		_ = serverPipe.Close()
+
+		select {
+		case res := <-out:
+			if clientErr != nil {
+				t.Fatalf("expected success with fragmented method selection, got error: %v", clientErr)
+			}
+			if res.err != "" {
+				t.Fatalf("unexpected far-end failure: %q", res.err)
+			}
+			if res.creds != "u/p" {
+				t.Fatalf("credentials not forwarded: got %q", res.creds)
+			}
+			if res.target != "example.com:443" {
+				t.Fatalf("unexpected CONNECT target: %q", res.target)
+			}
+		case <-time.After(3 * time.Second):
+			t.Fatalf("pipe server script did not complete (clientErr=%v)", clientErr)
+		}
+	})
 }
 
 func TestGvisorSocks5ConnectRequest(t *testing.T) {

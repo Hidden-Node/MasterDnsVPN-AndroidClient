@@ -65,6 +65,14 @@ func (c *gvisorSocksAuthConn) Read(p []byte) (int, error) {
 	if c.handshakeState != 1 || n == 0 {
 		return n, err
 	}
+	if err == nil && n < 2 && len(p) >= 2 {
+		var rest int
+		rest, err = io.ReadFull(c.Conn, p[n:2])
+		n += rest
+		if err != nil {
+			return 0, err
+		}
+	}
 	// The first response is the method selection "VER METHOD". When the
 	// server picks USER_PASS (0x02) send the username/password sub-negotiation
 	// and swallow the 2-byte auth reply so the caller's CONNECT flow is
@@ -92,10 +100,6 @@ func (c *gvisorSocksAuthConn) Read(p []byte) (int, error) {
 		// method-selection reply; present it a synthetic "no-auth chosen"
 		// response so the CONNECT handshake proceeds normally.
 		p[0], p[1] = 0x05, 0x00
-		// Guarantee the caller sees both bytes even with short reads.
-		if n < 2 {
-			n = 2
-		}
 	}
 	return n, err
 }
