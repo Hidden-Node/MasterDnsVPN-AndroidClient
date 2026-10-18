@@ -12,6 +12,9 @@ import (
 	"fmt"
 	"io"
 	"net"
+	"os"
+	"path/filepath"
+	"regexp"
 	"strconv"
 	"strings"
 	"testing"
@@ -486,4 +489,81 @@ func TestGvisorSocks5ConnectRequest(t *testing.T) {
 
 func bytesEqual(a, b []byte) bool {
 	return len(a) == len(b) && string(a) == string(b)
+}
+
+// ── Poison-guard target normalization ────────────────────────────────────────
+
+func TestGvisorTargetGuardNormalization(t *testing.T) {
+	t.Run("v4_mapped_v6_poison_target_refused", func(t *testing.T) {
+		// The virtual stack can surface an IPv4 destination as a v4-mapped
+		// IPv6 literal; normalization must collapse it to the plain IPv4
+		// form BEFORE the shared guard runs, or the poison address inside
+		// 10/8 would slip through to a dial.
+		host := gvisorNormalizeTargetHost("::ffff:10.10.34.35")
+		if host != "10.10.34.35" {
+			t.Fatalf("expected v4-mapped v6 to normalize to 10.10.34.35, got %q", host)
+		}
+		if !gvisorIsBlockedSOCKSTarget(host) {
+			t.Fatal("poison IP 10.10.34.35 must be refused after normalization")
+		}
+
+		// Sanity: a global IPv4 destination normalizes unchanged and is
+		// allowed through, and a global IPv6 literal is left alone.
+		if got := gvisorNormalizeTargetHost("93.184.216.34"); got != "93.184.216.34" {
+			t.Fatalf("global IPv4 must not be rewritten, got %q", got)
+		}
+		if gvisorIsBlockedSOCKSTarget("93.184.216.34") {
+			t.Fatal("global IPv4 must not be refused")
+		}
+		if got := gvisorNormalizeTargetHost("2001:db8::1"); got != "2001:db8::1" {
+			t.Fatalf("native IPv6 must pass through normalization unchanged, got %q", got)
+		}
+	})
+}
+
+// ── File logger (portable) ────────────────────────────────────────────────────
+
+func TestGvisorFileLog(t *testing.T) {
+	t.Run("writes_all_severities_with_viewer_prefix", func(t *testing.T) {
+		path := filepath.Join(t.TempDir(), "bridge.log")
+		if err := gvisorLogOpen(path); err != nil {
+			t.Fatalf("open: %v", err)
+		}
+
+		gvisorLogLine(gvisorLogInfo, "test info line abc123")
+		gvisorLogLine(gvisorLogWarn, "test warn line def456")
+		gvisorLogLine(gvisorLogError, "test error line ghi789")
+		gvisorLogClose()
+
+		data, err := os.ReadFile(path)
+		if err != nil {
+			t.Fatalf("read back: %v", err)
+		}
+		lines := strings.Split(strings.TrimRight(string(data), "\n"), "\n")
+		if len(lines) != 3 {
+			t.Fatalf("expected exactly 3 lines, got %d:\n%s", len(lines), data)
+		}
+
+		// Shape, not the clock: YYYY-MM-DD HH:MM:SS [TUN-GVISOR] [SEVERITY] …
+		shape := regexp.MustCompile(`^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2} \[TUN-GVISOR\] \[(INFO|WARN|ERROR)\] .+`)
+		for i, wantSev := range []string{"INFO", "WARN", "ERROR"} {
+			if !shape.MatchString(lines[i]) {
+				t.Fatalf("line %d does not match required shape: %q", i, lines[i])
+			}
+			if !strings.Contains(lines[i], "[TUN-GVISOR] ["+wantSev+"]") {
+				t.Fatalf("line %d missing %s severity: %q", i, wantSev, lines[i])
+			}
+		}
+		for i, wantMsg := range []string{"test info line abc123", "test warn line def456", "test error line ghi789"} {
+			if !strings.Contains(lines[i], wantMsg) {
+				t.Fatalf("line %d missing message %q: %q", i, wantMsg, lines[i])
+			}
+		}
+
+		// Disabled logger mode: empty path is a no-op, never an error.
+		if err := gvisorLogOpen(""); err != nil {
+			t.Fatalf("empty logPath must disable the logger, got error: %v", err)
+		}
+		gvisorLogClose()
+	})
 }
