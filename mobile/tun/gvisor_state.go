@@ -143,7 +143,7 @@ func gvisorFilterDNSAAAA(resp []byte) []byte {
 	section := 0
 	sectionRemaining := origAN
 	for _, r := range recs {
-		if sectionRemaining == 0 && section < 2 {
+		for sectionRemaining == 0 && section < 2 {
 			section++
 			switch section {
 			case 1:

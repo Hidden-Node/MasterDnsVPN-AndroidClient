@@ -189,6 +189,57 @@ func TestGvisorAAAAFilter(t *testing.T) {
 			t.Fatal("SetGvisorDisableIPv6(true) must restore blocking")
 		}
 	})
+
+	t.Run("empty_leading_sections_attribute_to_ar", func(t *testing.T) {
+		// AN=0 NS=0 AR=2 (e.g. an OPT-carrying AAAA response): a kept A
+		// record followed by a dropped AAAA record. The section cursor must
+		// skip ALL empty leading sections before attributing records, or the
+		// A record is misattributed into NSCOUNT.
+		resp := gvisorTestQuery(t, "example.com", 28)
+		resp[2] = 0x81 // QR=1, RD=1 — REQUIRED: the filter passes non-responses through untouched
+		resp[3] = 0x80 // RA=1
+		v6 := make([]byte, 16)
+		v6[0] = 0x20
+		v6[1] = 0x01
+		resp = gvisorTestAnswer(resp, "example.com", 1, []byte{93, 184, 216, 34})
+		resp = gvisorTestAnswer(resp, "example.com", 28, v6)
+		gvisorTestCounts(resp, 0, 0, 2) // AN=0 NS=0 AR=2
+
+		got := gvisorFilterDNSAAAA(resp)
+		if an := binary.BigEndian.Uint16(got[6:8]); an != 0 {
+			t.Fatalf("expected ANCOUNT=0 after dropping the AAAA answer, got %d", an)
+		}
+		ns := binary.BigEndian.Uint16(got[8:10])
+		ar := binary.BigEndian.Uint16(got[10:12])
+		if ns != 0 || ar != 1 {
+			t.Fatalf("expected NSCOUNT=0 ARCOUNT=1 after skipping empty leading sections, got NS=%d AR=%d", ns, ar)
+		}
+		// Survivors: exactly one type-1 (A) record, zero AAAA records.
+		qEnd, ok := gvisorDNSQuestionEnd(got)
+		if !ok {
+			t.Fatal("rebuilt message question unparseable")
+		}
+		countA, countAAAA := 0, 0
+		p := qEnd
+		for p+10 <= len(got) {
+			nameLen, ok := gvisorDNSNameLengthAt(got, p)
+			if !ok {
+				t.Fatal("rebuilt record stream unparseable")
+			}
+			typ := binary.BigEndian.Uint16(got[p+nameLen : p+nameLen+2])
+			rdLen := int(binary.BigEndian.Uint16(got[p+nameLen+8 : p+nameLen+10]))
+			switch typ {
+			case 1:
+				countA++
+			case gvisorDnsTypeAAAA:
+				countAAAA++
+			}
+			p += nameLen + 10 + rdLen
+		}
+		if countA != 1 || countAAAA != 0 {
+			t.Fatalf("expected exactly one A record and zero AAAA records surviving, got A=%d AAAA=%d", countA, countAAAA)
+		}
+	})
 }
 
 // ── SOCKS5 handshake (over net.Pipe) ─────────────────────────────────────────
