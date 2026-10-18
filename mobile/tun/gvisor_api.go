@@ -157,6 +157,7 @@ func StartTunGvisor(tunFd int64, mtu int64, socksAddr string, socksUser string, 
 	// leaves no half-started state behind.
 	s, err := gvisorSetupStack(ctx, safeFd, tunMTU, socksAddr)
 	if err != nil {
+		_ = syscall.Close(safeFd)
 		gvisorLogClose()
 		gvisorMu.Lock()
 		gvisorCancel = nil
@@ -171,6 +172,7 @@ func StartTunGvisor(tunFd int64, mtu int64, socksAddr string, socksUser string, 
 		<-ctx.Done()
 		gvisorBridgeLog("bridge shutting down")
 		s.Close()
+		_ = syscall.Close(safeFd)
 
 		// Clear lifecycle state before signalling completion.
 		gvisorMu.Lock()
