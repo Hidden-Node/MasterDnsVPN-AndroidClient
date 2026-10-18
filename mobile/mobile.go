@@ -149,6 +149,7 @@ func StartClient(configPath string, logPath string) error {
 
 	mu.Lock()
 	vpnClient = app
+	tun.SetGvisorClient(vpnClient)
 	cancelFunc = cancel
 	clientDone = done
 	running = true
@@ -163,6 +164,7 @@ func StartClient(configPath string, logPath string) error {
 	mu.Lock()
 	running = false
 	vpnClient = nil
+	tun.SetGvisorClient(nil)
 	cancelFunc = nil
 	clientDone = nil
 	mu.Unlock()
@@ -262,6 +264,7 @@ func StopClient() {
 	// 3. NOW it's safe to stop tun2socks — no traffic flowing.
 	StopTun()
 	StopTunBridge()
+	StopTunGvisor()
 }
 
 // IsRunning returns true if the client is currently running.
@@ -335,4 +338,24 @@ func GetTunBandwidth() *Bandwidth {
 		Up:   up,
 		Down: down,
 	}
+}
+
+// StartTunGvisor starts the gVisor TUN bridge (second engine; see mobile/tun).
+// logPath is the same Go-core log file path the service passes to
+// StartClient — bridge lines are appended there so they reach the in-app
+// Logs tab via the existing tailLogFile (no logcat needed on-device).
+func StartTunGvisor(tunFd int64, mtu int64, socksAddr string, socksUser string, socksPass string, logPath string) error {
+	return tun.StartTunGvisor(tunFd, mtu, socksAddr, socksUser, socksPass, logPath)
+}
+
+// StopTunGvisor stops the gVisor TUN bridge. Safe to call multiple times.
+func StopTunGvisor() { tun.StopTunGvisor() }
+
+// IsTunGvisorRunning reports whether the gVisor bridge is active.
+func IsTunGvisorRunning() bool { return tun.IsTunGvisorRunning() }
+
+// GetGvisorBandwidth returns gVisor bridge upload/download counters.
+func GetGvisorBandwidth() *Bandwidth {
+	up, down := tun.GvisorBandwidth()
+	return &Bandwidth{Up: up, Down: down}
 }
