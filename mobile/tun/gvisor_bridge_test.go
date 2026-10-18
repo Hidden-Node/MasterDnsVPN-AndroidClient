@@ -240,6 +240,25 @@ func TestGvisorAAAAFilter(t *testing.T) {
 			t.Fatalf("expected exactly one A record and zero AAAA records surviving, got A=%d AAAA=%d", countA, countAAAA)
 		}
 	})
+
+	t.Run("record_fixed_header_truncation_returns_original", func(t *testing.T) {
+		resp := gvisorTestQuery(t, "a", 28)
+		resp[2] = 0x81 // QR=1, RD=1
+		resp[3] = 0x80 // RA=1
+		v6 := make([]byte, 16)
+		v6[0] = 0x20
+		v6[1] = 0x01
+		resp = gvisorTestAnswer(resp, "a", 28, v6)
+		gvisorTestCounts(resp, 1, 0, 0)
+		resp = resp[:19+10] // keep exactly p+10 record bytes: name(3)+type(2)+class(2)+3 of 4 TTL bytes
+		capExact := make([]byte, len(resp)) // compaction REQUIRED: helpers' append backing keeps the full cap
+		copy(capExact, resp)
+		resp = capExact
+		got := gvisorFilterDNSAAAA(resp)
+		if string(got) != string(resp) {
+			t.Fatalf("truncated fixed header must return the original message, got %d/%d bytes", len(got), len(resp))
+		}
+	})
 }
 
 // ── SOCKS5 handshake (over net.Pipe) ─────────────────────────────────────────

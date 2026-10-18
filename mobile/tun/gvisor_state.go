@@ -64,6 +64,12 @@ const gvisorDnsTypeAAAA = 28
 // the A record immediately, which works end-to-end.
 //
 // This is the same mitigation used by clash/sing-box tun stacks.
+// Unlike sing-box, which rebuilds record names uncompressed, kept
+// records here are copied byte-verbatim: any DNS name compression
+// pointing into the answer/additional region can resolve into
+// shifted/garbage bytes after a drop. Owner names compressed against
+// the question — the common case — stay valid (the header and question
+// sections are copied at identical offsets).
 //
 // Gated by the app's "Disable IPv6" toggle (default ON). When the toggle is
 // off, responses pass through unmodified and the IPv6 TCP fast-RST in the
@@ -118,6 +124,9 @@ func gvisorFilterDNSAAAA(resp []byte) []byte {
 		nameLen, ok := gvisorDNSNameLengthAt(resp, p)
 		if !ok {
 			return resp // malformed — safer to keep the original message.
+		}
+		if p+nameLen+10 > len(resp) {
+			return resp
 		}
 		rtype := binary.BigEndian.Uint16(resp[p+nameLen : p+nameLen+2])
 		rdLen := int(binary.BigEndian.Uint16(resp[p+nameLen+8 : p+nameLen+10]))
