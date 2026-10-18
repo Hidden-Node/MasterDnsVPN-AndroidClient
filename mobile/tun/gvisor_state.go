@@ -137,11 +137,8 @@ func gvisorFilterDNSAAAA(resp []byte) []byte {
 		recs = append(recs, rec{start: p, end: end, isAAAA: rtype == gvisorDnsTypeAAAA})
 		p = end
 	}
-	if p != len(resp) && total > 0 {
-		// Trailing bytes we could not attribute to a record — keep original.
-		if p > len(resp) {
-			return resp
-		}
+	if len(recs) != total || p != len(resp) {
+		return resp
 	}
 
 	// Build output: header + question + kept records, then fix the counts.

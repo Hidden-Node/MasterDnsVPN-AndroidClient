@@ -250,13 +250,40 @@ func TestGvisorAAAAFilter(t *testing.T) {
 		v6[1] = 0x01
 		resp = gvisorTestAnswer(resp, "a", 28, v6)
 		gvisorTestCounts(resp, 1, 0, 0)
-		resp = resp[:19+10] // keep exactly p+10 record bytes: name(3)+type(2)+class(2)+3 of 4 TTL bytes
+		resp = resp[:19+10]                 // keep exactly p+10 record bytes: name(3)+type(2)+class(2)+3 of 4 TTL bytes
 		capExact := make([]byte, len(resp)) // compaction REQUIRED: helpers' append backing keeps the full cap
 		copy(capExact, resp)
 		resp = capExact
 		got := gvisorFilterDNSAAAA(resp)
 		if string(got) != string(resp) {
 			t.Fatalf("truncated fixed header must return the original message, got %d/%d bytes", len(got), len(resp))
+		}
+	})
+
+	t.Run("count_stream_mismatch_returns_original", func(t *testing.T) {
+		q := gvisorTestQuery(t, "example.com", 28)
+		q[2] = 0x81 // QR=1, RD=1
+		q[3] = 0x80 // RA=1
+		v6 := make([]byte, 16)
+		v6[0] = 0x20
+		v6[1] = 0x01
+
+		// Case A: counts overstate the stream — ANCOUNT=2, the wire holds one A record.
+		respA := append([]byte(nil), gvisorTestAnswer(q, "example.com", 1, []byte{93, 184, 216, 34})...)
+		gvisorTestCounts(respA, 2, 0, 0)
+		gotA := gvisorFilterDNSAAAA(respA)
+		if string(gotA) != string(respA) {
+			t.Fatalf("counts overstating the stream must return the original, got %d/%d bytes", len(gotA), len(respA))
+		}
+
+		// Case B: counts fully matched, plus 5 unattributed tail bytes and a AAAA inside the counted records.
+		respB := gvisorTestAnswer(q, "example.com", 1, []byte{93, 184, 216, 34}) // A record
+		respB = gvisorTestAnswer(respB, "example.com", 28, v6)                   // AAAA record
+		gvisorTestCounts(respB, 2, 0, 0)
+		respB = append(respB, 0x00, 0x01, 0x02, 0x03, 0x04) // 5 unattributed tail bytes
+		gotB := gvisorFilterDNSAAAA(respB)
+		if string(gotB) != string(respB) {
+			t.Fatalf("bytes beyond the header counts must return the original, got %d/%d bytes", len(gotB), len(respB))
 		}
 	})
 }
