@@ -11,6 +11,7 @@ package tun
 
 import (
 	"os"
+	"sync"
 	"testing"
 	"time"
 )
@@ -79,4 +80,85 @@ func TestGvisorStopAfterFailedStart(t *testing.T) {
 		t.Fatalf("bridge must be restartable after a failed start: %v", err)
 	}
 	StopTunGvisor()
+}
+
+func TestGvisorStopDuringStartup(t *testing.T) {
+	entered := make(chan struct{})
+	release := make(chan struct{})
+	var releaseOnce sync.Once
+	releaseStart := func() { releaseOnce.Do(func() { close(release) }) }
+
+	gvisorStartHook = func() {
+		close(entered)
+		<-release
+	}
+
+	startErr := make(chan error, 1)
+	startDone := make(chan struct{})
+	go func() {
+		startErr <- StartTunGvisor(3, 1500, "127.0.0.1:1", "", "", "")
+		close(startDone)
+	}()
+
+	t.Cleanup(func() {
+		releaseStart()
+		select {
+		case <-startDone:
+		case <-time.After(5 * time.Second):
+		}
+		gvisorStartHook = nil
+		stopDone := make(chan struct{})
+		go func() {
+			StopTunGvisor()
+			close(stopDone)
+		}()
+		select {
+		case <-stopDone:
+		case <-time.After(5 * time.Second):
+		}
+	})
+
+	select {
+	case <-entered:
+	case <-time.After(5 * time.Second):
+		t.Fatal("startup hook did not run")
+	}
+
+	if !IsTunGvisorRunning() {
+		t.Fatal("lifecycle is not published before the fallible setup: the running guard and a racing stop are blind")
+	}
+
+	stopped := make(chan struct{})
+	go func() {
+		StopTunGvisor()
+		close(stopped)
+	}()
+
+	select {
+	case <-stopped:
+		t.Fatal("StopTunGvisor returned while startup was still in progress")
+	default:
+	}
+
+	releaseStart()
+
+	var err error
+	select {
+	case err = <-startErr:
+	case <-time.After(5 * time.Second):
+		t.Fatal("StartTunGvisor did not return after release")
+	}
+	if err != nil {
+		t.Fatalf("StartTunGvisor: %v", err)
+	}
+
+	select {
+	case <-stopped:
+	case <-time.After(5 * time.Second):
+		t.Fatal("StopTunGvisor did not complete after startup finished")
+	}
+
+	if IsTunGvisorRunning() {
+		t.Fatal("bridge still running after stop")
+	}
 }

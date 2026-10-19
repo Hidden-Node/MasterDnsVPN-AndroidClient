@@ -45,6 +45,10 @@ var (
 	gvisorBytesDown atomic.Int64
 )
 
+// gvisorStartHook is nil in production; the linux lifecycle test uses it
+// to hold a start inside the startup window.
+var gvisorStartHook func()
+
 // GvisorBandwidth returns (upload, download) bytes moved by the gVisor
 // bridge since it started.
 func GvisorBandwidth() (int64, int64) {
@@ -127,13 +131,24 @@ func StartTunGvisor(tunFd int64, mtu int64, socksAddr string, socksUser string, 
 
 	ctx, cancel := context.WithCancel(context.Background())
 	done := make(chan struct{})
+	gvisorCancel = cancel
+	gvisorDone = done
 
 	gvisorBytesUp.Store(0)
 	gvisorBytesDown.Store(0)
 	gvisorMu.Unlock()
 
+	if gvisorStartHook != nil {
+		gvisorStartHook()
+	}
+
 	if err := gvisorLogOpen(logPath); err != nil {
 		cancel()
+		gvisorMu.Lock()
+		gvisorCancel = nil
+		gvisorDone = nil
+		gvisorMu.Unlock()
+		close(done)
 		return fmt.Errorf("gvisor bridge: %w", err)
 	}
 
@@ -155,13 +170,13 @@ func StartTunGvisor(tunFd int64, mtu int64, socksAddr string, socksUser string, 
 		_ = syscall.Close(safeFd)
 		gvisorLogClose()
 		cancel()
+		gvisorMu.Lock()
+		gvisorCancel = nil
+		gvisorDone = nil
+		gvisorMu.Unlock()
+		close(done)
 		return err
 	}
-
-	gvisorMu.Lock()
-	gvisorCancel = cancel
-	gvisorDone = done
-	gvisorMu.Unlock()
 
 	// Prompt return: only the shutdown-await goroutine outlives this call,
 	// plus whatever per-request goroutines the forwarders spawn on demand.
