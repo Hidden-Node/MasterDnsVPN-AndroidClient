@@ -12,6 +12,7 @@ package tun
 import (
 	"os"
 	"testing"
+	"time"
 )
 
 // TestGvisorStackFdAccounting starts/stops the bridge against /dev/null
@@ -43,4 +44,39 @@ func TestGvisorStackFdAccounting(t *testing.T) {
 	if after != before {
 		t.Fatalf("fd count changed across start/stop: before=%d after=%d", before, after)
 	}
+}
+
+func TestGvisorStopAfterFailedStart(t *testing.T) {
+	anchor := t.TempDir() + "/anchor"
+	if err := os.WriteFile(anchor, []byte("x"), 0644); err != nil {
+		t.Fatalf("anchor write: %v", err)
+	}
+	badLogPath := anchor + "/bridge.log"
+
+	// Pre-spawned stoppers: the publish→unwind window is ~2 mutex
+	// sections + one failing syscall — far narrower than goroutine-spawn
+	// latency, so a stopper spawned AFTER the failing start can never
+	// observe it (reviewer-proved: 200 sequential rounds pass on
+	// unfixed code in 0.00 s). A stopper already blocked in Stop BEFORE
+	// the failing start hits the window on round 0.
+	for i := 0; i < 2000; i++ {
+		stopped := make(chan struct{})
+		go func() {
+			StopTunGvisor()
+			close(stopped)
+		}()
+		if err := StartTunGvisor(3, 1500, "127.0.0.1:1", "", "", badLogPath); err == nil {
+			t.Fatalf("round %d: bad-log start must fail", i)
+		}
+		select {
+		case <-stopped:
+		case <-time.After(2 * time.Second):
+			t.Fatalf("round %d: stop blocked after failed start", i)
+		}
+	}
+
+	if err := StartTunGvisor(3, 1500, "127.0.0.1:1", "", "", ""); err != nil {
+		t.Fatalf("bridge must be restartable after a failed start: %v", err)
+	}
+	StopTunGvisor()
 }

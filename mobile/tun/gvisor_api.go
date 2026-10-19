@@ -127,18 +127,13 @@ func StartTunGvisor(tunFd int64, mtu int64, socksAddr string, socksUser string, 
 
 	ctx, cancel := context.WithCancel(context.Background())
 	done := make(chan struct{})
-	gvisorCancel = cancel
-	gvisorDone = done
 
 	gvisorBytesUp.Store(0)
 	gvisorBytesDown.Store(0)
 	gvisorMu.Unlock()
 
 	if err := gvisorLogOpen(logPath); err != nil {
-		gvisorMu.Lock()
-		gvisorCancel = nil
-		gvisorDone = nil
-		gvisorMu.Unlock()
+		cancel()
 		return fmt.Errorf("gvisor bridge: %w", err)
 	}
 
@@ -159,12 +154,14 @@ func StartTunGvisor(tunFd int64, mtu int64, socksAddr string, socksUser string, 
 	if err != nil {
 		_ = syscall.Close(safeFd)
 		gvisorLogClose()
-		gvisorMu.Lock()
-		gvisorCancel = nil
-		gvisorDone = nil
-		gvisorMu.Unlock()
+		cancel()
 		return err
 	}
+
+	gvisorMu.Lock()
+	gvisorCancel = cancel
+	gvisorDone = done
+	gvisorMu.Unlock()
 
 	// Prompt return: only the shutdown-await goroutine outlives this call,
 	// plus whatever per-request goroutines the forwarders spawn on demand.
