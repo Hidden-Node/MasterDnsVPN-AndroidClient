@@ -74,9 +74,10 @@ const gvisorDnsTypeAAAA = 28
 // the question — the common case — stay valid (the header and question
 // sections are copied at identical offsets).
 //
-// Gated by the app's "Disable IPv6" toggle (default ON). When the toggle is
-// off, responses pass through unmodified and the IPv6 TCP fast-RST in the
-// bridge is also disabled.
+// Blocked by default (the tunnel has no IPv6 egress); there is no settings
+// toggle yet, only the in-package SetGvisorDisableIPv6 test seam. When
+// blocking is off, responses pass through unmodified and the IPv6 TCP
+// fast-RST in the bridge is also disabled.
 //
 // The function returns the original slice untouched when the message is not
 // a response carrying AAAA answers, so the common IPv4 path stays zero-copy.

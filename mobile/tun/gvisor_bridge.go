@@ -130,9 +130,9 @@ func gvisorBridgeErr(format string, args ...any) {
 	gvisorLogLine(gvisorLogError, fmt.Sprintf(format, args...))
 }
 
-// Rate-limit slip for the per-packet UDP refusal counter's companion log
-// line: per-packet logging is FORBIDDEN, so repeated refusals are counted
-// but announced at most once per interval (atomic timestamp, CAS-guarded).
+// Rate-limit slip for the per-packet UDP refusal log line: per-packet
+// logging is FORBIDDEN, so repeated refusals are announced at most once
+// per interval (atomic timestamp, CAS-guarded).
 var gvisorRefusalLogLast atomic.Int64
 
 // ── Stack setup (the synchronous portion of bridge startup) ───────────────────
@@ -235,7 +235,7 @@ func gvisorSetupStack(ctx context.Context, tunFd int, mtu int, socksAddr string)
 			return
 		}
 
-		// "Disable IPv6" (default ON): RST IPv6 destinations on the spot.
+		// IPv6 blocking (default ON): RST IPv6 destinations on the spot.
 		// Apps with cached AAAA answers (e.g. YouTube/Cronet) otherwise send
 		// every IPv6 CONNECT through the SOCKS/tunnel and only learn of the
 		// failure after a full tunnel round-trip with "connect refused code
