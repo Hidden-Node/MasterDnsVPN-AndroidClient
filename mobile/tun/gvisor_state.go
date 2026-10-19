@@ -14,15 +14,18 @@ import (
 var (
 	gvisorStateMu sync.Mutex
 
-	// gvisorDisableIPv6 gates the "Disable IPv6" app toggle. Default true:
+	// gvisorDisableIPv6 gates IPv6 blocking in the bridge. Default true:
 	// the tunnel has no IPv6 egress, so AAAA answers (and IPv6 CONNECTs)
 	// only produce `socks5 connect refused code 3` timeouts in apps that
-	// race their dual-stack connect. Can be turned off from Android settings.
+	// race their dual-stack connect. No settings UI is wired to this yet;
+	// SetGvisorDisableIPv6 is a test seam (see the filter tests) until a
+	// dedicated plan adds the toggle.
 	gvisorDisableIPv6 = true
 )
 
-// SetGvisorDisableIPv6 toggles the bridge's IPv6 blocking (app setting
-// "Disable IPv6"). Safe to call at any time; affects queries/connections
+// SetGvisorDisableIPv6 toggles the bridge's IPv6 blocking. Currently a
+// test seam only (no settings UI calls it — IPv6 blocking is always on
+// in production); safe to call at any time, affects queries/connections
 // from now on.
 func SetGvisorDisableIPv6(disabled bool) {
 	gvisorStateMu.Lock()

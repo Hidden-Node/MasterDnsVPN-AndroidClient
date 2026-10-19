@@ -326,12 +326,11 @@ func gvisorSetupStack(ctx context.Context, tunFd int, mtu int, socksAddr string)
 		}
 		// Refuse → the stack falls through to the unknown-destination path
 		// and emits ICMP Port Unreachable for this packet.
-		gvisorBytesUp.Add(int64(pkt.Size()))
 		// Rate-limited WARN — per-packet logging is forbidden.
 		now := time.Now().UnixNano()
 		if last := gvisorRefusalLogLast.Load(); now-last > int64(10*time.Second) {
 			if gvisorRefusalLogLast.CompareAndSwap(last, now) {
-				gvisorBridgeWarn("refused non-DNS UDP packet to port %d (ICMP Port Unreachable; refusals are counted, not logged per packet)", id.LocalPort)
+				gvisorBridgeWarn("refused non-DNS UDP packet to port %d (ICMP Port Unreachable)", id.LocalPort)
 			}
 		}
 		return false
