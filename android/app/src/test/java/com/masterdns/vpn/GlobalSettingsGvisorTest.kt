@@ -8,6 +8,7 @@ import com.masterdns.vpn.util.GlobalSettingsStore
 import com.masterdns.vpn.util.parseImportedSettings
 import com.masterdns.vpn.util.toExportJson
 import kotlinx.coroutines.runBlocking
+import org.junit.After
 import org.junit.Test
 import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
@@ -20,6 +21,11 @@ import org.robolectric.annotation.Config
 @RunWith(RobolectricTestRunner::class)
 @Config(sdk = [33])
 class GlobalSettingsGvisorTest {
+
+    @After
+    fun resetEngineFlag() = runBlocking {
+        GlobalSettingsStore.save(ApplicationProvider.getApplicationContext(), GlobalSettings())
+    }
 
     @Test
     fun store_gvisorFlagDefaultsFalse_thenRoundTripsThroughSave() = runBlocking {
