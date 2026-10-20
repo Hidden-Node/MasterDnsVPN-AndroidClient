@@ -311,7 +311,7 @@ fun GlobalSettingsScreen(vm: GlobalSettingsViewModel = viewModel()) {
 
                         if (draft.fakeDnsEnabled) {
                             Text(
-                                "Intercepts DNS packets and resolves hostnames at the server. Best for bypassing DNS filtering in Iran. VPN mode only.",
+                                "Intercepts DNS packets and resolves hostnames at the server. Best for bypassing DNS filtering in Iran. VPN mode only. Leave on: also sets the default gVisor DNS/address; the legacy route only applies when gVisor is off.",
                                 style = MaterialTheme.typography.bodySmall,
                                 color = MdvColor.OnSurfaceVariant,
                                 modifier = Modifier.padding(start = MdvSpace.S3)
@@ -319,14 +319,14 @@ fun GlobalSettingsScreen(vm: GlobalSettingsViewModel = viewModel()) {
                         }
 
                         RowSwitch(
-                            title = "gVisor engine (experimental)",
+                            title = "gVisor engine",
                             checked = draft.gvisorEngineEnabled,
                             onChecked = { draft = draft.copy(gvisorEngineEnabled = it) }
                         )
 
                         if (draft.gvisorEngineEnabled) {
                             Text(
-                                "Use the in-process gVisor TUN engine instead of tun2socks+FakeDNS. Same tunnel and server; faster first-visit and QUIC fallback. Default off.",
+                                "Use the in-process gVisor TUN engine instead of tun2socks+FakeDNS. Same tunnel and server; faster first-visit and QUIC fallback. Default on; turn off to use the legacy engine.",
                                 style = MaterialTheme.typography.bodySmall,
                                 color = MdvColor.OnSurfaceVariant,
                                 modifier = Modifier.padding(start = MdvSpace.S3)
