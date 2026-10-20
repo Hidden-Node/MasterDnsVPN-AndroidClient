@@ -12,6 +12,7 @@ import (
 	"fmt"
 	"io"
 	"net"
+	"strings"
 	"time"
 )
 
@@ -201,6 +202,43 @@ func gvisorDrainSocks5Addr(conn net.Conn, atyp byte) error {
 
 // ── Poison-guard target handling (bridge-facing, portable for tests) ────────
 
+// gvisorIsBlockedSOCKSTarget is the bridge's SOCKS target guard (mirrors the
+// server rule in internal/udpserver/socks5_upstream.go:validateSOCKSTargetHost,
+// read-only). Client-side early refusal: avoids opening ARQ streams the server
+// will reject anyway (e.g. Iran poison 10.10.34.35 inside 10/8).
+func gvisorIsBlockedSOCKSTarget(host string) bool {
+	trimmed := strings.TrimSpace(host)
+	if trimmed == "" {
+		return true
+	}
+	lower := strings.ToLower(trimmed)
+	if lower == "localhost" || strings.HasSuffix(lower, ".localhost") {
+		return true
+	}
+	ip := net.ParseIP(trimmed)
+	if ip == nil {
+		return false
+	}
+	if !ip.IsGlobalUnicast() ||
+		ip.IsLoopback() ||
+		ip.IsPrivate() ||
+		ip.IsMulticast() ||
+		ip.IsLinkLocalUnicast() ||
+		ip.IsLinkLocalMulticast() ||
+		ip.IsUnspecified() {
+		return true
+	}
+	if v4 := ip.To4(); v4 != nil {
+		if v4[0] == 100 && v4[1] >= 64 && v4[1] <= 127 {
+			return true
+		}
+		if v4[0] == 198 && (v4[1] == 18 || v4[1] == 19) {
+			return true
+		}
+	}
+	return false
+}
+
 // gvisorNormalizeTargetHost rewrites a gVisor destination address into the
 // host-string form the shared SOCKS target guard expects. IPv4 destinations
 // surfaced by the stack can appear as v4-mapped IPv6 literals (::ffff:a.b.c.d)
@@ -215,13 +253,4 @@ func gvisorNormalizeTargetHost(host string) string {
 		return v4.String()
 	}
 	return host
-}
-
-// gvisorIsBlockedSOCKSTarget is the gVisor bridge's entry point into the
-// shared package target guard (isBlockedSOCKSTarget, fakedns_proxy.go).
-// Delegating keeps both engines refusing the exact same target set (server
-// rules, poison IP 10.10.34.35, localhost, private/link-local/multicast
-// space) from one source of truth.
-func gvisorIsBlockedSOCKSTarget(host string) bool {
-	return isBlockedSOCKSTarget(host)
 }

@@ -5,46 +5,8 @@ import (
 	"encoding/binary"
 	"io"
 	"net"
-	"strings"
 	"sync"
 )
-
-// isBlockedSOCKSTarget mirrors (not imports) the server rule in
-// internal/udpserver/socks5_upstream.go:validateSOCKSTargetHost (read-only).
-// Client-side early refusal: avoids opening ARQ streams the server will
-// reject anyway (e.g. Iran poison 10.10.34.35 inside 10/8).
-func isBlockedSOCKSTarget(host string) bool {
-	trimmed := strings.TrimSpace(host)
-	if trimmed == "" {
-		return true
-	}
-	lower := strings.ToLower(trimmed)
-	if lower == "localhost" || strings.HasSuffix(lower, ".localhost") {
-		return true
-	}
-	ip := net.ParseIP(trimmed)
-	if ip == nil {
-		return false
-	}
-	if !ip.IsGlobalUnicast() ||
-		ip.IsLoopback() ||
-		ip.IsPrivate() ||
-		ip.IsMulticast() ||
-		ip.IsLinkLocalUnicast() ||
-		ip.IsLinkLocalMulticast() ||
-		ip.IsUnspecified() {
-		return true
-	}
-	if v4 := ip.To4(); v4 != nil {
-		if v4[0] == 100 && v4[1] >= 64 && v4[1] <= 127 {
-			return true
-		}
-		if v4[0] == 198 && (v4[1] == 18 || v4[1] == 19) {
-			return true
-		}
-	}
-	return false
-}
 
 // relayBufPool provides 64KB-class scratch buffers for bulk TCP relay
 // (io.CopyBuffer) and for the UDP-associate receive loop. A single pool
@@ -203,7 +165,7 @@ func (p *FakeDNSProxy) handleConnection(conn net.Conn) {
 
 	if cmd == 1 && (atyp == 1 || atyp == 4) {
 		host := net.IP(targetAddr).String()
-		if isBlockedSOCKSTarget(host) {
+		if gvisorIsBlockedSOCKSTarget(host) {
 			_, _ = conn.Write([]byte{5, 2, 0, 1, 0, 0, 0, 0, 0, 0})
 			return
 		}

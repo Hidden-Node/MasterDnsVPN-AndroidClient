@@ -782,8 +782,8 @@ func TestBlockedSOCKSTargetTable(t *testing.T) {
 		{"localhost", true},
 	}
 	for _, tc := range cases {
-		if got := isBlockedSOCKSTarget(tc.host); got != tc.want {
-			t.Errorf("isBlockedSOCKSTarget(%q) = %v, want %v", tc.host, got, tc.want)
+		if got := gvisorIsBlockedSOCKSTarget(tc.host); got != tc.want {
+			t.Errorf("gvisorIsBlockedSOCKSTarget(%q) = %v, want %v", tc.host, got, tc.want)
 		}
 	}
 }
