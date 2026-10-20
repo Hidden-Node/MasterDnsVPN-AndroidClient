@@ -76,21 +76,9 @@ class MasterDnsVpnService : VpnService() {
         }
 
         /**
-         * Per session exactly ONE TUN engine starts: gVisor when opted in
-         * (wins over FakeDNS), the DNS-aware bridge under FakeDNS, raw
-         * tun2socks otherwise. Whichever one started is reaped Go-side by
-         * StopClient() — see the stop-path comments at MasterDnsVpnService
-         * :540/:651 — so Kotlin never stops the engine directly.
+         * Per session the gVisor TUN engine starts. Teardown is Go-side by
+         * StopClient() — so Kotlin never stops the engine directly.
          */
-        internal enum class Engine { GVISOR, BRIDGE, TUN2SOCKS }
-
-        internal fun selectEngine(gvisorEnabled: Boolean, fakeDnsEnabled: Boolean): Engine {
-            return when {
-                gvisorEnabled -> Engine.GVISOR
-                fakeDnsEnabled -> Engine.BRIDGE
-                else -> Engine.TUN2SOCKS
-            }
-        }
     }
 
     private val serviceScope = CoroutineScope(Dispatchers.IO + SupervisorJob())
@@ -129,7 +117,7 @@ class MasterDnsVpnService : VpnService() {
      * Close any ParcelFileDescriptor left from a previous session before we
      * attempt establish() again. The fd must be closed AFTER the Go core
      * stops (see MasterDnsVpnService.kt:457's comment) to avoid EBADF in
-     * tun2socks goroutines that are mid-read on the fd.
+     * the gVisor bridge goroutines that are mid-read on the fd.
      *
      * Plan 013: called at the top of startVpn() so connect-after-disconnect
      * racy reconnects don't leak an fd when ensureGoCoreStopped() reports
@@ -390,30 +378,18 @@ class MasterDnsVpnService : VpnService() {
     }
 
     private fun establishVpnInterface(inputs: ConnectInputs, configPaths: ConfigPaths) {
-        val vpnDnsServers = if (inputs.globalSettings.customDnsServers.isNotBlank()) {
-            inputs.globalSettings.customDnsServers
-                .split(",")
-                .map { it.trim() }
-                .filter { it.isNotEmpty() }
-                .also { servers ->
-                    VpnManager.appendLog("Using custom DNS servers: ${servers.joinToString()}")
-                }
-        } else if (inputs.globalSettings.fakeDnsEnabled) {
-            listOf("172.19.0.2").also {
-                VpnManager.appendLog("Using TUN bridge DNS: 172.19.0.2")
-            }
-        } else if (inputs.localDnsEnabled && !inputs.proxyMode) {
+        val vpnDnsServers = if (inputs.localDnsEnabled && !inputs.proxyMode) {
             listOf("10.0.0.2").also {
                 VpnManager.appendLog("Using local DNS via TUN address: 10.0.0.2")
             }
         } else {
-            listOf("8.8.8.8")
+            listOf("172.19.0.2")
         }
 
         val builder = Builder()
             .setSession(getString(R.string.app_name))
             .setMtu(1400)
-            .addAddress(if (inputs.globalSettings.fakeDnsEnabled) "172.19.0.1" else "10.0.0.2", if (inputs.globalSettings.fakeDnsEnabled) 30 else 32)
+            .addAddress("172.19.0.1", 30)
             .addRoute("0.0.0.0", 0)
             .setBlocking(true)
 
@@ -431,19 +407,6 @@ class MasterDnsVpnService : VpnService() {
             .onFailure { VpnManager.appendLog("IPv6 route skipped: ${it.message}") }
 
         vpnDnsServers.forEach { builder.addDnsServer(it) }
-        // The fake-IP range route only makes sense for the DNS-aware bridge
-        // arm: under the gVisor engine the fake route is useless (every
-        // UDP/53 datagram reaching the TUN fd is answered regardless), and
-        // under raw tun2socks FakeDNS is off. selectEngine picks exactly one
-        // arm per session, so the route stays exclusive to BRIDGE.
-        if (selectEngine(
-                inputs.globalSettings.gvisorEngineEnabled,
-                inputs.globalSettings.fakeDnsEnabled
-            ) == Engine.BRIDGE
-        ) {
-            builder.addRoute("198.18.0.0", 16)
-            VpnManager.appendLog("Added fake DNS route: 198.18.0.0/16")
-        }
 
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) {
             val splitEnabled = inputs.globalSettings.splitTunnelingEnabled &&
@@ -500,49 +463,22 @@ class MasterDnsVpnService : VpnService() {
 
         VpnManager.appendLog("TUN interface established (fd=${vpnInterface!!.fd})")
 
-        when (selectEngine(
-            inputs.globalSettings.gvisorEngineEnabled,
-            inputs.globalSettings.fakeDnsEnabled
-        )) {
-            Engine.GVISOR -> {
-                VpnManager.appendLog("Starting gVisor TUN bridge...")
-                runCatching {
-                    val (socksUser, socksPass) = coreTunnelCreds(parseAdvancedJson(inputs.profile.advancedJson))
-                    mobile.Mobile.startTunGvisor(
-                        vpnInterface!!.fd.toLong(),
-                        1400L,
-                        "127.0.0.1:${inputs.socksPort}",
-                        socksUser ?: "",
-                        socksPass ?: "",
-                        configPaths.logFile.absolutePath
-                    )
-                }.onSuccess {
-                    VpnManager.appendLog("gVisor TUN bridge started")
-                }.onFailure { e ->
-                    VpnManager.appendLog("gVisor TUN bridge failed: ${e.message}")
-                    throw IllegalStateException("gVisor TUN bridge start failed: ${e.message}", e)
-                }
-            }
-            Engine.BRIDGE -> {
-                VpnManager.appendLog("Starting DNS-aware TUN bridge...")
-                runCatching {
-                    mobile.Mobile.startTunBridge(vpnInterface!!.fd.toLong(), 1400L, "127.0.0.1:${inputs.socksPort}")
-                }.onSuccess {
-                    VpnManager.appendLog("DNS-aware TUN bridge started")
-                }.onFailure { e ->
-                    VpnManager.appendLog("DNS-aware TUN bridge failed: ${e.message}")
-                    throw IllegalStateException("TUN bridge start failed: ${e.message}", e)
-                }
-            }
-            Engine.TUN2SOCKS -> {
-                VpnManager.appendLog("Starting tun2socks bridge: TUN fd -> socks5://127.0.0.1:${inputs.socksPort}")
-                runCatching {
-                    mobile.Mobile.startTun(vpnInterface!!.fd.toLong(), "127.0.0.1:${inputs.socksPort}")
-                }.onFailure { e ->
-                    VpnManager.appendLog("tun2socks bridge failed: ${e.message}")
-                    throw IllegalStateException("TUN start failed: ${e.message}", e)
-                }
-            }
+        VpnManager.appendLog("Starting gVisor TUN bridge...")
+        runCatching {
+            val (socksUser, socksPass) = coreTunnelCreds(parseAdvancedJson(inputs.profile.advancedJson))
+            mobile.Mobile.startTunGvisor(
+                vpnInterface!!.fd.toLong(),
+                1400L,
+                "127.0.0.1:${inputs.socksPort}",
+                socksUser ?: "",
+                socksPass ?: "",
+                configPaths.logFile.absolutePath
+            )
+        }.onSuccess {
+            VpnManager.appendLog("gVisor TUN bridge started")
+        }.onFailure { e ->
+            VpnManager.appendLog("gVisor TUN bridge failed: ${e.message}")
+            throw IllegalStateException("gVisor TUN bridge start failed: ${e.message}", e)
         }
     }
 
@@ -589,7 +525,7 @@ class MasterDnsVpnService : VpnService() {
                 VpnManager.appendLog("VPN stop requested")
 
                 // Stop everything in Go layer via a single stopClient() call.
-                // Go's StopClient() internally handles StopTun/StopTunBridge
+                // Go's StopClient() internally handles StopTunGvisor
                 // with idempotent guards and panic recovery, so this is safe.
                 val stopCompleted = withTimeoutOrNull(5000L) {
                     withContext(Dispatchers.IO) {
@@ -699,7 +635,7 @@ class MasterDnsVpnService : VpnService() {
         // Normal path: stopVpn() already ran — Go layer guards make re-calls no-ops.
         // Force-kill path: stopVpn() was never called, so do full cleanup.
         if (!isStopping) {
-            // stopClient() internally handles StopTun + StopTunBridge + cancel
+            // stopClient() internally handles StopTunGvisor + cancel
             // with idempotent guards and panic recovery.
             try { mobile.Mobile.stopClient() } catch (_: Exception) {}
             try {

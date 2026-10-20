@@ -13,8 +13,7 @@ class GlobalSettingsClipboardTest {
         val settings = GlobalSettings(
             internetSharingUser = "secret-user",
             internetSharingPass = "secret-pass",
-            internetSharingSocksPort = 8090,
-            fakeDnsEnabled = false
+            internetSharingSocksPort = 8090
         )
         val json = settings.toExportJson()
         assertThat(json.contains("secret-user")).isFalse()
@@ -22,7 +21,6 @@ class GlobalSettingsClipboardTest {
         val parsed = parseImportedSettings(json)
         assertThat(parsed).isNotNull()
         assertThat(parsed!!.internetSharingSocksPort).isEqualTo(8090)
-        assertThat(parsed.fakeDnsEnabled).isFalse()
         assertThat(parsed.internetSharingUser).isEqualTo("")
         assertThat(parsed.internetSharingPass).isEqualTo("")
     }
@@ -34,8 +32,6 @@ class GlobalSettingsClipboardTest {
             splitTunnelingEnabled = true,
             splitTunnelMode = SplitTunnelMode.EXCLUDE,
             splitPackagesCsv = "com.example.a,com.example.b",
-            customDnsServers = "1.1.1.1, 8.8.8.8",
-            fakeDnsEnabled = false,
             internetSharingEnabled = true,
             internetSharingSocksPort = 8100,
             internetSharingHttpPort = 8101,
@@ -68,10 +64,9 @@ class GlobalSettingsClipboardTest {
 
     @Test
     fun import_wronglyTypedValues_fallBackToDefaults() {
-        val parsed = parseImportedSettings("{\"internetSharingSocksPort\":\"not-a-number\",\"fakeDnsEnabled\":\"yes\"}")
+        val parsed = parseImportedSettings("{\"internetSharingSocksPort\":\"not-a-number\"}")
         assertThat(parsed).isNotNull()
         assertThat(parsed!!.internetSharingSocksPort).isEqualTo(8090)
-        assertThat(parsed.fakeDnsEnabled).isEqualTo(true)
     }
 
     @Test

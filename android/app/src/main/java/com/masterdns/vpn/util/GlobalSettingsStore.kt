@@ -18,9 +18,6 @@ data class GlobalSettings(
     val splitTunnelingEnabled: Boolean = false,
     val splitTunnelMode: SplitTunnelMode = SplitTunnelMode.INCLUDE,
     val splitPackagesCsv: String = "",
-    val customDnsServers: String = "",
-    val fakeDnsEnabled: Boolean = true,
-    val gvisorEngineEnabled: Boolean = true,
     val internetSharingEnabled: Boolean = false,
     val internetSharingSocksPort: Int = 8090,
     val internetSharingHttpPort: Int = 8091,
@@ -35,9 +32,6 @@ object GlobalSettingsStore {
     private val KEY_SPLIT_TUNNELING_ENABLED = booleanPreferencesKey("split_tunneling_enabled")
     private val KEY_SPLIT_TUNNEL_MODE = stringPreferencesKey("split_tunnel_mode")
     private val KEY_SPLIT_PACKAGES = stringPreferencesKey("split_packages")
-    private val KEY_CUSTOM_DNS_SERVERS = stringPreferencesKey("custom_dns_servers")
-    private val KEY_FAKE_DNS_ENABLED = booleanPreferencesKey("fake_dns_enabled")
-    private val KEY_GVISOR_ENGINE_ENABLED = booleanPreferencesKey("gvisor_engine_enabled")
     private val KEY_INTERNET_SHARING_ENABLED = booleanPreferencesKey("internet_sharing_enabled")
     private val KEY_INTERNET_SHARING_SOCKS_PORT = intPreferencesKey("internet_sharing_socks_port_v2")
     private val KEY_INTERNET_SHARING_HTTP_PORT = intPreferencesKey("internet_sharing_http_port_v2")
@@ -61,9 +55,6 @@ object GlobalSettingsStore {
             prefs[KEY_SPLIT_TUNNELING_ENABLED] = settings.splitTunnelingEnabled
             prefs[KEY_SPLIT_TUNNEL_MODE] = settings.splitTunnelMode.name
             prefs[KEY_SPLIT_PACKAGES] = settings.splitPackagesCsv
-            prefs[KEY_CUSTOM_DNS_SERVERS] = settings.customDnsServers
-            prefs[KEY_FAKE_DNS_ENABLED] = settings.fakeDnsEnabled
-            prefs[KEY_GVISOR_ENGINE_ENABLED] = settings.gvisorEngineEnabled
             prefs[KEY_INTERNET_SHARING_ENABLED] = settings.internetSharingEnabled
             prefs[KEY_INTERNET_SHARING_SOCKS_PORT] = coerceSharingPort(settings.internetSharingSocksPort)
             prefs[KEY_INTERNET_SHARING_HTTP_PORT] = coerceSharingPort(settings.internetSharingHttpPort)
@@ -78,9 +69,6 @@ object GlobalSettingsStore {
             splitTunnelingEnabled = this[KEY_SPLIT_TUNNELING_ENABLED] ?: false,
             splitTunnelMode = runCatching { SplitTunnelMode.valueOf(this[KEY_SPLIT_TUNNEL_MODE] ?: "INCLUDE") }.getOrDefault(SplitTunnelMode.INCLUDE),
             splitPackagesCsv = this[KEY_SPLIT_PACKAGES] ?: "",
-            customDnsServers = this[KEY_CUSTOM_DNS_SERVERS] ?: "",
-            fakeDnsEnabled = this[KEY_FAKE_DNS_ENABLED] ?: true,
-            gvisorEngineEnabled = this[KEY_GVISOR_ENGINE_ENABLED] ?: true,
             internetSharingEnabled = this[KEY_INTERNET_SHARING_ENABLED] ?: false,
             internetSharingSocksPort = this[KEY_INTERNET_SHARING_SOCKS_PORT] ?: 8090,
             internetSharingHttpPort = this[KEY_INTERNET_SHARING_HTTP_PORT] ?: 8091,
