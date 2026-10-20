@@ -11,14 +11,47 @@ package tun
 
 import (
 	"os"
+	"strconv"
 	"sync"
 	"testing"
 	"time"
 )
 
+// fdsResolvingTo counts open fds whose /proc/self/fd target equals target.
+// Entries whose readlink fails are skipped (the fd can close between the
+// directory read and the readlink).
+func fdsResolvingTo(target string) int {
+	entries, err := os.ReadDir("/proc/self/fd")
+	if err != nil {
+		return -1
+	}
+	n := 0
+	for _, e := range entries {
+		got, err := os.Readlink("/proc/self/fd/" + e.Name())
+		if err != nil {
+			continue
+		}
+		if got == target {
+			n++
+		}
+	}
+	return n
+}
+
 // TestGvisorStackFdAccounting starts/stops the bridge against /dev/null
-// (a valid fd that stack setup accepts) and asserts the process fd count is
-// unchanged: proves the dup'd TUN fd is closed on the shutdown path.
+// (a valid fd that stack setup accepts) and asserts the bridge's dup of
+// that fd is closed on the shutdown path: the number of fds resolving to
+// the same target is baseline+1 after start and back to baseline after
+// stop.
+//
+// It deliberately does NOT assert total process fd equality: gVisor's
+// fdbased readv dispatcher allocates one eventfd per start
+// (pkg/tcpip/link/stopfd), and the pinned gVisor version never closes it
+// (StopFD has no Close; readVDispatcher.release does not touch it). That
+// fd is unexported and unreachable from this package; the pin is
+// immutable from the Android side. Counting the TUN target isolates the
+// property this test owns.
+//
 // /dev/null proves fd ACCOUNTING only, not traffic — traffic validation
 // belongs to plan 073's device check. The setup-error close is one
 // syscall.Close line on each exclusive path (review-verified); forcing
@@ -31,19 +64,31 @@ func TestGvisorStackFdAccounting(t *testing.T) {
 	}
 	defer func() { _ = f.Close() }()
 
-	fds, _ := os.ReadDir("/proc/self/fd")
-	before := len(fds)
+	target, err := os.Readlink("/proc/self/fd/" + strconv.Itoa(int(f.Fd())))
+	if err != nil {
+		t.Fatalf("readlink tun fd: %v", err)
+	}
+
+	before := fdsResolvingTo(target)
+	if before < 1 {
+		t.Fatalf("baseline fds resolving to %q = %d, want >= 1", target, before)
+	}
 
 	if err := StartTunGvisor(int64(f.Fd()), 1500, "127.0.0.1:1", "", "", ""); err != nil {
 		t.Fatalf("StartTunGvisor against /dev/null: %v", err)
 	}
 
+	during := fdsResolvingTo(target)
+	if during != before+1 {
+		StopTunGvisor()
+		t.Fatalf("dup'd TUN fd not visible during start: fds resolving to %q before=%d during=%d, want during=before+1", target, before, during)
+	}
+
 	StopTunGvisor()
 
-	afterFds, _ := os.ReadDir("/proc/self/fd")
-	after := len(afterFds)
+	after := fdsResolvingTo(target)
 	if after != before {
-		t.Fatalf("fd count changed across start/stop: before=%d after=%d", before, after)
+		t.Fatalf("dup'd TUN fd leaked across start/stop: fds resolving to %q before=%d after=%d", target, before, after)
 	}
 }
 
