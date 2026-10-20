@@ -519,8 +519,8 @@ class MasterDnsVpnService : VpnService() {
                 VpnManager.appendLog("VPN stop requested")
 
                 // Stop everything in Go layer via a single stopClient() call.
-                // Go's StopClient() internally handles StopTunGvisor
-                // with idempotent guards and panic recovery, so this is safe.
+                // StopTunGvisor is idempotent (no-op before start / on repeat),
+                // so this is safe.
                 val stopCompleted = withTimeoutOrNull(5000L) {
                     withContext(Dispatchers.IO) {
                         VpnManager.appendLog("Stopping Go core...")
@@ -629,8 +629,8 @@ class MasterDnsVpnService : VpnService() {
         // Normal path: stopVpn() already ran — Go layer guards make re-calls no-ops.
         // Force-kill path: stopVpn() was never called, so do full cleanup.
         if (!isStopping) {
-            // stopClient() internally handles StopTunGvisor + cancel
-            // with idempotent guards and panic recovery.
+            // stopClient() internally handles StopTunGvisor + cancel (both
+            // idempotent).
             try { mobile.Mobile.stopClient() } catch (_: Exception) {}
             try {
                 vpnInterface?.close()
