@@ -285,7 +285,7 @@ fun GlobalSettingsScreen(vm: GlobalSettingsViewModel = viewModel()) {
                             }
                         }
 
-                            }
+                        }
                         }
                     }
                     item {

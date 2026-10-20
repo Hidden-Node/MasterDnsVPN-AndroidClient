@@ -74,11 +74,6 @@ class MasterDnsVpnService : VpnService() {
             val pass = advanced["SOCKS5_PASS"]?.trim().takeIf { !it.isNullOrEmpty() } ?: "master_dns_vpn"
             return user to pass
         }
-
-        /**
-         * Per session the gVisor TUN engine starts. Teardown is Go-side by
-         * StopClient() — so Kotlin never stops the engine directly.
-         */
     }
 
     private val serviceScope = CoroutineScope(Dispatchers.IO + SupervisorJob())
@@ -377,14 +372,13 @@ class MasterDnsVpnService : VpnService() {
         VpnManager.appendLog("SOCKS5 proxy is ready on 127.0.0.1:$activeLocalSocksPort")
     }
 
+    /**
+     * Per session the gVisor TUN engine starts. Teardown is Go-side by
+     * StopClient() — so Kotlin never stops the engine directly.
+     */
     private fun establishVpnInterface(inputs: ConnectInputs, configPaths: ConfigPaths) {
-        val vpnDnsServers = if (inputs.localDnsEnabled && !inputs.proxyMode) {
-            listOf("10.0.0.2").also {
-                VpnManager.appendLog("Using local DNS via TUN address: 10.0.0.2")
-            }
-        } else {
-            listOf("172.19.0.2")
-        }
+        val vpnDnsServers = listOf("172.19.0.2")
+        VpnManager.appendLog("Using TUN bridge DNS: 172.19.0.2")
 
         val builder = Builder()
             .setSession(getString(R.string.app_name))
