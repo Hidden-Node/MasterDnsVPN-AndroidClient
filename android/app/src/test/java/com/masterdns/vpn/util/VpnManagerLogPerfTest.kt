@@ -9,6 +9,7 @@ import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.withTimeout
 import org.junit.After
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Test
 
@@ -63,5 +64,16 @@ class VpnManagerLogPerfTest {
             collector.cancel()
         }
         assertEquals(1, emissions.get())
+    }
+
+    @Test
+    fun emittedEntriesCarryStrictlyIncreasingUniqueSequenceNumbers() = runBlocking {
+        repeat(5) { index -> VpnManager.appendCoreLog("INFO seq $index") }
+        val entries = withTimeout(5000) {
+            VpnManager.logEntries.first { it.size == 5 }
+        }
+
+        assertTrue(entries.zipWithNext().all { (a, b) -> a.seq < b.seq })
+        assertEquals(entries.size, entries.map { it.seq }.distinct().size)
     }
 }
