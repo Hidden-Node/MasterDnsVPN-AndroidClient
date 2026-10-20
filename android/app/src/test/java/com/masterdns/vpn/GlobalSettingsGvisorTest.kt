@@ -14,8 +14,8 @@ import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
 import org.robolectric.annotation.Config
 
-// The engine toggle defaults OFF: fresh prefs must not enable gVisor, a saved
-// true must load back true through the DataStore, and the clipboard
+// The engine toggle defaults ON: fresh prefs must enable gVisor, a saved
+// false must load back false through the DataStore, and the clipboard
 // export/import round-trip must preserve the flag (booleans are never
 // secrets, so export redaction does not apply).
 @RunWith(RobolectricTestRunner::class)
@@ -28,18 +28,18 @@ class GlobalSettingsGvisorTest {
     }
 
     @Test
-    fun store_gvisorFlagDefaultsFalse_thenRoundTripsThroughSave() = runBlocking {
+    fun store_gvisorFlagDefaultsTrue_thenRoundTripsThroughSave() = runBlocking {
         val context = ApplicationProvider.getApplicationContext<Context>()
         val fresh = GlobalSettingsStore.load(context)
-        assertThat(fresh.gvisorEngineEnabled).isFalse()
+        assertThat(fresh.gvisorEngineEnabled).isTrue()
 
-        GlobalSettingsStore.save(context, fresh.copy(gvisorEngineEnabled = true))
-        assertThat(GlobalSettingsStore.load(context).gvisorEngineEnabled).isTrue()
+        GlobalSettingsStore.save(context, fresh.copy(gvisorEngineEnabled = false))
+        assertThat(GlobalSettingsStore.load(context).gvisorEngineEnabled).isFalse()
     }
 
     @Test
     fun clipboard_roundTripPreservesGvisorEngineEnabled() {
-        val original = GlobalSettings(gvisorEngineEnabled = true)
+        val original = GlobalSettings(gvisorEngineEnabled = false)
         val json = original.toExportJson()
         assertThat(json.contains("gvisorEngineEnabled")).isTrue()
         val parsed = parseImportedSettings(json)
