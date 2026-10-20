@@ -10,7 +10,7 @@ should follow the conventions below.
 | Path | Role | Edit policy |
 |------|------|-------------|
 | `android/` | Gradle Android app: Kotlin + Jetpack Compose + Hilt + Room + DataStore. `minSdk 21`, `compileSdk 36`, JDK 17. | Free to edit. |
-| `mobile/` | Go gomobile bridge. `mobile.go` exports `mobile.Mobile.*` to Kotlin via `gomobile bind`. `mobile/tun/` is the FakeDNS proxy + DNS mapper. | Free to edit. Rebuild AAR after. |
+| `mobile/` | Go gomobile bridge. `mobile.go` exports `mobile.Mobile.*` to Kotlin via `gomobile bind`. `mobile/tun/` is the gVisor TUN bridge — the only engine; the FakeDNS proxy + DNS mapper were deleted. | Free to edit. Rebuild AAR after. |
 | `cmd/`, `internal/` | Upstream Go core. | DO NOT EDIT in Android-client plans. The script `android/build_go_mobile.sh` auto-traps if `go.mod`/`go.sum` are touched. |
 | `scripts/`, `docker/`, `assets/` | Server-side tooling. | Out of scope for the Android client. |
 | `plans/` | Advisor plan files + this index. | Executors update their row in `plans/README.md` when done. |
@@ -55,10 +55,10 @@ the Kotlin side must add the scaffolding first (see `plans/005-kotlin-test-basel
    `go-test.yml`** (`grep -v '^masterdnsvpn-go/mobile$'`). Do not add Go files
    to `mobile/` expecting CI to test them automatically; either add a test file
    in `mobile/` AND remove the exclusion, or scope the file to `mobile/tun/`.
-3. The FakeDNS code path is **Go-side** (`mobile/tun/fakedns_proxy.go`), NOT
-   the legacy Kotlin `dns/FakeDnsServer.kt`/`FakeDnsInterceptor.kt`. The Kotlin
-   `dns/` package is dead code per `plans/007-delete-dead-code.md`. Do not
-   re-wire Kotlin-side FakeDNS; do not import from `com.masterdns.vpn.dns`.
+3. The DNS path is **Go-side** (`mobile/tun/gvisor_bridge.go`), NOT Kotlin:
+   the FakeDNS proxy and the DNS mapper were deleted, and no Kotlin `dns/`
+   package exists. Do not re-wire a Kotlin-side DNS stack; the bridge
+   answers DNS in-process.
 
 ## Code conventions (match existing patterns)
 

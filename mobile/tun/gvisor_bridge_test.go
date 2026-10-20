@@ -2,8 +2,9 @@
 //
 // Portable unit tests for the gVisor bridge helpers (state, filter, handshake
 // and file logger). No build tag: the whole file compiles and runs on every
-// platform, mirroring the structure of fakedns_proxy_test.go (table-driven
-// cases, hand-built wire messages, no external DNS library).
+// platform, following the portable-test structure of
+// gvisor_target_guard_test.go (table-driven cases, hand-built wire messages,
+// no external DNS library).
 // ==============================================================================
 package tun
 
