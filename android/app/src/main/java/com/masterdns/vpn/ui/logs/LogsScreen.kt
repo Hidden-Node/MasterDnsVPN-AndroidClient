@@ -2,6 +2,7 @@ package com.masterdns.vpn.ui.logs
 
 import android.content.Intent
 import androidx.compose.foundation.background
+import androidx.compose.foundation.gestures.scrollBy
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -13,6 +14,7 @@ import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -65,7 +67,7 @@ private enum class LogFilter(val labelRes: Int) {
     ANDROID(R.string.logs_filter_android)
 }
 
-private enum class LogSeverity {
+internal enum class LogSeverity {
     ERROR,
     WARN,
     INFO,
@@ -81,7 +83,7 @@ private data class ParsedLogFields(
     val explicitSeverity: Boolean
 )
 
-private data class UiLogItem(
+internal data class UiLogItem(
     val key: String,
     val source: VpnManager.LogSource,
     val timestamp: String?,
@@ -154,12 +156,9 @@ fun LogsScreen(onBack: () -> Unit) {
         }
     }
 
-    LaunchedEffect(uiLogItems.size, activeFilter, autoScrollEnabled) {
-        if (uiLogItems.isEmpty()) return@LaunchedEffect
-        val lastVisible = listState.layoutInfo.visibleItemsInfo.lastOrNull()?.index ?: 0
-        if (autoScrollEnabled && lastVisible >= uiLogItems.size - 3) {
-            listState.scrollToItem(uiLogItems.size - 1)
-        }
+    LaunchedEffect(uiLogItems, autoScrollEnabled) {
+        if (!autoScrollEnabled || uiLogItems.isEmpty()) return@LaunchedEffect
+        listState.scrollToLatestItem(uiLogItems.lastIndex)
     }
 
     Scaffold(
@@ -277,6 +276,15 @@ fun LogsScreen(onBack: () -> Unit) {
             }
         }
     }
+}
+
+private suspend fun LazyListState.scrollToLatestItem(lastIndex: Int) {
+    if (lastIndex < 0) return
+    scrollToItem(lastIndex)
+    val lastItem = layoutInfo.visibleItemsInfo.lastOrNull { it.index == lastIndex } ?: return
+    val viewportBottom = layoutInfo.viewportEndOffset - layoutInfo.afterContentPadding
+    val overflow = lastItem.offset + lastItem.size - viewportBottom
+    if (overflow > 0) scrollBy(overflow.toFloat())
 }
 
 @Composable
@@ -415,7 +423,7 @@ private fun buildLogStats(items: List<UiLogItem>): LogStats {
     return LogStats(total = items.size.toLong(), errors = errors, warnings = warnings)
 }
 
-private fun buildUiLogItems(entries: List<VpnManager.LogEntry>): List<UiLogItem> {
+internal fun buildUiLogItems(entries: List<VpnManager.LogEntry>): List<UiLogItem> {
     if (entries.isEmpty()) return emptyList()
 
     val result = mutableListOf<UiLogItem>()
@@ -447,7 +455,7 @@ private fun buildUiLogItems(entries: List<VpnManager.LogEntry>): List<UiLogItem>
         pendingKey = ""
     }
 
-    entries.forEachIndexed { index, entry ->
+    entries.forEach { entry ->
         val parsed = parseLine(entry.line)
         val startsNewBlock = parsed.timestamp != null || parsed.explicitSeverity || pendingSource == null
 
@@ -457,7 +465,7 @@ private fun buildUiLogItems(entries: List<VpnManager.LogEntry>): List<UiLogItem>
             pendingTimestamp = parsed.timestamp
             pendingSeverity = parsed.severity
             pendingMessage = parsed.message
-            pendingKey = "$index:${entry.source}:${entry.line.hashCode()}"
+            pendingKey = entry.seq.toString()
         } else {
             pendingDetails.add(entry.line)
             pendingSeverity = prioritizeSeverity(pendingSeverity, parsed.severity)
