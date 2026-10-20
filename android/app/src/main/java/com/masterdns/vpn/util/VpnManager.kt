@@ -35,6 +35,7 @@ object VpnManager {
         CORE, ANDROID
     }
     data class LogEntry(
+        val seq: Long,
         val line: String,
         val source: LogSource
     )
@@ -195,8 +196,8 @@ object VpnManager {
             if (logBuffer.size == MAX_LOG_LINES) {
                 logBuffer.removeFirst()
             }
-            logBuffer.addLast(LogEntry(normalizedLine, source))
             logBufferVersion++
+            logBuffer.addLast(LogEntry(logBufferVersion, normalizedLine, source))
         }
         scheduleLogEmission()
         parseScanLine(normalizedLine)
