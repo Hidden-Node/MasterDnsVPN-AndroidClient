@@ -2,8 +2,8 @@
 
 // Package tun — gvisor_bridge.go
 //
-// Implements a tun2socks bridge using the gVisor netstack (second engine,
-// opt-in). Reads raw IP packets from a TUN file descriptor (provided by
+// Implements the TUN bridge using the gVisor netstack. Reads raw IP packets
+// from a TUN file descriptor (provided by
 // Android's VpnService.establish()), sets up a virtual TCP/IP stack, and
 // forwards every TCP flow through the loopback SOCKS5 proxy; DNS (UDP/53) is
 // answered in-process by the running VPN client, and every other UDP
@@ -357,11 +357,11 @@ func gvisorProxyTCPDirect(ctx context.Context, src net.Conn, dstAddr string, soc
 		return
 	}
 
-	// Poison-guard parity with the FakeDNS engine: gVisor hands the target
+	// The bridge owns the SOCKS target guard: gVisor hands the target
 	// over as a stack address (An IPv4 destination can surface as a
 	// v4-mapped IPv6 literal), so normalize to the plain host-string form
-	// FIRST, then refuse the exact same target set the old engine refuses —
-	// no dial, the flow's source conn is simply closed by the caller.
+	// FIRST, then refuse the blocked target set — no dial, the flow's
+	// source conn is simply closed by the caller.
 	host = gvisorNormalizeTargetHost(host)
 	if gvisorIsBlockedSOCKSTarget(host) {
 		gvisorBridgeWarn("refused blocked target %s", dstAddr)

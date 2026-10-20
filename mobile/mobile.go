@@ -9,115 +9,23 @@ package mobile
 import (
 	"context"
 	"fmt"
-	"io"
-	"net"
 	"os"
 	"path/filepath"
 	"sync"
-	"sync/atomic"
-	"syscall"
 	"time"
 
 	"masterdnsvpn-go/internal/client"
 	"masterdnsvpn-go/internal/config"
 	"masterdnsvpn-go/mobile/tun"
-
-	"github.com/xjasonlyu/tun2socks/v2/engine"
 )
 
 var (
-	mu               sync.Mutex
-	vpnClient        *client.Client
-	cancelFunc       context.CancelFunc
-	running          bool
-	tunRunning       bool
-	tunBridgeRunning bool
-	clientDone       chan struct{} // closed when app.Run(ctx) returns
-
-	trackedUp        int64
-	trackedDown      int64
-	trackingListener net.Listener
-	trackingMu       sync.Mutex
+	mu         sync.Mutex
+	vpnClient  *client.Client
+	cancelFunc context.CancelFunc
+	running    bool
+	clientDone chan struct{} // closed when app.Run(ctx) returns
 )
-
-type trackingConn struct {
-	net.Conn
-	onRead  func(int64)
-	onWrite func(int64)
-}
-
-func (t *trackingConn) Read(b []byte) (n int, err error) {
-	n, err = t.Conn.Read(b)
-	if n > 0 && t.onRead != nil {
-		t.onRead(int64(n))
-	}
-	return
-}
-
-func (t *trackingConn) Write(b []byte) (n int, err error) {
-	n, err = t.Conn.Write(b)
-	if n > 0 && t.onWrite != nil {
-		t.onWrite(int64(n))
-	}
-	return
-}
-
-func startTrackingProxy(realProxyAddr string) (string, error) {
-	trackingMu.Lock()
-	defer trackingMu.Unlock()
-
-	if trackingListener != nil {
-		trackingListener.Close()
-	}
-
-	atomic.StoreInt64(&trackedUp, 0)
-	atomic.StoreInt64(&trackedDown, 0)
-
-	l, err := net.Listen("tcp", "127.0.0.1:0")
-	if err != nil {
-		return "", err
-	}
-
-	trackingListener = l
-
-	go func() {
-		for {
-			client, err := l.Accept()
-			if err != nil {
-				return
-			}
-			go handleTracking(client, realProxyAddr)
-		}
-	}()
-
-	return l.Addr().String(), nil
-}
-
-func handleTracking(c net.Conn, realProxyAddr string) {
-	defer c.Close()
-	server, err := net.Dial("tcp", realProxyAddr)
-	if err != nil {
-		return
-	}
-	defer server.Close()
-
-	tcClient := &trackingConn{
-		Conn:    c,
-		onRead:  func(n int64) { atomic.AddInt64(&trackedUp, n) },
-		onWrite: func(n int64) { atomic.AddInt64(&trackedDown, n) },
-	}
-
-	errc := make(chan error, 2)
-	go func() {
-		_, err := io.Copy(server, tcClient)
-		errc <- err
-	}()
-	go func() {
-		_, err := io.Copy(tcClient, server)
-		errc <- err
-	}()
-	<-errc
-}
 
 // Bandwidth holds upload and download counters for gomobile bindings.
 type Bandwidth struct {
@@ -158,7 +66,8 @@ func StartClient(configPath string, logPath string) error {
 	runErr := app.Run(ctx)
 
 	// Signal that the client has fully stopped BEFORE clearing state.
-	// StopClient waits on this channel to know it's safe to tear down tun2socks.
+	// StopClient waits on this channel to know it's safe to tear down the
+	// gVisor bridge.
 	close(done)
 
 	mu.Lock()
@@ -172,73 +81,9 @@ func StartClient(configPath string, logPath string) error {
 	return runErr
 }
 
-// dupFd duplicates a file descriptor so tun2socks and Android each own
-// independent copies.  When engine.Stop() internally closes the duplicated fd,
-// Android's ParcelFileDescriptor still has its original fd to close safely —
-// no double-close SIGSEGV.
-func dupFd(fd int) int {
-	dup, err := syscall.Dup(fd)
-	if err != nil {
-		// Fallback: use original fd (carries double-close risk but better
-		// than failing to start entirely).
-		return fd
-	}
-	return dup
-}
-
-// StartTun starts a tun2socks engine to bridge the TUN interface (fd) to a SOCKS5 proxy.
-func StartTun(fd int64, proxyAddr string) {
-	trackedAddr, err := startTrackingProxy(proxyAddr)
-	if err == nil {
-		proxyAddr = trackedAddr
-	}
-
-	safeFd := dupFd(int(fd))
-
-	key := &engine.Key{
-		Proxy:  "socks5://" + proxyAddr,
-		Device: fmt.Sprintf("fd://%d", safeFd),
-		// ponytail: 1400 leaves headroom for SOCKS5/transport overhead so QUIC
-		// datagrams don't exceed upstream path MTU and black-hole (issue #32).
-		MTU: 1400,
-	}
-
-	engine.Insert(key)
-	engine.Start()
-
-	mu.Lock()
-	tunRunning = true
-	mu.Unlock()
-}
-
-// StopTun stops the tun2socks engine. Safe to call multiple times.
-func StopTun() {
-	mu.Lock()
-	if !tunRunning {
-		mu.Unlock()
-		return
-	}
-	tunRunning = false
-	mu.Unlock()
-
-	trackingMu.Lock()
-	if trackingListener != nil {
-		trackingListener.Close()
-		trackingListener = nil
-	}
-	trackingMu.Unlock()
-
-	// Stop outside lock to avoid deadlock. Recover from panic in case
-	// engine is in a bad state (e.g. fd already closed by Android).
-	func() {
-		defer func() { recover() }()
-		engine.Stop()
-	}()
-}
-
 // StopClient gracefully stops the running client.
 // Order: cancel Go context first (stops traffic), wait for client to drain,
-// THEN stop tun2socks (no more goroutines writing to the engine).
+// THEN stop the gVisor bridge (no more goroutines writing to it).
 func StopClient() {
 	// 1. Cancel context — tells app.Run(ctx) to shut down.
 	mu.Lock()
@@ -252,7 +97,7 @@ func StopClient() {
 	}
 
 	// 2. Wait for the Go client to fully stop (with timeout).
-	//    This ensures no goroutine is writing to the tun2socks engine
+	//    This ensures no goroutine is writing to the gVisor bridge
 	//    when we tear it down in step 3.
 	if done != nil {
 		select {
@@ -261,9 +106,7 @@ func StopClient() {
 		}
 	}
 
-	// 3. NOW it's safe to stop tun2socks — no traffic flowing.
-	StopTun()
-	StopTunBridge()
+	// 3. NOW it's safe to stop the gVisor bridge — no traffic flowing.
 	StopTunGvisor()
 }
 
@@ -274,73 +117,7 @@ func IsRunning() bool {
 	return running
 }
 
-// StartTunBridge starts the TUN bridge with DNS interception using FakeDNS proxy.
-func StartTunBridge(tunFd int64, mtu int64, socksAddr string) error {
-	proxyAddr, err := tun.StartFakeDNSProxy(socksAddr)
-	if err != nil {
-		return err
-	}
-
-	trackedAddr, err2 := startTrackingProxy(proxyAddr)
-	if err2 == nil {
-		proxyAddr = trackedAddr
-	}
-
-	safeFd := dupFd(int(tunFd))
-
-	key := &engine.Key{
-		Proxy:  "socks5://" + proxyAddr,
-		Device: fmt.Sprintf("fd://%d", safeFd),
-		MTU:    int(mtu),
-	}
-
-	engine.Insert(key)
-	engine.Start()
-
-	mu.Lock()
-	tunBridgeRunning = true
-	mu.Unlock()
-
-	return nil
-}
-
-// StopTunBridge stops the DNS-aware TUN bridge. Safe to call multiple times.
-func StopTunBridge() {
-	mu.Lock()
-	if !tunBridgeRunning {
-		mu.Unlock()
-		return
-	}
-	tunBridgeRunning = false
-	mu.Unlock()
-
-	trackingMu.Lock()
-	if trackingListener != nil {
-		trackingListener.Close()
-		trackingListener = nil
-	}
-	trackingMu.Unlock()
-
-	// Stop outside lock to avoid deadlock. Recover from panic in case
-	// engine is in a bad state (e.g. fd already closed by Android).
-	func() {
-		defer func() { recover() }()
-		engine.Stop()
-	}()
-	tun.StopFakeDNSProxy()
-}
-
-// GetTunBandwidth returns upload/download counters from the TUN bridge.
-func GetTunBandwidth() *Bandwidth {
-	up := atomic.LoadInt64(&trackedUp)
-	down := atomic.LoadInt64(&trackedDown)
-	return &Bandwidth{
-		Up:   up,
-		Down: down,
-	}
-}
-
-// StartTunGvisor starts the gVisor TUN bridge (second engine; see mobile/tun).
+// StartTunGvisor starts the gVisor TUN bridge (see mobile/tun).
 // logPath is the same Go-core log file path the service passes to
 // StartClient — bridge lines are appended there so they reach the in-app
 // Logs tab via the existing tailLogFile (no logcat needed on-device).
