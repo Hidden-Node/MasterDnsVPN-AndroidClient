@@ -1,5 +1,5 @@
 import java.io.ByteArrayInputStream
-import java.util.zip.ZipException
+import java.io.IOException
 import java.util.zip.ZipFile
 import java.util.zip.ZipInputStream
 
@@ -182,7 +182,7 @@ val verifyMobileAar = tasks.register("verifyMobileAar") {
                     )
                 }
             }
-        } catch (e: ZipException) {
+        } catch (e: IOException) {
             throw org.gradle.api.GradleException(
                 "Go mobile AAR is stale or invalid: ${aarFile.absolutePath} is not a readable zip. " +
                     "Re-run the AAR build script for your platform (see android/BUILDING.md).",
