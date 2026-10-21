@@ -165,8 +165,7 @@ class MasterDnsVpnService : VpnService() {
         val profile: com.masterdns.vpn.data.local.ProfileEntity,
         val socksPort: Int,
         val globalSettings: com.masterdns.vpn.util.GlobalSettings,
-        val proxyMode: Boolean,
-        val localDnsEnabled: Boolean
+        val proxyMode: Boolean
     )
 
     private data class ConfigPaths(
@@ -220,7 +219,7 @@ class MasterDnsVpnService : VpnService() {
                     VpnManager.appendLog("Proxy mode active: skipping Android VpnService TUN setup")
                     VpnManager.updateState(VpnManager.VpnState.CONNECTED)
                     releaseWakeLock()
-                    VpnManager.startTrafficMonitor(this@MasterDnsVpnService)
+                    VpnManager.startTrafficMonitor()
                     val notification = buildNotification("Proxy mode active on port ${inputs.socksPort}")
                     val manager = getSystemService(NOTIFICATION_SERVICE) as android.app.NotificationManager
                     manager.notify(NOTIFICATION_ID, notification)
@@ -232,7 +231,7 @@ class MasterDnsVpnService : VpnService() {
 
                 VpnManager.updateState(VpnManager.VpnState.CONNECTED)
                 releaseWakeLock()
-                VpnManager.startTrafficMonitor(this@MasterDnsVpnService)
+                VpnManager.startTrafficMonitor()
                 VpnManager.appendLog("VPN connected successfully!")
 
                 val notification = buildNotification(getString(R.string.notification_connected))
@@ -257,8 +256,7 @@ class MasterDnsVpnService : VpnService() {
         activeLocalSocksPort = socksPort
         val globalSettings = GlobalSettingsStore.load(this)
         val proxyMode = globalSettings.connectionMode.equals("PROXY", ignoreCase = true)
-        val localDnsEnabled = parseAdvancedJson(profile.advancedJson)["LOCAL_DNS_ENABLED"].equals("true", ignoreCase = true)
-        return ConnectInputs(profile, socksPort, globalSettings, proxyMode, localDnsEnabled)
+        return ConnectInputs(profile, socksPort, globalSettings, proxyMode)
     }
 
     private suspend fun prepareConfigFiles(inputs: ConnectInputs): ConfigPaths {

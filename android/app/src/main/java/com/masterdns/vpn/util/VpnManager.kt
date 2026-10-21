@@ -244,9 +244,7 @@ object VpnManager {
         return version
     }
 
-    fun startTrafficMonitor(context: Context) {
-        val appContext = context.applicationContext
-        val uid = appContext.applicationInfo.uid
+    fun startTrafficMonitor() {
         trafficMonitorJob?.cancel()
         trafficMonitorJob = monitorScope.launch {
             val initialBw = Mobile.getGvisorBandwidth()
