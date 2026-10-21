@@ -31,4 +31,4 @@ android/.gradle/
 android/local.properties
 android/release.jks
 android/app/libs/*.aar
-android/app/libs/masterdnsvpn-sources.jar
+android/app/libs/*-sources.jar
