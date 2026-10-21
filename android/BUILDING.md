@@ -21,3 +21,9 @@ Both scripts:
 - fail if the real `go.mod` or `go.sum` are modified
 
 If the build reports missing Go module dependencies, update the shared Go module in a separate upstream/core change rather than from the Android build script.
+
+## AAR freshness check
+
+`android/app/libs/masterdnsvpn.aar` is a gitignored build artifact: rebuild it after any change under `mobile/`.
+Every app build runs the `verifyMobileAar` Gradle task, which fails with an explicit message when the AAR is missing or still carries the removed legacy engine (`tun2socks` / `FakeDNS`).
+When the build reports a missing or stale AAR, re-run the AAR build script for your platform (see above) and rebuild.
