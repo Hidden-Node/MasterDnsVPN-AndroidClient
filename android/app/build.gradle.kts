@@ -1,3 +1,8 @@
+import java.io.ByteArrayInputStream
+import java.io.IOException
+import java.util.zip.ZipFile
+import java.util.zip.ZipInputStream
+
 plugins {
     id("com.android.application")
     id("org.jetbrains.kotlin.android")
@@ -116,6 +121,79 @@ gradle.taskGraph.whenReady {
             "Release builds require ANDROID_SIGNING_ENABLED=true and Android signing environment variables."
         )
     }
+}
+
+val verifyMobileAar = tasks.register("verifyMobileAar") {
+    group = "verification"
+    description = "Fails when the gomobile AAR is missing or still carries the removed legacy engine."
+    outputs.upToDateWhen { false }
+    val aarFile = layout.projectDirectory.file("libs/masterdnsvpn.aar").asFile
+    doLast {
+        if (!aarFile.isFile) {
+            throw org.gradle.api.GradleException(
+                "Go mobile AAR missing: ${aarFile.absolutePath}. " +
+                    "Run the AAR build script for your platform (see android/BUILDING.md) and rebuild."
+            )
+        }
+        try {
+            ZipFile(aarFile).use { aar ->
+                val classEntry = aar.getEntry("classes.jar")
+                    ?: throw org.gradle.api.GradleException(
+                        "Go mobile AAR is stale or invalid: classes.jar is missing from ${aarFile.absolutePath}. " +
+                            "Re-run the AAR build script for your platform (see android/BUILDING.md)."
+                    )
+                val classMarkers = listOf("startTunBridge", "stopTunBridge", "getTunBandwidth")
+                var mobileClassFound = false
+                ZipInputStream(ByteArrayInputStream(aar.getInputStream(classEntry).readBytes())).use { classes ->
+                    var entry = classes.nextEntry
+                    while (entry != null) {
+                        if (entry.name == "mobile/Mobile.class") {
+                            mobileClassFound = true
+                            val text = classes.readBytes().toString(Charsets.ISO_8859_1)
+                            val marker = classMarkers.firstOrNull { text.contains(it) }
+                            if (marker != null) {
+                                throw org.gradle.api.GradleException(
+                                    "Go mobile AAR is stale or legacy: mobile/Mobile.class contains '$marker'. " +
+                                        "Re-run the AAR build script for your platform (see android/BUILDING.md)."
+                                )
+                            }
+                        }
+                        classes.closeEntry()
+                        entry = classes.nextEntry
+                    }
+                }
+                if (!mobileClassFound) {
+                    throw org.gradle.api.GradleException(
+                        "Go mobile AAR is stale or invalid: mobile/Mobile.class is missing from ${aarFile.absolutePath}. " +
+                            "Re-run the AAR build script for your platform (see android/BUILDING.md)."
+                    )
+                }
+                val libraryEntry = aar.getEntry("jni/arm64-v8a/libgojni.so")
+                    ?: throw org.gradle.api.GradleException(
+                        "Go mobile AAR is stale or invalid: jni/arm64-v8a/libgojni.so is missing from ${aarFile.absolutePath}. " +
+                            "Re-run the AAR build script for your platform (see android/BUILDING.md)."
+                    )
+                val nativeText = aar.getInputStream(libraryEntry).readBytes().toString(Charsets.ISO_8859_1)
+                val nativeMarker = listOf("tun2socks", "FakeDNS").firstOrNull { nativeText.contains(it) }
+                if (nativeMarker != null) {
+                    throw org.gradle.api.GradleException(
+                        "Go mobile AAR is stale or legacy: jni/arm64-v8a/libgojni.so contains '$nativeMarker'. " +
+                            "Re-run the AAR build script for your platform (see android/BUILDING.md)."
+                    )
+                }
+            }
+        } catch (e: IOException) {
+            throw org.gradle.api.GradleException(
+                "Go mobile AAR is stale or invalid: ${aarFile.absolutePath} is not a readable zip. " +
+                    "Re-run the AAR build script for your platform (see android/BUILDING.md).",
+                e
+            )
+        }
+    }
+}
+
+tasks.named("preBuild") {
+    dependsOn(verifyMobileAar)
 }
 
 dependencies {
