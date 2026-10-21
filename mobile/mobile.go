@@ -128,9 +128,6 @@ func StartTunGvisor(tunFd int64, mtu int64, socksAddr string, socksUser string, 
 // StopTunGvisor stops the gVisor TUN bridge. Safe to call multiple times.
 func StopTunGvisor() { tun.StopTunGvisor() }
 
-// IsTunGvisorRunning reports whether the gVisor bridge is active.
-func IsTunGvisorRunning() bool { return tun.IsTunGvisorRunning() }
-
 // GetGvisorBandwidth returns gVisor bridge upload/download counters.
 func GetGvisorBandwidth() *Bandwidth {
 	up, down := tun.GvisorBandwidth()
