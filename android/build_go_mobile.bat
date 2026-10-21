@@ -71,7 +71,7 @@ if errorlevel 8 (
 cd /d "%BUILD_ROOT%"
 
 REM Resolve gomobile's bind dependency only in this temporary build tree.
-GO111MODULE=on go get golang.org/x/mobile@%MOBILE_TOOLS_VERSION%
+go get golang.org/x/mobile@%MOBILE_TOOLS_VERSION%
 if errorlevel 1 (
     echo ERROR: Failed to prepare temporary gomobile module dependencies
     cd /d "%SOURCE_ROOT%"
@@ -80,7 +80,7 @@ if errorlevel 1 (
     exit /b 1
 )
 
-GO111MODULE=on go mod download
+go mod download
 if errorlevel 1 (
     echo ERROR: Failed to download temporary gomobile module dependencies
     cd /d "%SOURCE_ROOT%"
@@ -97,7 +97,7 @@ if errorlevel 1 (
     echo Make sure ANDROID_HOME and ANDROID_NDK_HOME are set correctly.
     echo.
     echo ANDROID_HOME should point to: %LOCALAPPDATA%\Android\Sdk
-    echo ANDROID_NDK_HOME should point to: %LOCALAPPDATA%\Android\Sdk\ndk\(version)
+    echo ANDROID_NDK_HOME should point to: %LOCALAPPDATA%\Android\Sdk\ndk^(version^)
     cd /d "%SOURCE_ROOT%"
     rmdir /s /q "%BUILD_ROOT%"
     pause
