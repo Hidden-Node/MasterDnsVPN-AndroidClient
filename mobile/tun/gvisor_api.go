@@ -93,7 +93,7 @@ func gvisorSocksCredsWrapper(conn net.Conn) net.Conn {
 	return &gvisorSocksAuthConn{Conn: conn, cred: cred}
 }
 
-// StartTunGvisor starts the gVisor TUN bridge (second engine).
+// StartTunGvisor starts the gVisor TUN bridge.
 //
 // It must be called when the local SOCKS5 proxy is already listening on
 // socksAddr and a VPN client may be running (see SetGvisorClient).
@@ -158,7 +158,7 @@ func StartTunGvisor(tunFd int64, mtu int64, socksAddr string, socksUser string, 
 		tunMTU = 1500
 	}
 
-	// Announce auth use once at startup (matching the old engine's log).
+	// Announce auth use once at startup.
 	if cred := gvisorCurrentSocksCred(); cred.user != "" {
 		gvisorBridgeLog("gVisor bridge using SOCKS5 auth for user %q on %s", cred.user, socksAddr)
 	}

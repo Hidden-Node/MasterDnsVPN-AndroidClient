@@ -287,8 +287,8 @@ func gvisorSetupStack(ctx context.Context, tunFd int, mtu int, socksAddr string)
 	s.SetTransportProtocolHandler(tcp.ProtocolNumber, tcpFwd.HandlePacket)
 
 	// ── UDP: port-53 forwarder wrapped in a refusal gate ───────────────────────
-	// DNS (port 53) is served in-process (no SOCKS5 overhead, no fake-IP
-	// mapping). At the pinned upstream module udp.NewForwarder has NO
+	// DNS (port 53) is served in-process (no SOCKS5 overhead). At the
+	// pinned upstream module udp.NewForwarder has NO
 	// bool-returning handler and (*Forwarder).HandlePacket always returns
 	// true — so port≠53 refusals happen HERE, in the per-stack transport
 	// handler: returning false marks the packet unhandled and the network
