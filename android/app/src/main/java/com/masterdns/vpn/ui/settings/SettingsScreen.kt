@@ -67,6 +67,7 @@ import com.masterdns.vpn.data.local.ProfileEntity
 import com.masterdns.vpn.ui.components.mdv.cards.MdvSectionCard
 import com.masterdns.vpn.ui.components.mdv.cards.MdvSettingFieldCard
 import com.masterdns.vpn.ui.components.mdv.controls.MdvPrimaryActionButton
+import androidx.annotation.StringRes
 import com.masterdns.vpn.ui.components.mdv.controls.MdvBackTopAppBar
 import com.masterdns.vpn.ui.components.mdv.controls.MdvTopAppBar
 import com.masterdns.vpn.ui.theme.MdvColor
@@ -82,149 +83,166 @@ import kotlinx.coroutines.withContext
 
 private enum class FieldType { TEXT, BOOL, OPTION }
 
+private enum class Section(@StringRes val titleRes: Int) {
+    IDENTITY(R.string.settings_section_identity),
+    SECURITY(R.string.settings_section_security),
+    PROXY(R.string.settings_section_proxy),
+    DNS(R.string.settings_section_dns),
+    RESOLVER(R.string.settings_section_resolver),
+    COMPRESSION(R.string.settings_section_compression),
+    MTU(R.string.settings_section_mtu),
+    RUNTIME(R.string.settings_section_runtime),
+    ARQ(R.string.settings_section_arq),
+    LOGGING(R.string.settings_section_logging)
+}
+
+private data class SettingOption(val value: String, @StringRes val labelRes: Int)
+
 private data class SettingField(
-    val section: String,
+    val section: Section,
     val key: String,
-    val label: String,
-    val helper: String,
+    @StringRes val helperRes: Int,
     val type: FieldType = FieldType.TEXT,
     val keyboardType: KeyboardType = KeyboardType.Text,
-    val options: List<String> = emptyList()
+    val options: List<SettingOption> = emptyList()
 )
 
 private val configFields = listOf(
-    SettingField("Identity", "DOMAINS", "DOMAINS", "Comma-separated domains"),
-    SettingField("Identity", "ENCRYPTION_KEY", "ENCRYPTION_KEY", "Shared key with server"),
+    SettingField(Section.IDENTITY, "DOMAINS", R.string.settings_helper_domains),
+    SettingField(Section.IDENTITY, "ENCRYPTION_KEY", R.string.settings_helper_encryption_key),
     SettingField(
-        "Security",
+        Section.SECURITY,
         "DATA_ENCRYPTION_METHOD",
-        "DATA_ENCRYPTION_METHOD",
-        "0=None, 1=XOR, 2=ChaCha20, 3-5=AES-GCM",
+        R.string.settings_helper_data_encryption_method,
         type = FieldType.OPTION,
         options = listOf(
-            "0 - None",
-            "1 - XOR",
-            "2 - ChaCha20",
-            "3 - AES-128-GCM",
-            "4 - AES-192-GCM",
-            "5 - AES-256-GCM"
+            SettingOption("0", R.string.settings_option_data_encryption_method_0),
+            SettingOption("1", R.string.settings_option_data_encryption_method_1),
+            SettingOption("2", R.string.settings_option_data_encryption_method_2),
+            SettingOption("3", R.string.settings_option_data_encryption_method_3),
+            SettingOption("4", R.string.settings_option_data_encryption_method_4),
+            SettingOption("5", R.string.settings_option_data_encryption_method_5)
         )
     ),
     SettingField(
-        "Proxy",
+        Section.PROXY,
         "PROTOCOL_TYPE",
-        "PROTOCOL_TYPE",
-        "Client local proxy protocol",
+        R.string.settings_helper_protocol_type,
         type = FieldType.OPTION,
-        options = listOf("SOCKS5", "TCP")
+        options = listOf(
+            SettingOption("SOCKS5", R.string.settings_option_protocol_type_socks5),
+            SettingOption("TCP", R.string.settings_option_protocol_type_tcp)
+        )
     ),
-    SettingField("Proxy", "LISTEN_IP", "LISTEN_IP", "Local bind IP"),
+    SettingField(Section.PROXY, "LISTEN_IP", R.string.settings_helper_listen_ip),
     SettingField(
-        "Proxy",
+        Section.PROXY,
         "LISTEN_PORT",
-        "LISTEN_PORT",
-        "Local proxy port",
+        R.string.settings_helper_listen_port,
         keyboardType = KeyboardType.Number
     ),
-    SettingField("Proxy", "SOCKS5_AUTH", "SOCKS5_AUTH", "Enable SOCKS5 auth", type = FieldType.BOOL),
-    SettingField("Proxy", "SOCKS5_USER", "SOCKS5_USER", "SOCKS username"),
-    SettingField("Proxy", "SOCKS5_PASS", "SOCKS5_PASS", "SOCKS password"),
-    SettingField("DNS", "LOCAL_DNS_ENABLED", "LOCAL_DNS_ENABLED", "Enable local DNS mode", type = FieldType.BOOL),
-    SettingField("DNS", "LOCAL_DNS_IP", "LOCAL_DNS_IP", "Local DNS bind IP"),
-    SettingField("DNS", "LOCAL_DNS_PORT", "LOCAL_DNS_PORT", "Local DNS bind port", keyboardType = KeyboardType.Number),
-    SettingField("DNS", "LOCAL_DNS_CACHE_MAX_RECORDS", "LOCAL_DNS_CACHE_MAX_RECORDS", "Local DNS cache max records", keyboardType = KeyboardType.Number),
-    SettingField("DNS", "LOCAL_DNS_CACHE_TTL_SECONDS", "LOCAL_DNS_CACHE_TTL_SECONDS", "Local DNS cache TTL seconds", keyboardType = KeyboardType.Decimal),
-    SettingField("DNS", "LOCAL_DNS_PENDING_TIMEOUT_SECONDS", "LOCAL_DNS_PENDING_TIMEOUT_SECONDS", "Local DNS pending timeout seconds", keyboardType = KeyboardType.Decimal),
-    SettingField("DNS", "DNS_RESPONSE_FRAGMENT_TIMEOUT_SECONDS", "DNS_RESPONSE_FRAGMENT_TIMEOUT_SECONDS", "DNS response fragment timeout seconds", keyboardType = KeyboardType.Decimal),
-    SettingField("DNS", "LOCAL_DNS_CACHE_PERSIST_TO_FILE", "LOCAL_DNS_CACHE_PERSIST_TO_FILE", "Persist local DNS cache to file", type = FieldType.BOOL),
-    SettingField("DNS", "LOCAL_DNS_CACHE_FLUSH_INTERVAL_SECONDS", "LOCAL_DNS_CACHE_FLUSH_INTERVAL_SECONDS", "Local DNS cache flush interval seconds", keyboardType = KeyboardType.Decimal),
+    SettingField(Section.PROXY, "SOCKS5_AUTH", R.string.settings_helper_socks5_auth, type = FieldType.BOOL),
+    SettingField(Section.PROXY, "SOCKS5_USER", R.string.settings_helper_socks5_user),
+    SettingField(Section.PROXY, "SOCKS5_PASS", R.string.settings_helper_socks5_pass),
+    SettingField(Section.DNS, "LOCAL_DNS_ENABLED", R.string.settings_helper_local_dns_enabled, type = FieldType.BOOL),
+    SettingField(Section.DNS, "LOCAL_DNS_IP", R.string.settings_helper_local_dns_ip),
+    SettingField(Section.DNS, "LOCAL_DNS_PORT", R.string.settings_helper_local_dns_port, keyboardType = KeyboardType.Number),
+    SettingField(Section.DNS, "LOCAL_DNS_CACHE_MAX_RECORDS", R.string.settings_helper_local_dns_cache_max_records, keyboardType = KeyboardType.Number),
+    SettingField(Section.DNS, "LOCAL_DNS_CACHE_TTL_SECONDS", R.string.settings_helper_local_dns_cache_ttl_seconds, keyboardType = KeyboardType.Decimal),
+    SettingField(Section.DNS, "LOCAL_DNS_PENDING_TIMEOUT_SECONDS", R.string.settings_helper_local_dns_pending_timeout_seconds, keyboardType = KeyboardType.Decimal),
+    SettingField(Section.DNS, "DNS_RESPONSE_FRAGMENT_TIMEOUT_SECONDS", R.string.settings_helper_dns_response_fragment_timeout_seconds, keyboardType = KeyboardType.Decimal),
+    SettingField(Section.DNS, "LOCAL_DNS_CACHE_PERSIST_TO_FILE", R.string.settings_helper_local_dns_cache_persist_to_file, type = FieldType.BOOL),
+    SettingField(Section.DNS, "LOCAL_DNS_CACHE_FLUSH_INTERVAL_SECONDS", R.string.settings_helper_local_dns_cache_flush_interval_seconds, keyboardType = KeyboardType.Decimal),
     SettingField(
-        "Resolver",
+        Section.RESOLVER,
         "RESOLVER_BALANCING_STRATEGY",
-        "RESOLVER_BALANCING_STRATEGY",
-        "Resolver balancing strategy",
+        R.string.settings_helper_resolver_balancing_strategy,
         type = FieldType.OPTION,
         options = listOf(
-            "1 - Random",
-            "2 - Round Robin",
-            "3 - Least Loss",
-            "4 - Lowest Latency",
-            "5 - Hybrid Score",
-            "6 - Loss Then Latency",
-            "7 - Least Loss Top Random",
-            "8 - Least Loss Top Round Robin"
+            SettingOption("1", R.string.settings_option_resolver_balancing_strategy_1),
+            SettingOption("2", R.string.settings_option_resolver_balancing_strategy_2),
+            SettingOption("3", R.string.settings_option_resolver_balancing_strategy_3),
+            SettingOption("4", R.string.settings_option_resolver_balancing_strategy_4),
+            SettingOption("5", R.string.settings_option_resolver_balancing_strategy_5),
+            SettingOption("6", R.string.settings_option_resolver_balancing_strategy_6),
+            SettingOption("7", R.string.settings_option_resolver_balancing_strategy_7),
+            SettingOption("8", R.string.settings_option_resolver_balancing_strategy_8)
         )
     ),
-    SettingField("Resolver", "PACKET_DUPLICATION_COUNT", "PACKET_DUPLICATION_COUNT", "Runtime packet duplication count", keyboardType = KeyboardType.Number),
-    SettingField("Resolver", "SETUP_PACKET_DUPLICATION_COUNT", "SETUP_PACKET_DUPLICATION_COUNT", "Setup packet duplication count", keyboardType = KeyboardType.Number),
-    SettingField("Resolver", "STREAM_RESOLVER_FAILOVER_RESEND_THRESHOLD", "STREAM_RESOLVER_FAILOVER_RESEND_THRESHOLD", "Resends before stream failover", keyboardType = KeyboardType.Number),
-    SettingField("Resolver", "STREAM_RESOLVER_FAILOVER_COOLDOWN", "STREAM_RESOLVER_FAILOVER_COOLDOWN", "Failover cooldown seconds", keyboardType = KeyboardType.Decimal),
-    SettingField("Resolver", "RECHECK_INACTIVE_SERVERS_ENABLED", "RECHECK_INACTIVE_SERVERS_ENABLED", "Re-check inactive resolvers", type = FieldType.BOOL),
-    SettingField("Resolver", "AUTO_DISABLE_TIMEOUT_SERVERS", "AUTO_DISABLE_TIMEOUT_SERVERS", "Auto disable timeout resolvers", type = FieldType.BOOL),
-    SettingField("Resolver", "AUTO_DISABLE_TIMEOUT_WINDOW_SECONDS", "AUTO_DISABLE_TIMEOUT_WINDOW_SECONDS", "Timeout-only window seconds", keyboardType = KeyboardType.Decimal),
-    SettingField("Resolver", "BASE_ENCODE_DATA", "BASE_ENCODE_DATA", "Use base-encoded payloads", type = FieldType.BOOL),
-    SettingField("Compression", "UPLOAD_COMPRESSION_TYPE", "UPLOAD_COMPRESSION_TYPE", "0=Off, 1=Snappy, 2=LZ4, 3=ZSTD, 4=Gzip, 5=Zlib", keyboardType = KeyboardType.Number),
-    SettingField("Compression", "DOWNLOAD_COMPRESSION_TYPE", "DOWNLOAD_COMPRESSION_TYPE", "0=Off, 1=Snappy, 2=LZ4, 3=ZSTD, 4=Gzip, 5=Zlib", keyboardType = KeyboardType.Number),
-    SettingField("Compression", "COMPRESSION_MIN_SIZE", "COMPRESSION_MIN_SIZE", "Min bytes to trigger compression", keyboardType = KeyboardType.Number),
-    SettingField("MTU", "AUTO_REMOVE_LOW_MTU_SERVERS", "AUTO_REMOVE_LOW_MTU_SERVERS", "Auto remove low MTU servers", type = FieldType.BOOL),
-    SettingField("MTU", "MIN_UPLOAD_MTU", "MIN_UPLOAD_MTU", "Minimum upload MTU bytes", keyboardType = KeyboardType.Number),
-    SettingField("MTU", "MIN_DOWNLOAD_MTU", "MIN_DOWNLOAD_MTU", "Minimum download MTU bytes", keyboardType = KeyboardType.Number),
-    SettingField("MTU", "MAX_UPLOAD_MTU", "MAX_UPLOAD_MTU", "Maximum upload MTU bytes", keyboardType = KeyboardType.Number),
-    SettingField("MTU", "MAX_DOWNLOAD_MTU", "MAX_DOWNLOAD_MTU", "Maximum download MTU bytes", keyboardType = KeyboardType.Number),
-    SettingField("MTU", "MTU_TEST_RETRIES", "MTU_TEST_RETRIES", "Retries per MTU probe", keyboardType = KeyboardType.Number),
-    SettingField("MTU", "MTU_TEST_TIMEOUT", "MTU_TEST_TIMEOUT", "Probe timeout seconds", keyboardType = KeyboardType.Decimal),
-    SettingField("MTU", "MTU_TEST_PARALLELISM", "MTU_TEST_PARALLELISM", "Parallel probe workers", keyboardType = KeyboardType.Number),
-    SettingField("MTU", "SAVE_MTU_SERVERS_TO_FILE", "SAVE_MTU_SERVERS_TO_FILE", "Persist successful MTU resolvers to file", type = FieldType.BOOL),
-    SettingField("MTU", "MTU_SERVERS_FILE_NAME", "MTU_SERVERS_FILE_NAME", "Output file name/path (absolute path supported)"),
-    SettingField("MTU", "MTU_SERVERS_FILE_FORMAT", "MTU_SERVERS_FILE_FORMAT", "Format: {IP} {UP_MTU} {DOWN-MTU}"),
-    SettingField("MTU", "MTU_USING_SECTION_SEPARATOR_TEXT", "MTU_USING_SECTION_SEPARATOR_TEXT", "Optional separator text between sections"),
-    SettingField("MTU", "MTU_REMOVED_SERVER_LOG_FORMAT", "MTU_REMOVED_SERVER_LOG_FORMAT", "Log format when resolver is removed"),
-    SettingField("MTU", "MTU_ADDED_SERVER_LOG_FORMAT", "MTU_ADDED_SERVER_LOG_FORMAT", "Log format when resolver is re-added"),
-    SettingField("MTU", "MTU_REACTIVE_ADDED_SERVER_LOG_FORMAT", "MTU_REACTIVE_ADDED_SERVER_LOG_FORMAT", "Log format when resolver is re-added after reactive recheck"),
-    SettingField("Runtime", "RX_TX_WORKERS", "RX_TX_WORKERS", "Combined RX/TX worker count", keyboardType = KeyboardType.Number),
-    SettingField("Runtime", "TUNNEL_PROCESS_WORKERS", "TUNNEL_PROCESS_WORKERS", "Processor worker count", keyboardType = KeyboardType.Number),
-    SettingField("Runtime", "TUNNEL_PACKET_TIMEOUT_SECONDS", "TUNNEL_PACKET_TIMEOUT_SECONDS", "Packet timeout seconds", keyboardType = KeyboardType.Decimal),
-    SettingField("Runtime", "RX_CHANNEL_SIZE", "RX_CHANNEL_SIZE", "RX channel size", keyboardType = KeyboardType.Number),
-    SettingField("Runtime", "DISPATCHER_IDLE_POLL_INTERVAL_SECONDS", "DISPATCHER_IDLE_POLL_INTERVAL_SECONDS", "Dispatcher idle poll interval seconds", keyboardType = KeyboardType.Decimal),
-    SettingField("Runtime", "SOCKS_UDP_ASSOCIATE_READ_TIMEOUT_SECONDS", "SOCKS_UDP_ASSOCIATE_READ_TIMEOUT_SECONDS", "SOCKS UDP associate read timeout seconds", keyboardType = KeyboardType.Decimal),
-    SettingField("Runtime", "CLIENT_TERMINAL_STREAM_RETENTION_SECONDS", "CLIENT_TERMINAL_STREAM_RETENTION_SECONDS", "Terminal stream retention seconds", keyboardType = KeyboardType.Decimal),
-    SettingField("Runtime", "CLIENT_CANCELLED_SETUP_RETENTION_SECONDS", "CLIENT_CANCELLED_SETUP_RETENTION_SECONDS", "Cancelled setup stream retention seconds", keyboardType = KeyboardType.Decimal),
-    SettingField("Runtime", "SESSION_INIT_RETRY_BASE_SECONDS", "SESSION_INIT_RETRY_BASE_SECONDS", "Session init retry base seconds", keyboardType = KeyboardType.Decimal),
-    SettingField("Runtime", "SESSION_INIT_RETRY_STEP_SECONDS", "SESSION_INIT_RETRY_STEP_SECONDS", "Session init retry step seconds", keyboardType = KeyboardType.Decimal),
-    SettingField("Runtime", "SESSION_INIT_RETRY_LINEAR_AFTER", "SESSION_INIT_RETRY_LINEAR_AFTER", "Session init retry linear-after", keyboardType = KeyboardType.Number),
-    SettingField("Runtime", "SESSION_INIT_RETRY_MAX_SECONDS", "SESSION_INIT_RETRY_MAX_SECONDS", "Session init retry max seconds", keyboardType = KeyboardType.Decimal),
-    SettingField("Runtime", "SESSION_INIT_BUSY_RETRY_INTERVAL_SECONDS", "SESSION_INIT_BUSY_RETRY_INTERVAL_SECONDS", "Session busy retry interval seconds", keyboardType = KeyboardType.Decimal),
-    SettingField("Runtime", "SESSION_INIT_RACING_COUNT", "SESSION_INIT_RACING_COUNT", "Session init racing count", keyboardType = KeyboardType.Number),
-    SettingField("Runtime", "PING_AGGRESSIVE_INTERVAL_SECONDS", "PING_AGGRESSIVE_INTERVAL_SECONDS", "Ping aggressive interval seconds", keyboardType = KeyboardType.Decimal),
-    SettingField("Runtime", "PING_LAZY_INTERVAL_SECONDS", "PING_LAZY_INTERVAL_SECONDS", "Ping lazy interval seconds", keyboardType = KeyboardType.Decimal),
-    SettingField("Runtime", "PING_COOLDOWN_INTERVAL_SECONDS", "PING_COOLDOWN_INTERVAL_SECONDS", "Ping cooldown interval seconds", keyboardType = KeyboardType.Decimal),
-    SettingField("Runtime", "PING_COLD_INTERVAL_SECONDS", "PING_COLD_INTERVAL_SECONDS", "Ping cold interval seconds", keyboardType = KeyboardType.Decimal),
-    SettingField("Runtime", "PING_WARM_THRESHOLD_SECONDS", "PING_WARM_THRESHOLD_SECONDS", "Ping warm threshold seconds", keyboardType = KeyboardType.Decimal),
-    SettingField("Runtime", "PING_COOL_THRESHOLD_SECONDS", "PING_COOL_THRESHOLD_SECONDS", "Ping cool threshold seconds", keyboardType = KeyboardType.Decimal),
-    SettingField("Runtime", "PING_COLD_THRESHOLD_SECONDS", "PING_COLD_THRESHOLD_SECONDS", "Ping cold threshold seconds", keyboardType = KeyboardType.Decimal),
-    SettingField("ARQ", "ARQ_WINDOW_SIZE", "ARQ_WINDOW_SIZE", "ARQ receive window size", keyboardType = KeyboardType.Number),
-    SettingField("ARQ", "MAX_PACKETS_PER_BATCH", "MAX_PACKETS_PER_BATCH", "Max packets per batch", keyboardType = KeyboardType.Number),
-    SettingField("ARQ", "ARQ_INITIAL_RTO_SECONDS", "ARQ_INITIAL_RTO_SECONDS", "Initial RTO seconds", keyboardType = KeyboardType.Decimal),
-    SettingField("ARQ", "ARQ_MAX_RTO_SECONDS", "ARQ_MAX_RTO_SECONDS", "Maximum RTO seconds", keyboardType = KeyboardType.Decimal),
-    SettingField("ARQ", "ARQ_CONTROL_INITIAL_RTO_SECONDS", "ARQ_CONTROL_INITIAL_RTO_SECONDS", "Control initial RTO seconds", keyboardType = KeyboardType.Decimal),
-    SettingField("ARQ", "ARQ_CONTROL_MAX_RTO_SECONDS", "ARQ_CONTROL_MAX_RTO_SECONDS", "Control packet max RTO seconds", keyboardType = KeyboardType.Decimal),
-    SettingField("ARQ", "ARQ_MAX_CONTROL_RETRIES", "ARQ_MAX_CONTROL_RETRIES", "Maximum retries per control packet", keyboardType = KeyboardType.Number),
-    SettingField("ARQ", "ARQ_MAX_DATA_RETRIES", "ARQ_MAX_DATA_RETRIES", "Maximum retries per data packet", keyboardType = KeyboardType.Number),
-    SettingField("ARQ", "ARQ_DATA_PACKET_TTL_SECONDS", "ARQ_DATA_PACKET_TTL_SECONDS", "ARQ data packet TTL seconds", keyboardType = KeyboardType.Decimal),
-    SettingField("ARQ", "ARQ_CONTROL_PACKET_TTL_SECONDS", "ARQ_CONTROL_PACKET_TTL_SECONDS", "ARQ control packet TTL seconds", keyboardType = KeyboardType.Decimal),
-    SettingField("ARQ", "ARQ_DATA_NACK_MAX_GAP", "ARQ_DATA_NACK_MAX_GAP", "ARQ data NACK max gap", keyboardType = KeyboardType.Number),
-    SettingField("ARQ", "ARQ_DATA_NACK_INITIAL_DELAY_SECONDS", "ARQ_DATA_NACK_INITIAL_DELAY_SECONDS", "Initial delay before first NACK seconds", keyboardType = KeyboardType.Decimal),
-    SettingField("ARQ", "ARQ_DATA_NACK_REPEAT_SECONDS", "ARQ_DATA_NACK_REPEAT_SECONDS", "NACK repeat interval seconds", keyboardType = KeyboardType.Decimal),
-    SettingField("ARQ", "ARQ_INACTIVITY_TIMEOUT_SECONDS", "ARQ_INACTIVITY_TIMEOUT_SECONDS", "Inactivity timeout seconds", keyboardType = KeyboardType.Decimal),
-    SettingField("ARQ", "ARQ_TERMINAL_DRAIN_TIMEOUT_SECONDS", "ARQ_TERMINAL_DRAIN_TIMEOUT_SECONDS", "ARQ terminal drain timeout seconds", keyboardType = KeyboardType.Decimal),
-    SettingField("ARQ", "ARQ_TERMINAL_ACK_WAIT_TIMEOUT_SECONDS", "ARQ_TERMINAL_ACK_WAIT_TIMEOUT_SECONDS", "ARQ terminal ACK wait timeout seconds", keyboardType = KeyboardType.Decimal),
+    SettingField(Section.RESOLVER, "PACKET_DUPLICATION_COUNT", R.string.settings_helper_packet_duplication_count, keyboardType = KeyboardType.Number),
+    SettingField(Section.RESOLVER, "SETUP_PACKET_DUPLICATION_COUNT", R.string.settings_helper_setup_packet_duplication_count, keyboardType = KeyboardType.Number),
+    SettingField(Section.RESOLVER, "STREAM_RESOLVER_FAILOVER_RESEND_THRESHOLD", R.string.settings_helper_stream_resolver_failover_resend_threshold, keyboardType = KeyboardType.Number),
+    SettingField(Section.RESOLVER, "STREAM_RESOLVER_FAILOVER_COOLDOWN", R.string.settings_helper_stream_resolver_failover_cooldown, keyboardType = KeyboardType.Decimal),
+    SettingField(Section.RESOLVER, "RECHECK_INACTIVE_SERVERS_ENABLED", R.string.settings_helper_recheck_inactive_servers_enabled, type = FieldType.BOOL),
+    SettingField(Section.RESOLVER, "AUTO_DISABLE_TIMEOUT_SERVERS", R.string.settings_helper_auto_disable_timeout_servers, type = FieldType.BOOL),
+    SettingField(Section.RESOLVER, "AUTO_DISABLE_TIMEOUT_WINDOW_SECONDS", R.string.settings_helper_auto_disable_timeout_window_seconds, keyboardType = KeyboardType.Decimal),
+    SettingField(Section.RESOLVER, "BASE_ENCODE_DATA", R.string.settings_helper_base_encode_data, type = FieldType.BOOL),
+    SettingField(Section.COMPRESSION, "UPLOAD_COMPRESSION_TYPE", R.string.settings_helper_upload_compression_type, keyboardType = KeyboardType.Number),
+    SettingField(Section.COMPRESSION, "DOWNLOAD_COMPRESSION_TYPE", R.string.settings_helper_download_compression_type, keyboardType = KeyboardType.Number),
+    SettingField(Section.COMPRESSION, "COMPRESSION_MIN_SIZE", R.string.settings_helper_compression_min_size, keyboardType = KeyboardType.Number),
+    SettingField(Section.MTU, "AUTO_REMOVE_LOW_MTU_SERVERS", R.string.settings_helper_auto_remove_low_mtu_servers, type = FieldType.BOOL),
+    SettingField(Section.MTU, "MIN_UPLOAD_MTU", R.string.settings_helper_min_upload_mtu, keyboardType = KeyboardType.Number),
+    SettingField(Section.MTU, "MIN_DOWNLOAD_MTU", R.string.settings_helper_min_download_mtu, keyboardType = KeyboardType.Number),
+    SettingField(Section.MTU, "MAX_UPLOAD_MTU", R.string.settings_helper_max_upload_mtu, keyboardType = KeyboardType.Number),
+    SettingField(Section.MTU, "MAX_DOWNLOAD_MTU", R.string.settings_helper_max_download_mtu, keyboardType = KeyboardType.Number),
+    SettingField(Section.MTU, "MTU_TEST_RETRIES", R.string.settings_helper_mtu_test_retries, keyboardType = KeyboardType.Number),
+    SettingField(Section.MTU, "MTU_TEST_TIMEOUT", R.string.settings_helper_mtu_test_timeout, keyboardType = KeyboardType.Decimal),
+    SettingField(Section.MTU, "MTU_TEST_PARALLELISM", R.string.settings_helper_mtu_test_parallelism, keyboardType = KeyboardType.Number),
+    SettingField(Section.MTU, "SAVE_MTU_SERVERS_TO_FILE", R.string.settings_helper_save_mtu_servers_to_file, type = FieldType.BOOL),
+    SettingField(Section.MTU, "MTU_SERVERS_FILE_NAME", R.string.settings_helper_mtu_servers_file_name),
+    SettingField(Section.MTU, "MTU_SERVERS_FILE_FORMAT", R.string.settings_helper_mtu_servers_file_format),
+    SettingField(Section.MTU, "MTU_USING_SECTION_SEPARATOR_TEXT", R.string.settings_helper_mtu_using_section_separator_text),
+    SettingField(Section.MTU, "MTU_REMOVED_SERVER_LOG_FORMAT", R.string.settings_helper_mtu_removed_server_log_format),
+    SettingField(Section.MTU, "MTU_ADDED_SERVER_LOG_FORMAT", R.string.settings_helper_mtu_added_server_log_format),
+    SettingField(Section.MTU, "MTU_REACTIVE_ADDED_SERVER_LOG_FORMAT", R.string.settings_helper_mtu_reactive_added_server_log_format),
+    SettingField(Section.RUNTIME, "RX_TX_WORKERS", R.string.settings_helper_rx_tx_workers, keyboardType = KeyboardType.Number),
+    SettingField(Section.RUNTIME, "TUNNEL_PROCESS_WORKERS", R.string.settings_helper_tunnel_process_workers, keyboardType = KeyboardType.Number),
+    SettingField(Section.RUNTIME, "TUNNEL_PACKET_TIMEOUT_SECONDS", R.string.settings_helper_tunnel_packet_timeout_seconds, keyboardType = KeyboardType.Decimal),
+    SettingField(Section.RUNTIME, "RX_CHANNEL_SIZE", R.string.settings_helper_rx_channel_size, keyboardType = KeyboardType.Number),
+    SettingField(Section.RUNTIME, "DISPATCHER_IDLE_POLL_INTERVAL_SECONDS", R.string.settings_helper_dispatcher_idle_poll_interval_seconds, keyboardType = KeyboardType.Decimal),
+    SettingField(Section.RUNTIME, "SOCKS_UDP_ASSOCIATE_READ_TIMEOUT_SECONDS", R.string.settings_helper_socks_udp_associate_read_timeout_seconds, keyboardType = KeyboardType.Decimal),
+    SettingField(Section.RUNTIME, "CLIENT_TERMINAL_STREAM_RETENTION_SECONDS", R.string.settings_helper_client_terminal_stream_retention_seconds, keyboardType = KeyboardType.Decimal),
+    SettingField(Section.RUNTIME, "CLIENT_CANCELLED_SETUP_RETENTION_SECONDS", R.string.settings_helper_client_cancelled_setup_retention_seconds, keyboardType = KeyboardType.Decimal),
+    SettingField(Section.RUNTIME, "SESSION_INIT_RETRY_BASE_SECONDS", R.string.settings_helper_session_init_retry_base_seconds, keyboardType = KeyboardType.Decimal),
+    SettingField(Section.RUNTIME, "SESSION_INIT_RETRY_STEP_SECONDS", R.string.settings_helper_session_init_retry_step_seconds, keyboardType = KeyboardType.Decimal),
+    SettingField(Section.RUNTIME, "SESSION_INIT_RETRY_LINEAR_AFTER", R.string.settings_helper_session_init_retry_linear_after, keyboardType = KeyboardType.Number),
+    SettingField(Section.RUNTIME, "SESSION_INIT_RETRY_MAX_SECONDS", R.string.settings_helper_session_init_retry_max_seconds, keyboardType = KeyboardType.Decimal),
+    SettingField(Section.RUNTIME, "SESSION_INIT_BUSY_RETRY_INTERVAL_SECONDS", R.string.settings_helper_session_init_busy_retry_interval_seconds, keyboardType = KeyboardType.Decimal),
+    SettingField(Section.RUNTIME, "SESSION_INIT_RACING_COUNT", R.string.settings_helper_session_init_racing_count, keyboardType = KeyboardType.Number),
+    SettingField(Section.RUNTIME, "PING_AGGRESSIVE_INTERVAL_SECONDS", R.string.settings_helper_ping_aggressive_interval_seconds, keyboardType = KeyboardType.Decimal),
+    SettingField(Section.RUNTIME, "PING_LAZY_INTERVAL_SECONDS", R.string.settings_helper_ping_lazy_interval_seconds, keyboardType = KeyboardType.Decimal),
+    SettingField(Section.RUNTIME, "PING_COOLDOWN_INTERVAL_SECONDS", R.string.settings_helper_ping_cooldown_interval_seconds, keyboardType = KeyboardType.Decimal),
+    SettingField(Section.RUNTIME, "PING_COLD_INTERVAL_SECONDS", R.string.settings_helper_ping_cold_interval_seconds, keyboardType = KeyboardType.Decimal),
+    SettingField(Section.RUNTIME, "PING_WARM_THRESHOLD_SECONDS", R.string.settings_helper_ping_warm_threshold_seconds, keyboardType = KeyboardType.Decimal),
+    SettingField(Section.RUNTIME, "PING_COOL_THRESHOLD_SECONDS", R.string.settings_helper_ping_cool_threshold_seconds, keyboardType = KeyboardType.Decimal),
+    SettingField(Section.RUNTIME, "PING_COLD_THRESHOLD_SECONDS", R.string.settings_helper_ping_cold_threshold_seconds, keyboardType = KeyboardType.Decimal),
+    SettingField(Section.ARQ, "ARQ_WINDOW_SIZE", R.string.settings_helper_arq_window_size, keyboardType = KeyboardType.Number),
+    SettingField(Section.ARQ, "MAX_PACKETS_PER_BATCH", R.string.settings_helper_max_packets_per_batch, keyboardType = KeyboardType.Number),
+    SettingField(Section.ARQ, "ARQ_INITIAL_RTO_SECONDS", R.string.settings_helper_arq_initial_rto_seconds, keyboardType = KeyboardType.Decimal),
+    SettingField(Section.ARQ, "ARQ_MAX_RTO_SECONDS", R.string.settings_helper_arq_max_rto_seconds, keyboardType = KeyboardType.Decimal),
+    SettingField(Section.ARQ, "ARQ_CONTROL_INITIAL_RTO_SECONDS", R.string.settings_helper_arq_control_initial_rto_seconds, keyboardType = KeyboardType.Decimal),
+    SettingField(Section.ARQ, "ARQ_CONTROL_MAX_RTO_SECONDS", R.string.settings_helper_arq_control_max_rto_seconds, keyboardType = KeyboardType.Decimal),
+    SettingField(Section.ARQ, "ARQ_MAX_CONTROL_RETRIES", R.string.settings_helper_arq_max_control_retries, keyboardType = KeyboardType.Number),
+    SettingField(Section.ARQ, "ARQ_MAX_DATA_RETRIES", R.string.settings_helper_arq_max_data_retries, keyboardType = KeyboardType.Number),
+    SettingField(Section.ARQ, "ARQ_DATA_PACKET_TTL_SECONDS", R.string.settings_helper_arq_data_packet_ttl_seconds, keyboardType = KeyboardType.Decimal),
+    SettingField(Section.ARQ, "ARQ_CONTROL_PACKET_TTL_SECONDS", R.string.settings_helper_arq_control_packet_ttl_seconds, keyboardType = KeyboardType.Decimal),
+    SettingField(Section.ARQ, "ARQ_DATA_NACK_MAX_GAP", R.string.settings_helper_arq_data_nack_max_gap, keyboardType = KeyboardType.Number),
+    SettingField(Section.ARQ, "ARQ_DATA_NACK_INITIAL_DELAY_SECONDS", R.string.settings_helper_arq_data_nack_initial_delay_seconds, keyboardType = KeyboardType.Decimal),
+    SettingField(Section.ARQ, "ARQ_DATA_NACK_REPEAT_SECONDS", R.string.settings_helper_arq_data_nack_repeat_seconds, keyboardType = KeyboardType.Decimal),
+    SettingField(Section.ARQ, "ARQ_INACTIVITY_TIMEOUT_SECONDS", R.string.settings_helper_arq_inactivity_timeout_seconds, keyboardType = KeyboardType.Decimal),
+    SettingField(Section.ARQ, "ARQ_TERMINAL_DRAIN_TIMEOUT_SECONDS", R.string.settings_helper_arq_terminal_drain_timeout_seconds, keyboardType = KeyboardType.Decimal),
+    SettingField(Section.ARQ, "ARQ_TERMINAL_ACK_WAIT_TIMEOUT_SECONDS", R.string.settings_helper_arq_terminal_ack_wait_timeout_seconds, keyboardType = KeyboardType.Decimal),
     SettingField(
-        "Logging",
+        Section.LOGGING,
         "LOG_LEVEL",
-        "LOG_LEVEL",
-        "Client log level",
+        R.string.settings_helper_log_level,
         type = FieldType.OPTION,
-        options = listOf("DEBUG", "INFO", "WARN", "ERROR")
+        options = listOf(
+            SettingOption("DEBUG", R.string.settings_option_log_level_debug),
+            SettingOption("INFO", R.string.settings_option_log_level_info),
+            SettingOption("WARN", R.string.settings_option_log_level_warn),
+            SettingOption("ERROR", R.string.settings_option_log_level_error)
+        )
     )
 )
 
@@ -243,8 +261,8 @@ fun SettingsScreen(
     val sections = remember { configFields.groupBy { it.section } }
     val sectionOrder = remember { configFields.map { it.section }.distinct() }
     val sectionExpanded = remember {
-        mutableStateMapOf<String, Boolean>().apply {
-            sectionOrder.forEach { put(it, it == "Identity") }
+        mutableStateMapOf<Section, Boolean>().apply {
+            sectionOrder.forEach { put(it, it == Section.IDENTITY) }
         }
     }
 
@@ -297,8 +315,15 @@ fun SettingsScreen(
                     return@launch
                 }
                 viewModel.importResolvers(selected, result)
+                val statsDetails = context.getString(
+                    if (result.stats.truncated) R.string.resolvers_import_stats_capped
+                    else R.string.resolvers_import_stats,
+                    result.stats.uniqueResolvers,
+                    result.stats.duplicateResolvers,
+                    result.stats.invalidLines
+                )
                 snackbarHostState.showSnackbar(
-                    context.getString(R.string.settings_resolvers_imported_stats_msg, result.stats.summary())
+                    context.getString(R.string.settings_resolvers_imported_stats_msg, statsDetails)
                 )
             }
         }
@@ -429,7 +454,10 @@ fun SettingsScreen(
                                     }.onFailure { err ->
                                         scope.launch {
                                             snackbarHostState.showSnackbar(
-                                                "Cannot open file picker: ${err.message ?: "unknown error"}"
+                                                context.getString(
+                                                    R.string.settings_file_picker_error,
+                                                    err.message ?: context.getString(R.string.common_unknown_error)
+                                                )
                                             )
                                         }
                                     }
@@ -463,17 +491,17 @@ fun SettingsScreen(
                     }
 
                     val socksAuthEnabled = fieldsState["SOCKS5_AUTH"].equals("true", ignoreCase = true)
-                    items(sectionOrder, key = { "section_$it" }) { section ->
+                    items(sectionOrder, key = { "section_${it.name}" }) { section ->
                         val expanded = sectionExpanded[section] ?: false
                         MdvSectionCard(
-                            title = section,
+                            title = stringResource(section.titleRes),
                             expanded = expanded,
                             onToggle = { sectionExpanded[section] = !expanded }
                         )
                         if (!expanded) return@items
 
                         Spacer(modifier = Modifier.height(MdvSpace.S1))
-                        if (section == "DNS") {
+                        if (section == Section.DNS) {
                             val dnsEnabled = fieldsState["LOCAL_DNS_ENABLED"].equals("true", ignoreCase = true)
                             val dnsPort = fieldsState["LOCAL_DNS_PORT"]?.toIntOrNull() ?: 53
                             if (dnsEnabled && dnsPort <= 1024) {
@@ -547,9 +575,9 @@ private fun ConfigFieldCard(
                         verticalAlignment = Alignment.CenterVertically
                     ) {
                         Column(modifier = Modifier.weight(1f)) {
-                            Text(field.label, fontWeight = FontWeight.SemiBold)
+                            Text(field.key, fontWeight = FontWeight.SemiBold)
                             Text(
-                                field.helper,
+                                stringResource(field.helperRes),
                                 style = MaterialTheme.typography.bodySmall,
                                 color = MdvColor.OnSurfaceVariant
                             )
@@ -563,16 +591,17 @@ private fun ConfigFieldCard(
 
                 FieldType.OPTION -> {
                     var expanded by remember(field.key) { mutableStateOf(false) }
+                    val displayLabel = field.options.firstOrNull { it.value == value }?.let { stringResource(it.labelRes) } ?: value
                     ExposedDropdownMenuBox(
                         expanded = expanded,
                         onExpandedChange = { expanded = !expanded }
                     ) {
                         OutlinedTextField(
-                            value = value,
+                            value = displayLabel,
                             onValueChange = {},
                             readOnly = true,
-                            label = { Text(field.label) },
-                            supportingText = { Text(field.helper) },
+                            label = { Text(field.key) },
+                            supportingText = { Text(stringResource(field.helperRes)) },
                             trailingIcon = {
                                 Icon(
                                     imageVector = Icons.Filled.ArrowDropDown,
@@ -589,9 +618,9 @@ private fun ConfigFieldCard(
                         ) {
                             field.options.forEach { option ->
                                 DropdownMenuItem(
-                                    text = { Text(option) },
+                                    text = { Text(stringResource(option.labelRes)) },
                                     onClick = {
-                                        onChange(option.substringBefore(" - ").trim())
+                                        onChange(option.value)
                                         expanded = false
                                     }
                                 )
@@ -604,8 +633,8 @@ private fun ConfigFieldCard(
                     OutlinedTextField(
                         value = value,
                         onValueChange = onChange,
-                        label = { Text(field.label) },
-                        supportingText = { Text(field.helper) },
+                        label = { Text(field.key) },
+                        supportingText = { Text(stringResource(field.helperRes)) },
                         modifier = Modifier.fillMaxWidth(),
                         keyboardOptions = KeyboardOptions(keyboardType = field.keyboardType)
                     )

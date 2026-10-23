@@ -1,7 +1,10 @@
 package com.masterdns.vpn.ui.settings
 
+import androidx.annotation.StringRes
+import androidx.appcompat.app.AppCompatDelegate
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.layout.Arrangement
@@ -62,6 +65,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.platform.LocalClipboardManager
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.font.FontWeight
@@ -69,6 +73,7 @@ import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Dialog
+import androidx.core.os.LocaleListCompat
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.masterdns.vpn.R
 import com.masterdns.vpn.ui.components.mdv.controls.MdvFilterChip
@@ -83,9 +88,51 @@ import androidx.compose.ui.unit.Dp
 import androidx.compose.runtime.LaunchedEffect
 import kotlinx.coroutines.launch
 
+private data class LanguageOption(val tag: String?, @StringRes val labelRes: Int)
+
+@Composable
+private fun LanguageCard() {
+    val current = AppCompatDelegate.getApplicationLocales().toLanguageTags().ifBlank { null }
+    val options = listOf(
+        LanguageOption(null, R.string.language_system),
+        LanguageOption("en", R.string.language_english),
+        LanguageOption("fa", R.string.language_persian),
+        LanguageOption("zh-CN", R.string.language_chinese),
+        LanguageOption("ru", R.string.language_russian)
+    )
+    Card(colors = CardDefaults.cardColors(containerColor = MdvColor.SurfaceHigh)) {
+        Column(modifier = Modifier.padding(MdvSpace.S3), verticalArrangement = Arrangement.spacedBy(MdvSpace.S2)) {
+            Text(stringResource(R.string.language_title), style = MaterialTheme.typography.titleMedium)
+            Row(
+                horizontalArrangement = Arrangement.spacedBy(MdvSpace.S2),
+                modifier = Modifier.horizontalScroll(rememberScrollState())
+            ) {
+                options.forEach { option ->
+                    val isSelected = when (option.tag) {
+                        null -> current == null
+                        "zh-CN" -> current != null && (current == "zh-CN" || current.startsWith("zh"))
+                        else -> current != null && current.startsWith(option.tag)
+                    }
+                    MdvFilterChip(
+                        selected = isSelected,
+                        onClick = {
+                            AppCompatDelegate.setApplicationLocales(
+                                if (option.tag == null) LocaleListCompat.getEmptyLocaleList()
+                                else LocaleListCompat.forLanguageTags(option.tag)
+                            )
+                        },
+                        label = stringResource(option.labelRes)
+                    )
+                }
+            }
+        }
+    }
+}
+
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun GlobalSettingsScreen(vm: GlobalSettingsViewModel = viewModel()) {
+    val context = LocalContext.current
     val current by vm.settings.collectAsState()
     val installedApps by vm.installedApps.collectAsState()
     val localIp by vm.localIp.collectAsState()
@@ -133,22 +180,22 @@ fun GlobalSettingsScreen(vm: GlobalSettingsViewModel = viewModel()) {
                 actions = {
                     Box {
                         IconButton(onClick = { menuExpanded = true }) {
-                            Icon(imageVector = Icons.Filled.MoreVert, contentDescription = "More")
+                            Icon(imageVector = Icons.Filled.MoreVert, contentDescription = stringResource(R.string.action_more))
                         }
                         DropdownMenu(
                             expanded = menuExpanded,
                             onDismissRequest = { menuExpanded = false }
                         ) {
                             DropdownMenuItem(
-                                text = { Text("Export to Clipboard") },
+                                text = { Text(stringResource(R.string.global_export_clipboard)) },
                                 onClick = {
                                     menuExpanded = false
                                     clipboardManager.setText(AnnotatedString(draft.toExportJson()))
-                                    scope.launch { snackbarHostState.showSnackbar("Settings copied (credentials excluded)") }
+                                    scope.launch { snackbarHostState.showSnackbar(context.getString(R.string.global_settings_copied_msg)) }
                                 }
                             )
                             DropdownMenuItem(
-                                text = { Text("Import from Clipboard") },
+                                text = { Text(stringResource(R.string.global_import_clipboard)) },
                                 onClick = {
                                     menuExpanded = false
                                     val text = clipboardManager.getText()?.text
@@ -156,12 +203,12 @@ fun GlobalSettingsScreen(vm: GlobalSettingsViewModel = viewModel()) {
                                         val imported = parseImportedSettings(text)
                                         if (imported != null) {
                                             draft = imported
-                                            scope.launch { snackbarHostState.showSnackbar("Settings imported from clipboard") }
+                                            scope.launch { snackbarHostState.showSnackbar(context.getString(R.string.global_settings_imported_msg)) }
                                         } else {
-                                            scope.launch { snackbarHostState.showSnackbar("Failed to parse settings JSON") }
+                                            scope.launch { snackbarHostState.showSnackbar(context.getString(R.string.global_settings_parse_failed_msg)) }
                                         }
                                     } else {
-                                        scope.launch { snackbarHostState.showSnackbar("Clipboard is empty") }
+                                        scope.launch { snackbarHostState.showSnackbar(context.getString(R.string.global_clipboard_empty_msg)) }
                                     }
                                 }
                             )
@@ -194,6 +241,9 @@ fun GlobalSettingsScreen(vm: GlobalSettingsViewModel = viewModel()) {
                     contentPadding = PaddingValues(MdvSpace.S4),
                     verticalArrangement = Arrangement.spacedBy(MdvSpace.S3)
                 ) {
+                    item {
+                        LanguageCard()
+                    }
                     item {
                         Card(colors = CardDefaults.cardColors(containerColor = MdvColor.SurfaceHigh)) {
                             Column(modifier = Modifier.padding(MdvSpace.S3), verticalArrangement = Arrangement.spacedBy(MdvSpace.S3)) {

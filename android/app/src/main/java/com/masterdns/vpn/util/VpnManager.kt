@@ -3,6 +3,7 @@ package com.masterdns.vpn.util
 import android.content.Context
 import android.content.Intent
 import androidx.core.content.ContextCompat
+import com.masterdns.vpn.R
 import com.masterdns.vpn.data.local.ProfileEntity
 import com.masterdns.vpn.service.MasterDnsVpnService
 import kotlinx.coroutines.CoroutineScope
@@ -303,7 +304,7 @@ object VpnManager {
                 android.provider.Settings.Global.getString(context.contentResolver, "private_dns_mode")
             }.getOrNull()
             if (isPrivateDnsStrictBypass(mode)) {
-                val msg = "Android Private DNS (Strict mode) is active and will bypass VPN DNS (poisoned answers like 10.10.34.35). To fix: Settings → Network & Internet → Private DNS → Off, then reconnect."
+                val msg = context.getString(R.string.vpn_private_dns_warning)
                 appendLog(msg)
                 setError(msg)
                 updateState(VpnState.ERROR)
@@ -323,8 +324,9 @@ object VpnManager {
 
         runCatching { ContextCompat.startForegroundService(context, intent) }
             .onFailure {
-                setError("Failed to start VPN service: ${it.message}")
-                appendLog("Failed to start VPN service: ${it.message}")
+                val msg = context.getString(R.string.vpn_start_failed, it.message ?: context.getString(R.string.common_unknown_error))
+                setError(msg)
+                appendLog(msg)
                 updateState(VpnState.ERROR)
             }
     }
@@ -343,8 +345,9 @@ object VpnManager {
         }
         runCatching { context.startService(intent) }
             .onFailure {
-                setError("Failed to stop VPN service: ${it.message}")
-                appendLog("Failed to stop VPN service: ${it.message}")
+                val msg = context.getString(R.string.vpn_stop_failed, it.message ?: context.getString(R.string.common_unknown_error))
+                setError(msg)
+                appendLog(msg)
                 updateState(VpnState.ERROR)
             }
     }

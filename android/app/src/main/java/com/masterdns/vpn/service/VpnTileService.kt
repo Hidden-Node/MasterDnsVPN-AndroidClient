@@ -81,17 +81,17 @@ class VpnTileService : TileService() {
             VpnManager.VpnState.CONNECTED -> {
                 tile.state = Tile.STATE_ACTIVE
                 tile.label = getString(R.string.app_name)
-                tile.subtitle = "Connected"
+                tile.subtitle = getString(R.string.home_state_connected)
             }
             VpnManager.VpnState.CONNECTING -> {
                 tile.state = Tile.STATE_ACTIVE
                 tile.label = getString(R.string.app_name)
-                tile.subtitle = "Connecting..."
+                tile.subtitle = getString(R.string.home_state_connecting)
             }
             else -> {
                 tile.state = Tile.STATE_INACTIVE
                 tile.label = getString(R.string.app_name)
-                tile.subtitle = "Disconnected"
+                tile.subtitle = getString(R.string.home_state_disconnected)
             }
         }
         tile.updateTile()

@@ -53,14 +53,14 @@ fun ResolversScreen() {
                     val textToCopy = activeResolvers.joinToString("\n")
                     if (textToCopy.isNotBlank()) {
                         val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
-                        val clip = ClipData.newPlainText("Active Resolvers", textToCopy)
+                        val clip = ClipData.newPlainText(context.getString(R.string.title_resolvers), textToCopy)
                         clipboard.setPrimaryClip(clip)
-                        Toast.makeText(context, "Copied ${activeResolvers.size} resolvers", Toast.LENGTH_SHORT).show()
+                        Toast.makeText(context, context.getString(R.string.resolvers_copied, activeResolvers.size), Toast.LENGTH_SHORT).show()
                     } else {
-                        Toast.makeText(context, "No active resolvers", Toast.LENGTH_SHORT).show()
+                        Toast.makeText(context, context.getString(R.string.resolvers_none), Toast.LENGTH_SHORT).show()
                     }
                 }) {
-                    Icon(Icons.Filled.ContentCopy, contentDescription = "Copy", tint = MdvColor.PrimaryContainer)
+                    Icon(Icons.Filled.ContentCopy, contentDescription = stringResource(R.string.resolvers_copy_desc), tint = MdvColor.PrimaryContainer)
                 }
                 IconButton(onClick = {
                     val textToShare = activeResolvers.joinToString("\n")
@@ -73,10 +73,10 @@ fun ResolversScreen() {
                         val shareIntent = Intent.createChooser(sendIntent, null)
                         context.startActivity(shareIntent)
                     } else {
-                        Toast.makeText(context, "No active resolvers to share", Toast.LENGTH_SHORT).show()
+                        Toast.makeText(context, context.getString(R.string.resolvers_none_to_share), Toast.LENGTH_SHORT).show()
                     }
                 }) {
-                    Icon(Icons.Filled.Share, contentDescription = "Share", tint = MdvColor.PrimaryContainer)
+                    Icon(Icons.Filled.Share, contentDescription = stringResource(R.string.resolvers_share_desc), tint = MdvColor.PrimaryContainer)
                 }
             },
             colors = TopAppBarDefaults.topAppBarColors(
@@ -89,7 +89,7 @@ fun ResolversScreen() {
         if (activeResolvers.isEmpty()) {
             Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
                 Text(
-                    text = "No active resolvers found yet.",
+                    text = stringResource(R.string.resolvers_empty),
                     style = MaterialTheme.typography.bodyLarge,
                     color = MdvColor.OnSurfaceVariant
                 )

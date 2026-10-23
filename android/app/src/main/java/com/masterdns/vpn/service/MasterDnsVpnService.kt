@@ -220,7 +220,7 @@ class MasterDnsVpnService : VpnService() {
                     VpnManager.updateState(VpnManager.VpnState.CONNECTED)
                     releaseWakeLock()
                     VpnManager.startTrafficMonitor()
-                    val notification = buildNotification("Proxy mode active on port ${inputs.socksPort}")
+                    val notification = buildNotification(getString(R.string.notification_proxy_active, inputs.socksPort))
                     val manager = getSystemService(NOTIFICATION_SERVICE) as android.app.NotificationManager
                     manager.notify(NOTIFICATION_ID, notification)
                     return@launch
@@ -243,7 +243,7 @@ class MasterDnsVpnService : VpnService() {
             } catch (e: Exception) {
                 Log.e(TAG, "Failed to start VPN", e)
                 VpnManager.appendLog("Error: ${e.message}")
-                VpnManager.setError(e.message ?: "Unknown error")
+                VpnManager.setError(e.message ?: getString(R.string.common_unknown_error))
                 stopVpn()
             }
         }
@@ -356,7 +356,7 @@ class MasterDnsVpnService : VpnService() {
                     Log.e(TAG, "Go core error", e)
                     VpnManager.appendLog("Go core error: $msg")
                     runCatching {
-                        VpnManager.setError("Go core error: $msg")
+                        VpnManager.setError(getString(R.string.vpn_go_core_error, msg))
                     }
                 }
             }
