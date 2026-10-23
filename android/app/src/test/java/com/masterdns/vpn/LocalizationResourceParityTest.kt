@@ -11,15 +11,16 @@ import javax.xml.parsers.DocumentBuilderFactory
 class LocalizationResourceParityTest {
 
     private fun resolveResDir(): File {
-        var dir: File? = File(System.getProperty("user.dir")).absoluteFile
+        val userDir = System.getProperty("user.dir") ?: "."
+        var dir: File? = File(userDir).absoluteFile
         while (dir != null) {
             val candidate = File(dir, "src/main/res/values/strings.xml")
-            if (candidate.exists()) return candidate.parentFile.parentFile
+            if (candidate.exists()) return candidate.parentFile!!.parentFile!!
             val candidateSub = File(dir, "android/app/src/main/res/values/strings.xml")
-            if (candidateSub.exists()) return candidateSub.parentFile.parentFile
+            if (candidateSub.exists()) return candidateSub.parentFile!!.parentFile!!
             dir = dir.parentFile
         }
-        error("Could not locate res directory starting from ${System.getProperty("user.dir")}")
+        error("Could not locate res directory starting from $userDir")
     }
 
     private data class StringEntry(val name: String, val text: String, val translatable: Boolean)
