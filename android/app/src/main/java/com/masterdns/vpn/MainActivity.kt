@@ -4,12 +4,9 @@ import android.content.Intent
 import android.net.Uri
 import android.os.Bundle
 import android.widget.Toast
-import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
-import androidx.compose.runtime.CompositionLocalProvider
-import androidx.compose.ui.unit.LayoutDirection
-import androidx.compose.ui.platform.LocalLayoutDirection
+import androidx.appcompat.app.AppCompatActivity
 import androidx.lifecycle.lifecycleScope
 import com.google.gson.Gson
 import com.masterdns.vpn.data.local.ProfileEntity
@@ -26,7 +23,7 @@ import kotlinx.coroutines.withContext
 import javax.inject.Inject
 
 @AndroidEntryPoint
-class MainActivity : ComponentActivity() {
+class MainActivity : AppCompatActivity() {
     @Inject
     lateinit var profileRepository: ProfileRepository
 
@@ -42,10 +39,8 @@ class MainActivity : ComponentActivity() {
             isFirstCreation = true)
         enableEdgeToEdge()
         setContent {
-            CompositionLocalProvider(LocalLayoutDirection provides LayoutDirection.Ltr) {
-                MasterDnsVPNTheme {
-                    AppNavigation()
-                }
+            MasterDnsVPNTheme {
+                AppNavigation()
             }
         }
     }

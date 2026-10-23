@@ -23,11 +23,6 @@ data class ResolverImportStats(
 ) {
     val uniqueResolvers: Int
         get() = validResolvers
-
-    fun summary(): String {
-        val capped = if (truncated) ", capped" else ""
-        return "$uniqueResolvers usable, $duplicateResolvers duplicate, $invalidLines invalid$capped"
-    }
 }
 
 data class ResolverImportResult(

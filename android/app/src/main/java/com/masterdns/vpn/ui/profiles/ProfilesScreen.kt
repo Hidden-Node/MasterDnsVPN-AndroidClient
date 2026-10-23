@@ -100,8 +100,15 @@ fun ProfilesScreen(
             }
             importedResolvers = result
             showEditor = true
+            val statsDetails = context.getString(
+                if (result.stats.truncated) R.string.resolvers_import_stats_capped
+                else R.string.resolvers_import_stats,
+                result.stats.uniqueResolvers,
+                result.stats.duplicateResolvers,
+                result.stats.invalidLines
+            )
             snackbarHostState.showSnackbar(
-                context.getString(R.string.profiles_resolvers_imported_stats_msg, result.stats.summary())
+                context.getString(R.string.profiles_resolvers_imported_stats_msg, statsDetails)
             )
         }
     }
@@ -491,7 +498,7 @@ private fun ProfileEditorDialog(
                                             onClick = { domainList.remove(domain) },
                                             modifier = Modifier.size(16.dp)
                                         ) {
-                                            Icon(Icons.Filled.Close, contentDescription = "Remove")
+                                            Icon(Icons.Filled.Close, contentDescription = stringResource(R.string.action_remove))
                                         }
                                     }
                                 )
@@ -513,7 +520,7 @@ private fun ProfileEditorDialog(
                             isError = validationMessage == domainRequiredMsg,
                             placeholder = {
                                 if (isDomainInputFocused) {
-                                    Text("(e.g. v.example.com)")
+                                    Text(stringResource(R.string.profiles_domain_example))
                                 }
                             },
                             singleLine = true,
@@ -521,7 +528,8 @@ private fun ProfileEditorDialog(
                                 .weight(1f)
                                 .onFocusChanged { focusState ->
                                     isDomainInputFocused = focusState.isFocused
-                                },
+                                }
+                            ,
                             keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Uri)
                         )
                         Spacer(modifier = Modifier.width(12.dp))
@@ -536,7 +544,7 @@ private fun ProfileEditorDialog(
                             modifier = Modifier.size(48.dp),
                             colors = IconButtonDefaults.filledIconButtonColors(containerColor = ConnectedGreen)
                         ) {
-                            Icon(Icons.Filled.Add, contentDescription = "Add Domain", tint = MdvColor.Background)
+                            Icon(Icons.Filled.Add, contentDescription = stringResource(R.string.profiles_add_domain), tint = MdvColor.Background)
                         }
                     }
                 }

@@ -7,6 +7,9 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.ArrowForward
+import androidx.compose.material3.Icon
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
@@ -101,7 +104,7 @@ fun MdvConnectionTelemetryCard(
                 ) {
                     Column(horizontalAlignment = Alignment.End, modifier = Modifier.padding(start = 8.dp)) {
                         Text(
-                            text = "SESSION",
+                            text = stringResource(R.string.home_status_session),
                             style = MaterialTheme.typography.labelSmall,
                             color = MdvColor.OnSurfaceVariant,
                             fontWeight = FontWeight.Bold
@@ -133,7 +136,7 @@ fun MdvConnectionTelemetryCard(
                             horizontalArrangement = Arrangement.SpaceBetween
                         ) {
                             Text(
-                                text = "DNS Scan",
+                                text = stringResource(R.string.home_status_dns_scan),
                                 style = MaterialTheme.typography.labelMedium,
                                 color = MdvColor.OnSurfaceVariant
                             )
@@ -155,6 +158,8 @@ fun MdvConnectionTelemetryCard(
                             strokeCap = androidx.compose.ui.graphics.StrokeCap.Round
                         )
                         if (scanStatus.validCount > 0 || scanStatus.rejectedCount > 0) {
+                            val validLabel = stringResource(R.string.home_status_valid)
+                            val rejectedLabel = stringResource(R.string.home_status_rejected)
                             androidx.compose.foundation.layout.Spacer(modifier = Modifier.height(8.dp))
                             Row(
                                 modifier = Modifier.fillMaxWidth(),
@@ -162,7 +167,8 @@ fun MdvConnectionTelemetryCard(
                             ) {
                                 Text(
                                     text = buildAnnotatedString {
-                                        append("Valid: ")
+                                        append(validLabel)
+                                        append(" ")
                                         pushStyle(SpanStyle(color = ConnectedGreen, fontWeight = FontWeight.Bold))
                                         append(scanStatus.validCount.toString())
                                         pop()
@@ -171,7 +177,8 @@ fun MdvConnectionTelemetryCard(
                                 )
                                 Text(
                                     text = buildAnnotatedString {
-                                        append("Rejected: ")
+                                        append(rejectedLabel)
+                                        append(" ")
                                         pushStyle(SpanStyle(color = DisconnectedRed, fontWeight = FontWeight.Bold))
                                         append(scanStatus.rejectedCount.toString())
                                         pop()
@@ -241,7 +248,7 @@ fun MdvConnectionTelemetryCard(
                             horizontalAlignment = Alignment.CenterHorizontally
                         ) {
                             Text(
-                                text = "↓ DOWNLOAD",
+                                text = stringResource(R.string.home_status_download),
                                 style = MaterialTheme.typography.labelSmall,
                                 color = ConnectedGreen,
                                 fontWeight = FontWeight.Bold
@@ -272,7 +279,7 @@ fun MdvConnectionTelemetryCard(
                             horizontalAlignment = Alignment.CenterHorizontally
                         ) {
                             Text(
-                                text = "↑ UPLOAD",
+                                text = stringResource(R.string.home_status_upload),
                                 style = MaterialTheme.typography.labelSmall,
                                 color = MdvColor.PrimaryContainer,
                                 fontWeight = FontWeight.Bold
@@ -302,31 +309,31 @@ fun MdvConnectionTelemetryCard(
                 ) {
                     if (scanStatus.activeResolvers > 0) {
                         Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-                            Text("Active Resolvers", style = MaterialTheme.typography.bodySmall, color = MdvColor.OnSurfaceVariant)
+                            Text(stringResource(R.string.home_status_active_resolvers), style = MaterialTheme.typography.bodySmall, color = MdvColor.OnSurfaceVariant)
                             Text(scanStatus.activeResolvers.toString(), style = MaterialTheme.typography.bodySmall, color = MdvColor.OnSurface, fontWeight = FontWeight.Bold)
                         }
                         androidx.compose.foundation.layout.Spacer(modifier = Modifier.height(4.dp))
                     }
                     if (scanStatus.syncedUploadMtu > 0 || scanStatus.syncedDownloadMtu > 0) {
                         Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-                            Text("Synced MTU (Up/Down)", style = MaterialTheme.typography.bodySmall, color = MdvColor.OnSurfaceVariant)
+                            Text(stringResource(R.string.home_status_synced_mtu), style = MaterialTheme.typography.bodySmall, color = MdvColor.OnSurfaceVariant)
                             Text("${scanStatus.syncedUploadMtu} / ${scanStatus.syncedDownloadMtu}", style = MaterialTheme.typography.bodySmall, color = MdvColor.OnSurface, fontWeight = FontWeight.Bold)
                         }
                         androidx.compose.foundation.layout.Spacer(modifier = Modifier.height(4.dp))
                     }
                     Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-                        Text("SOCKS5 Proxy", style = MaterialTheme.typography.bodySmall, color = MdvColor.OnSurfaceVariant)
+                        Text(stringResource(R.string.home_status_socks5_proxy), style = MaterialTheme.typography.bodySmall, color = MdvColor.OnSurfaceVariant)
                         Text("$proxyHost:$proxyPort", style = MaterialTheme.typography.bodySmall, color = MdvColor.OnSurface, fontWeight = FontWeight.Bold)
                     }
                     if (socksAuthEnabled && socksUser.isNotBlank()) {
                         androidx.compose.foundation.layout.Spacer(modifier = Modifier.height(4.dp))
                         Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-                            Text("SOCKS5 Auth", style = MaterialTheme.typography.bodySmall, color = MdvColor.OnSurfaceVariant)
-                            Text("Enabled", style = MaterialTheme.typography.bodySmall, color = MdvColor.OnSurface, fontWeight = FontWeight.Bold)
+                            Text(stringResource(R.string.home_status_socks5_auth), style = MaterialTheme.typography.bodySmall, color = MdvColor.OnSurfaceVariant)
+                            Text(stringResource(R.string.home_status_enabled), style = MaterialTheme.typography.bodySmall, color = MdvColor.OnSurface, fontWeight = FontWeight.Bold)
                         }
                         androidx.compose.foundation.layout.Spacer(modifier = Modifier.height(2.dp))
                         Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-                            Text("  ↳ Credentials", style = MaterialTheme.typography.bodySmall, color = MdvColor.OnSurfaceVariant)
+                            Text(stringResource(R.string.home_status_credentials), style = MaterialTheme.typography.bodySmall, color = MdvColor.OnSurfaceVariant)
                             Text("$socksUser:$socksPass", style = MaterialTheme.typography.bodySmall, color = MdvColor.OnSurfaceVariant)
                         }
                     }
@@ -365,10 +372,10 @@ fun MdvProfileSelectorCard(
                     color = MdvColor.OnSurface
                 )
             }
-            Text(
-                text = "→",
-                style = MaterialTheme.typography.titleLarge,
-                color = MdvColor.PrimaryContainer
+            Icon(
+                imageVector = Icons.AutoMirrored.Filled.ArrowForward,
+                contentDescription = null,
+                tint = MdvColor.PrimaryContainer
             )
         }
     }
