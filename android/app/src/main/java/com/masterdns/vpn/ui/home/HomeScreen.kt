@@ -342,7 +342,7 @@ private fun HowToUseCard(onOpen: () -> Unit) {
 @Composable
 private fun HowToUseDialog(onDismiss: () -> Unit) {
     val screenHeight = LocalConfiguration.current.screenHeightDp.dp
-    val maxDialogContentHeight = (screenHeight * 0.72f)
+    val maxDialogContentHeight = (screenHeight - 160.dp).coerceIn(120.dp, screenHeight * 0.72f)
 
     AlertDialog(
         onDismissRequest = onDismiss,
