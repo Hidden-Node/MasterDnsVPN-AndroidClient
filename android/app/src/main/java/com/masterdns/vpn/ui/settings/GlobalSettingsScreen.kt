@@ -2,6 +2,7 @@ package com.masterdns.vpn.ui.settings
 
 import androidx.annotation.StringRes
 import androidx.appcompat.app.AppCompatDelegate
+import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.horizontalScroll
@@ -21,12 +22,16 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ArrowDropDown
+import androidx.compose.material.icons.filled.KeyboardArrowDown
+import androidx.compose.material.icons.filled.KeyboardArrowUp
+import androidx.compose.material.icons.filled.Language
 import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
@@ -88,41 +93,108 @@ import androidx.compose.ui.unit.Dp
 import androidx.compose.runtime.LaunchedEffect
 import kotlinx.coroutines.launch
 
-private data class LanguageOption(val tag: String?, @StringRes val labelRes: Int)
+private data class LanguageOption(
+    val tag: String?,
+    val nativeName: String
+)
 
 @Composable
 private fun LanguageCard() {
     val current = AppCompatDelegate.getApplicationLocales().toLanguageTags().ifBlank { null }
     val options = listOf(
-        LanguageOption(null, R.string.language_system),
-        LanguageOption("en", R.string.language_english),
-        LanguageOption("fa", R.string.language_persian),
-        LanguageOption("zh-CN", R.string.language_chinese),
-        LanguageOption("ru", R.string.language_russian)
+        LanguageOption(null, stringResource(R.string.language_system)),
+        LanguageOption("en", "English"),
+        LanguageOption("fa", "فارسی"),
+        LanguageOption("zh-CN", "简体中文"),
+        LanguageOption("ru", "Русский")
     )
-    Card(colors = CardDefaults.cardColors(containerColor = MdvColor.SurfaceHigh)) {
-        Column(modifier = Modifier.padding(MdvSpace.S3), verticalArrangement = Arrangement.spacedBy(MdvSpace.S2)) {
-            Text(stringResource(R.string.language_title), style = MaterialTheme.typography.titleMedium)
+    val selectedOption = options.firstOrNull { option ->
+        when (option.tag) {
+            null -> current == null
+            "zh-CN" -> current != null && (current == "zh-CN" || current.startsWith("zh"))
+            else -> current != null && current.startsWith(option.tag)
+        }
+    } ?: options.first()
+
+    var expanded by remember { mutableStateOf(false) }
+
+    Card(
+        colors = CardDefaults.cardColors(containerColor = MdvColor.SurfaceHigh),
+        modifier = Modifier.fillMaxWidth()
+    ) {
+        Column(modifier = Modifier.fillMaxWidth()) {
             Row(
-                horizontalArrangement = Arrangement.spacedBy(MdvSpace.S2),
-                modifier = Modifier.horizontalScroll(rememberScrollState())
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clickable { expanded = !expanded }
+                    .padding(MdvSpace.S3),
+                verticalAlignment = Alignment.CenterVertically
             ) {
-                options.forEach { option ->
-                    val isSelected = when (option.tag) {
-                        null -> current == null
-                        "zh-CN" -> current != null && (current == "zh-CN" || current.startsWith("zh"))
-                        else -> current != null && current.startsWith(option.tag)
-                    }
-                    MdvFilterChip(
-                        selected = isSelected,
-                        onClick = {
-                            AppCompatDelegate.setApplicationLocales(
-                                if (option.tag == null) LocaleListCompat.getEmptyLocaleList()
-                                else LocaleListCompat.forLanguageTags(option.tag)
-                            )
-                        },
-                        label = stringResource(option.labelRes)
+                Icon(
+                    imageVector = Icons.Filled.Language,
+                    contentDescription = null,
+                    tint = MdvColor.Primary,
+                    modifier = Modifier.size(28.dp)
+                )
+                Spacer(modifier = Modifier.width(MdvSpace.S3))
+                Column(modifier = Modifier.weight(1f)) {
+                    Text(
+                        text = stringResource(R.string.language_title),
+                        style = MaterialTheme.typography.titleMedium,
+                        fontWeight = FontWeight.SemiBold
                     )
+                    Text(
+                        text = selectedOption.nativeName,
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MdvColor.OnSurfaceVariant
+                    )
+                }
+                Icon(
+                    imageVector = if (expanded) Icons.Filled.KeyboardArrowUp else Icons.Filled.KeyboardArrowDown,
+                    contentDescription = null,
+                    tint = MdvColor.OnSurfaceVariant,
+                    modifier = Modifier.size(20.dp)
+                )
+            }
+
+            AnimatedVisibility(visible = expanded) {
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = MdvSpace.S2, vertical = MdvSpace.S1)
+                ) {
+                    options.forEach { option ->
+                        val isSelected = option == selectedOption
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clickable {
+                                    expanded = false
+                                    AppCompatDelegate.setApplicationLocales(
+                                        if (option.tag == null) LocaleListCompat.getEmptyLocaleList()
+                                        else LocaleListCompat.forLanguageTags(option.tag)
+                                    )
+                                }
+                                .padding(horizontal = MdvSpace.S3, vertical = MdvSpace.S2),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Text(
+                                text = option.nativeName,
+                                color = if (isSelected) MdvColor.Primary else MdvColor.OnSurface,
+                                fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal,
+                                style = MaterialTheme.typography.bodyMedium,
+                                modifier = Modifier.weight(1f)
+                            )
+                            if (isSelected) {
+                                Text(
+                                    text = "✓",
+                                    color = MdvColor.Primary,
+                                    fontWeight = FontWeight.Bold,
+                                    style = MaterialTheme.typography.bodyMedium
+                                )
+                            }
+                        }
+                    }
                 }
             }
         }
