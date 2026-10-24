@@ -53,12 +53,22 @@ fun AppNavigation() {
         if (currentRoute == screen.route) {
             return
         }
-        navController.navigate(screen.route) {
-            popUpTo(navController.graph.findStartDestination().id) {
-                saveState = true
+        if (screen == Screen.Home) {
+            navController.navigate(Screen.Home.route) {
+                popUpTo(Screen.Home.route) {
+                    inclusive = false
+                    saveState = true
+                }
+                launchSingleTop = true
             }
-            launchSingleTop = true
-            restoreState = true
+        } else {
+            navController.navigate(screen.route) {
+                popUpTo(navController.graph.findStartDestination().id) {
+                    saveState = true
+                }
+                launchSingleTop = true
+                restoreState = true
+            }
         }
     }
     val icons = mapOf(

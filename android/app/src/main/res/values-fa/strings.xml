@@ -3,7 +3,7 @@
     <string name="profile_settings_title">تنظیمات پروفایل</string>
     <string name="action_save">ذخیره</string>
     <string name="action_back">بازگشت</string>
-    <string name="action_hide">مخفی‌سازی</string>
+    <string name="action_hide">مخفی کردن</string>
     <string name="action_show">نمایش</string>
     <string name="action_close">بستن</string>
     <string name="action_remove">حذف</string>
@@ -29,7 +29,7 @@
     <string name="global_settings_ports_range_msg">پورت‌ها باید بین 1025 و 65535 باشند.</string>
     <string name="global_connection_mode">حالت اتصال</string>
     <string name="global_connection_mode_help">حالت VPN یا حالت پروکسی (فقط SOCKS)</string>
-    <string name="global_split_tunneling">تونل‌سازی</string>
+    <string name="global_split_tunneling">VPN برای هر برنامه</string>
     <string name="global_sharing_internet">اشتراک‌گذاری اینترنت</string>
     <string name="global_local_ip">IP محلی: %1$s</string>
     <string name="global_socks5_port">پورت SOCKS5</string>
@@ -47,14 +47,14 @@
     <string name="global_settings_imported_msg">تنظیمات از کلیپ‌بورد وارد شد</string>
     <string name="global_settings_parse_failed_msg">خطا در پردازش JSON تنظیمات</string>
     <string name="global_clipboard_empty_msg">کلیپ‌بورد خالی است</string>
-    <string name="split_tunnel_apps_title">برنامه‌های تونل‌سازی</string>
+    <string name="split_tunnel_apps_title">برنامه‌های تحت پوشش VPN</string>
     <string name="split_tunnel_apps_selected_count">%1$d برنامه انتخاب شده - لمس برای انتخاب</string>
-    <string name="split_tunnel_dialog_title">انتخاب برنامه‌ها برای تونل‌سازی</string>
+    <string name="split_tunnel_dialog_title">انتخاب برنامه‌ها برای VPN</string>
     <string name="split_tunnel_mode_include">فقط این برنامه‌ها</string>
     <string name="split_tunnel_mode_exclude">همه به جز این برنامه‌ها</string>
-    <string name="split_tunnel_dialog_desc_include">برنامه‌هایی که باید از تونل VPN استفاده کنند را انتخاب کنید</string>
+    <string name="split_tunnel_dialog_desc_include">برنامه‌هایی که باید از VPN استفاده کنند را انتخاب کنید</string>
     <string name="split_tunnel_dialog_desc_exclude">برنامه‌هایی که باید مستقیماً متصل شوند (دور زدن VPN) را انتخاب کنید</string>
-    <string name="split_tunnel_empty_apps_warning">تونل‌سازی فعال است اما برنامه‌ای انتخاب نشده — در عمل غیرفعال است</string>
+    <string name="split_tunnel_empty_apps_warning">قابلیت VPN برای هر برنامه فعال است اما برنامه‌ای انتخاب نشده — در عمل غیرفعال است</string>
     <string name="split_tunnel_selected_count">انتخاب شده: %1$d</string>
     <string name="split_tunnel_available_count">موجود: %1$d</string>
     <string name="split_tunnel_search_selected">جستجوی برنامه‌های انتخاب شده</string>
@@ -77,10 +77,10 @@
     <string name="home_state_connecting">در حال اتصال...</string>
     <string name="home_state_disconnecting">در حال قطع اتصال...</string>
     <string name="home_state_error">خطا</string>
-    <string name="home_state_disconnected">قطع شده</string>
+    <string name="home_state_disconnected">عدم اتصال</string>
     <string name="home_connection_status_title">وضعیت اتصال</string>
     <string name="home_connection_running">متصل و در حال اجرا</string>
-    <string name="home_connection_preparing">در حال آماده‌سازی تونل
+    <string name="home_connection_preparing">در حال آماده‌سازی اتصال
 (برای لغو دوباره لمس کنید)</string>
     <string name="home_connection_error_check_logs">خطا - لاگ‌ها را بررسی کنید</string>
     <string name="home_profile_title">پروفایل</string>
@@ -134,7 +134,7 @@
     <string name="profiles_add_domain">افزودن دامنه</string>
     <string name="profiles_encryption_key">کلید رمزنگاری</string>
     <string name="profiles_show_sensitive">نمایش مقدار محرمانه</string>
-    <string name="profiles_hide_sensitive">مخفی‌سازی مقدار محرمانه</string>
+    <string name="profiles_hide_sensitive">مخفی کردن مقدار محرمانه</string>
     <string name="profiles_large_resolvers_title">لیست ریزالورها بزرگ است (%1$d خط)</string>
     <string name="profiles_large_resolvers_desc">برای جلوگیری از کندی برنامه، روی ویرایش ضربه بزنید تا کادر متنی باز شود.</string>
     <string name="profiles_edit_resolvers">ویرایش ریزالورها</string>
@@ -179,7 +179,7 @@
     <string name="info_project_links">لینک‌های پروژه</string>
     <string name="info_version_info">اطلاعات نسخه</string>
     <string name="info_app_version">نسخه برنامه</string>
-    <string name="info_upstream_engine">هسته بالادست</string>
+    <string name="info_upstream_engine">Upstream Engine</string>
     <string name="info_app_logo">لوگوی برنامه</string>
     <string name="info_open_link">باز کردن لینک</string>
     <string name="channel_vpn_service">سرویس VPN</string>
@@ -208,29 +208,29 @@
     <string name="settings_section_runtime">زمان اجرا</string>
     <string name="settings_section_arq">ARQ</string>
     <string name="settings_section_logging">ثبت لاگ</string>
-    <string name="settings_option_data_encryption_method_0">۰ - بدون رمزنگاری</string>
-    <string name="settings_option_data_encryption_method_1">۱ - XOR</string>
-    <string name="settings_option_data_encryption_method_2">۲ - ChaCha20</string>
-    <string name="settings_option_data_encryption_method_3">۳ - AES-128-GCM</string>
-    <string name="settings_option_data_encryption_method_4">۴ - AES-192-GCM</string>
-    <string name="settings_option_data_encryption_method_5">۵ - AES-256-GCM</string>
+    <string name="settings_option_data_encryption_method_0">0 - None</string>
+    <string name="settings_option_data_encryption_method_1">1 - XOR</string>
+    <string name="settings_option_data_encryption_method_2">2 - ChaCha20</string>
+    <string name="settings_option_data_encryption_method_3">3 - AES-128-GCM</string>
+    <string name="settings_option_data_encryption_method_4">4 - AES-192-GCM</string>
+    <string name="settings_option_data_encryption_method_5">5 - AES-256-GCM</string>
     <string name="settings_option_protocol_type_socks5">SOCKS5</string>
     <string name="settings_option_protocol_type_tcp">TCP</string>
     <string name="settings_option_resolver_balancing_strategy_1">۱ - تصادفی</string>
     <string name="settings_option_resolver_balancing_strategy_2">۲ - چرخشی (Round Robin)</string>
-    <string name="settings_option_resolver_balancing_strategy_3">۳ - کمترین افت پکت</string>
+    <string name="settings_option_resolver_balancing_strategy_3">۳ - کمترین packet loss</string>
     <string name="settings_option_resolver_balancing_strategy_4">۴ - کمترین تاخیر</string>
     <string name="settings_option_resolver_balancing_strategy_5">۵ - امتیاز ترکیبی</string>
-    <string name="settings_option_resolver_balancing_strategy_6">۶ - افت پکت سپس تاخیر</string>
-    <string name="settings_option_resolver_balancing_strategy_7">۷ - تصادفی میان برترین‌های کم‌افت</string>
-    <string name="settings_option_resolver_balancing_strategy_8">۸ - چرخشی میان برترین‌های کم‌افت</string>
+    <string name="settings_option_resolver_balancing_strategy_6">۶ - packet loss سپس تاخیر</string>
+    <string name="settings_option_resolver_balancing_strategy_7">۷ - تصادفی میان برترین‌های با کمترین packet loss</string>
+    <string name="settings_option_resolver_balancing_strategy_8">۸ - چرخشی میان برترین‌های با کمترین packet loss</string>
     <string name="settings_option_log_level_debug">DEBUG</string>
     <string name="settings_option_log_level_info">INFO</string>
     <string name="settings_option_log_level_warn">WARN</string>
     <string name="settings_option_log_level_error">ERROR</string>
     <string name="settings_helper_domains">دامنه‌ها جدا شده با کاما</string>
     <string name="settings_helper_encryption_key">کلید مشترک با سرور</string>
-    <string name="settings_helper_data_encryption_method">۰=بدون رمزنگاری، ۱=XOR، ۲=ChaCha20، ۳-۵=AES-GCM</string>
+    <string name="settings_helper_data_encryption_method">0=None, 1=XOR, 2=ChaCha20, 3-5=AES-GCM</string>
     <string name="settings_helper_protocol_type">پروتکل پروکسی محلی کلاینت</string>
     <string name="settings_helper_listen_ip">IP محلی اتصال</string>
     <string name="settings_helper_listen_port">پورت پروکسی محلی</string>
@@ -255,8 +255,8 @@
     <string name="settings_helper_auto_disable_timeout_servers">غیرفعال‌سازی خودکار ریزالورهای دارای تایم‌اوت</string>
     <string name="settings_helper_auto_disable_timeout_window_seconds">پنجره زمانی تشخیص تایم‌اوت به ثانیه</string>
     <string name="settings_helper_base_encode_data">استفاده از داده‌های کدگذاری‌شده پایه</string>
-    <string name="settings_helper_upload_compression_type">۰=خاموش، ۱=Snappy، ۲=LZ4، ۳=ZSTD، ۴=Gzip، ۵=Zlib</string>
-    <string name="settings_helper_download_compression_type">۰=خاموش، ۱=Snappy، ۲=LZ4، ۳=ZSTD، ۴=Gzip، ۵=Zlib</string>
+    <string name="settings_helper_upload_compression_type">0=Off, 1=Snappy, 2=LZ4, 3=ZSTD, 4=Gzip, 5=Zlib</string>
+    <string name="settings_helper_download_compression_type">0=Off, 1=Snappy, 2=LZ4, 3=ZSTD, 4=Gzip, 5=Zlib</string>
     <string name="settings_helper_compression_min_size">حداقل بایت برای فشرده‌سازی</string>
     <string name="settings_helper_auto_remove_low_mtu_servers">حذف خودکار سرورهای با MTU پایین</string>
     <string name="settings_helper_min_upload_mtu">حداقل بایت MTU آپلود</string>
@@ -287,13 +287,13 @@
     <string name="settings_helper_session_init_retry_max_seconds">حداکثر زمان تلاش مجدد راه‌اندازی نشست به ثانیه</string>
     <string name="settings_helper_session_init_busy_retry_interval_seconds">فاصله زمانی تلاش مجدد در صورت مشغول بودن سرور به ثانیه</string>
     <string name="settings_helper_session_init_racing_count">تعداد تلاش‌های همزمان راه‌اندازی نشست</string>
-    <string name="settings_helper_ping_aggressive_interval_seconds">فاصله زمانی پینگ تهاجمی به ثانیه</string>
-    <string name="settings_helper_ping_lazy_interval_seconds">فاصله زمانی پینگ معمولی به ثانیه</string>
-    <string name="settings_helper_ping_cooldown_interval_seconds">زمان آرامش پینگ به ثانیه</string>
-    <string name="settings_helper_ping_cold_interval_seconds">فاصله زمانی پینگ سرد به ثانیه</string>
-    <string name="settings_helper_ping_warm_threshold_seconds">آستانه پینگ گرم به ثانیه</string>
-    <string name="settings_helper_ping_cool_threshold_seconds">آستانه پینگ خنک به ثانیه</string>
-    <string name="settings_helper_ping_cold_threshold_seconds">آستانه پینگ سرد به ثانیه</string>
+    <string name="settings_helper_ping_aggressive_interval_seconds">فاصله زمانی ping aggressive به ثانیه</string>
+    <string name="settings_helper_ping_lazy_interval_seconds">فاصله زمانی lazy ping به ثانیه</string>
+    <string name="settings_helper_ping_cooldown_interval_seconds">زمان cooldown ping به ثانیه</string>
+    <string name="settings_helper_ping_cold_interval_seconds">فاصله زمانی ping cold به ثانیه</string>
+    <string name="settings_helper_ping_warm_threshold_seconds">آستانه ping warm به ثانیه</string>
+    <string name="settings_helper_ping_cool_threshold_seconds">آستانه ping cool به ثانیه</string>
+    <string name="settings_helper_ping_cold_threshold_seconds">آستانه ping cold به ثانیه</string>
     <string name="settings_helper_arq_window_size">اندازه پنجره دریافت ARQ</string>
     <string name="settings_helper_max_packets_per_batch">حداکثر بسته‌ها در هر دسته پکت</string>
     <string name="settings_helper_arq_initial_rto_seconds">مقدار اولیه RTO به ثانیه</string>

@@ -35,6 +35,7 @@ import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.ExposedDropdownMenuBox
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
+import androidx.compose.material3.LocalTextStyle
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
@@ -59,6 +60,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
+import androidx.compose.ui.text.style.TextDirection
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
@@ -601,7 +603,13 @@ private fun ConfigFieldCard(
                             onValueChange = {},
                             readOnly = true,
                             label = { Text(field.key) },
-                            supportingText = { Text(stringResource(field.helperRes)) },
+                            textStyle = LocalTextStyle.current.copy(textDirection = TextDirection.Content),
+                            supportingText = {
+                                Text(
+                                    text = stringResource(field.helperRes),
+                                    style = LocalTextStyle.current.copy(textDirection = TextDirection.Content)
+                                )
+                            },
                             trailingIcon = {
                                 Icon(
                                     imageVector = Icons.Filled.ArrowDropDown,
@@ -618,7 +626,12 @@ private fun ConfigFieldCard(
                         ) {
                             field.options.forEach { option ->
                                 DropdownMenuItem(
-                                    text = { Text(stringResource(option.labelRes)) },
+                                    text = {
+                                        Text(
+                                            text = stringResource(option.labelRes),
+                                            style = LocalTextStyle.current.copy(textDirection = TextDirection.Content)
+                                        )
+                                    },
                                     onClick = {
                                         onChange(option.value)
                                         expanded = false
@@ -634,7 +647,12 @@ private fun ConfigFieldCard(
                         value = value,
                         onValueChange = onChange,
                         label = { Text(field.key) },
-                        supportingText = { Text(stringResource(field.helperRes)) },
+                        supportingText = {
+                            Text(
+                                text = stringResource(field.helperRes),
+                                style = LocalTextStyle.current.copy(textDirection = TextDirection.Content)
+                            )
+                        },
                         modifier = Modifier.fillMaxWidth(),
                         keyboardOptions = KeyboardOptions(keyboardType = field.keyboardType)
                     )
