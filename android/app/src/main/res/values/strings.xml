@@ -98,22 +98,47 @@
     <string name="home_disconnect">Disconnect</string>
     <string name="home_howto_title">How to Use</string>
     <string name="home_howto_subtitle">Quick setup and usage guide.</string>
-    <string name="home_howto_body">MasterDnsVPN is an advanced DNS tunneling VPN designed to bypass strict network censorship. It tunnels your traffic inside standard DNS queries (port 53) to keep you connected even during severe shutdowns.
+    <string name="home_howto_body">What is MasterDnsVPN?
+MasterDnsVPN is an advanced DNS tunneling VPN protocol designed to encapsulate and encrypt your Internet traffic inside standard DNS queries and responses (UDP port 53). It enables stable and censorship-resistant connectivity even during severe Internet shutdowns, blackouts, or heavily filtered networks where conventional protocols are blocked, because networks must permit DNS traffic to operate.
 
-Note: To set up your own custom configuration, you must purchase a VPS and a domain name first.
+Key Highlights:
+• Multipath transmission for enhanced speed, diversity, and reliability.
+• Packet Duplication to prevent connection drops across unstable or lossy links.
+• Smart Resolver Load Balancing based on live latency and packet loss metrics.
+• Low-overhead custom ARQ mechanism for fast and efficient packet loss recovery.
 
-To ensure high resilience, the core uses:
-- Multipath transmission &amp; packet duplication.
-- Load balancing across multiple DNS resolvers.
-- Low-overhead ARQ to handle data loss.
+Prerequisites:
+You have two options:
+1) Using a ready-made configuration: If your server administrator or a peer provided connection details, skip directly to the in-app setup.
+2) Hosting your own server:
+  • You need a Linux VPS and a Domain name.
+  • In your domain DNS manager (e.g., Cloudflare in DNS-Only mode):
+    - Create an A record: ns.example.com pointing to your VPS IP.
+    - Create an NS record: v.example.com pointing to ns.example.com.
+  • Run the automated installer script on your Linux server:
+    bash &lt;(curl -Ls https://raw.githubusercontent.com/masterking32/MasterDnsVPN/main/server_linux_install.sh)
+  • Securely save the generated ENCRYPTION_KEY.
 
-Quick setup:
-1) Go to the Profiles tab.
-2) Create a new profile or import an existing one.
-3) Fill in the DOMAINS and ENCRYPTION_KEY fields (from your server configuration).
-4) Add DNS resolvers (IP or IP:PORT, one per line).
-5) Save and select the profile.
-6) Go back to the Home tab and tap Connect.</string>
+Step-by-Step Setup Guide:
+1. Navigate to the "Profiles" tab in the bottom bar.
+2. Tap "Create Profile" (or use import if you have an encoded config).
+3. Assign a recognizable name to your profile.
+4. In "DOMAINS", enter your tunnel subdomain (e.g., v.example.com).
+5. In "ENCRYPTION_KEY", enter the exact key provided by your server.
+6. Select the Data Encryption Method (must match your server configuration; e.g., 1=XOR for lightweight high speed, or ChaCha20/AES for higher security).
+7. In "DNS Resolvers", enter the list of working DNS resolvers (one IP or IP:PORT per line, e.g., 8.8.8.8, 1.1.1.1:53, or your local ISP resolvers).
+8. Save and select the profile.
+9. Return to the "Home" tab and tap the large Connect button. Grant Android VPN permission when prompted.
+
+Additional Features &amp; Settings:
+• Per-App VPN (Split Tunneling): Choose specifically which apps route through the tunnel and exclude local or banking apps.
+• Built-in SOCKS5 Proxy: The app automatically runs a local SOCKS5 proxy at 127.0.0.1:18000, allowing standalone apps to connect directly.
+
+Important Tips &amp; Troubleshooting:
+• Resolver Quality Matters: Tunnel speed and latency directly depend on the resolvers used. Add multiple low-latency, responsive resolvers.
+• Total Blackout Mode: During international internet blackouts, use local ISP-operated DNS resolvers that remain reachable inside the intranet.
+• Short Domain Names: Shorter subdomains leave more payload room in DNS packets, maximizing throughput.
+• Troubleshooting: If connection fails, check that UDP port 53 is open on the server, ensure no conflict with systemd-resolved, confirm key accuracy, and inspect the "Logs" tab.</string>
     <string name="home_status_session">SESSION</string>
     <string name="home_status_dns_scan">DNS Scan</string>
     <string name="home_status_valid">Valid:</string>

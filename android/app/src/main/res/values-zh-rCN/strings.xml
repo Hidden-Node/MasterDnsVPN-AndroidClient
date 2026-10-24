@@ -88,22 +88,47 @@
     <string name="home_disconnect">断开连接</string>
     <string name="home_howto_title">使用指南</string>
     <string name="home_howto_subtitle">快速设置和使用指南。</string>
-    <string name="home_howto_body">MasterDnsVPN 是一款先进的基于 DNS 隧道的 VPN，旨在绕过严格的网络审查。它将您的流量封装在标准 DNS 查询（端口 53）中，以确保即使在严重断网期间也能保持连接。
+    <string name="home_howto_body">什么是 MasterDnsVPN？
+MasterDnsVPN 是一款基于高级 DNS 隧道技术的 VPN 协议，它将您的互联网流量封装并加密在标准的 DNS 查询与响应（UDP 53 端口）中。该技术专为对抗严苛的网络审查、封锁和区域性断网环境而设计。即便在常规网络协议被全面切断的情况下，只要基础网络依然允许 DNS 查询通过，它就能为您维持稳定可靠的全球连接。
 
-注意：如果您打算搭建自己的自定义配置，需要先购买 VPS 和域名。
+核心技术亮点：
+• 多路径传输（Multipath）：大幅提升连接吞吐量、多样性与稳定性。
+• 数据包复制（Packet Duplication）：在高丢包与恶劣网络环境下有效防止掉线。
+• 智能解析器负载均衡：根据延迟与丢包率实时优选最佳的 DNS 解析器。
+• 轻量级 ARQ 机制：以极低的协议开销快速恢复丢失的数据包。
 
-为了确保高可用性，核心采用了以下技术：
-- 多路径传输和数据包复制（Packet Duplication）。
-- 跨多个 DNS 解析器的负载均衡。
-- 低开销的 ARQ 机制处理丢包。
+准备工作：
+您有两种使用途径：
+1）使用现成配置：若服务管理员已向您提供连接参数，可直接进入应用配置步骤。
+2）自建专属服务器：
+  • 准备一台 Linux VPS 和一个域名。
+  • 在域名 DNS 管理后台（如 Cloudflare，需设为仅 DNS 模式 / 灰云）：
+    - 添加一条 A 记录：ns.example.com 指向您的 VPS IP。
+    - 添加一条 NS 记录：v.example.com 指向 ns.example.com。
+  • 在 Linux 服务器终端运行一键安装脚本：
+    bash &lt;(curl -Ls https://raw.githubusercontent.com/masterking32/MasterDnsVPN/main/server_linux_install.sh)
+  • 妥善保存安装完成后输出的加密密钥（ENCRYPTION_KEY）。
 
-快速设置：
-1) 进入“配置文件”标签页。
-2) 创建新配置文件或导入已有配置文件。
-3) 填写 DOMAINS 和 ENCRYPTION_KEY 字段（根据您的服务器配置）。
-4) 添加 DNS 解析器（IP 或 IP:PORT，每行一个）。
-5) 保存并选择该配置文件。
-6) 返回主界面并点击“连接”。</string>
+详细配置使用步骤：
+1. 打开应用底部导航栏的“配置文件”标签页。
+2. 点击“创建配置文件”（或选择导入配置）。
+3. 为配置文件输入一个便于识别的名称。
+4. 在“DOMAINS”字段中填入您的隧道子域名（例如 v.example.com）。
+5. 在“ENCRYPTION_KEY”字段中输入与服务器完全一致的密钥。
+6. 选择数据加密方式（必须与服务器保持一致；例如 1=XOR 具有极低开销和极高速度，或选择 ChaCha20/AES 以获得更高的安全性）。
+7. 在“DNS Resolvers”区域填入有效的 DNS 解析器列表（每行一个 IP 或 IP:PORT，例如 8.8.8.8、1.1.1.1:53 或当地运营商的 DNS）。
+8. 保存并选中该配置文件。
+9. 返回“主页”标签页，点击中央的连接大按钮。在系统弹出 VPN 权限申请时点击允许。
+
+高级功能与设置：
+• 分流设置（分应用代理）：自由选择哪些应用走代理（如浏览器、社交软件），并排除银行等本地应用。
+• 内置 SOCKS5 代理：客户端启动后会在 127.0.0.1:18000 自动开启本地 SOCKS5 代理，供第三方应用直接调用。
+
+使用技巧与故障排除：
+• 解析器优选：隧道的速度与稳定性直接取决于所选 DNS 解析器的响应质量，建议配置多个低延迟、高可用的解析器。
+• 严苛断网应对：当国际网络受限时，优先选用本地运营商内部依然连通的 DNS 解析器。
+• 域名长度：子域名越短，单个 DNS 数据包中可容纳的实际有效载荷越大，传输效率越高。
+• 无法连接时排查：请检查服务器 UDP 53 端口是否放行、是否存在与 systemd-resolved 的端口冲突、密钥是否输入正确，并前往“日志”标签页查看具体报错信息。</string>
     <string name="home_status_session">会话</string>
     <string name="home_status_dns_scan">DNS 扫描</string>
     <string name="home_status_valid">有效:</string>
