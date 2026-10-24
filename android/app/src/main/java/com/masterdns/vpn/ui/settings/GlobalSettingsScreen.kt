@@ -29,6 +29,7 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ArrowDropDown
+import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.KeyboardArrowDown
 import androidx.compose.material.icons.filled.KeyboardArrowUp
 import androidx.compose.material.icons.filled.Language
@@ -95,6 +96,7 @@ import kotlinx.coroutines.launch
 
 private data class LanguageOption(
     val tag: String?,
+    @StringRes val labelRes: Int,
     val nativeName: String
 )
 
@@ -102,11 +104,11 @@ private data class LanguageOption(
 private fun LanguageCard() {
     val current = AppCompatDelegate.getApplicationLocales().toLanguageTags().ifBlank { null }
     val options = listOf(
-        LanguageOption(null, stringResource(R.string.language_system)),
-        LanguageOption("en", "English"),
-        LanguageOption("fa", "فارسی"),
-        LanguageOption("zh-CN", "简体中文"),
-        LanguageOption("ru", "Русский")
+        LanguageOption(null, R.string.language_system, stringResource(R.string.language_system)),
+        LanguageOption("en", R.string.language_english, "English"),
+        LanguageOption("fa", R.string.language_persian, "فارسی"),
+        LanguageOption("zh-CN", R.string.language_chinese, "简体中文"),
+        LanguageOption("ru", R.string.language_russian, "Русский")
     )
     val selectedOption = options.firstOrNull { option ->
         when (option.tag) {
@@ -186,11 +188,11 @@ private fun LanguageCard() {
                                 modifier = Modifier.weight(1f)
                             )
                             if (isSelected) {
-                                Text(
-                                    text = "✓",
-                                    color = MdvColor.Primary,
-                                    fontWeight = FontWeight.Bold,
-                                    style = MaterialTheme.typography.bodyMedium
+                                Icon(
+                                    imageVector = Icons.Filled.Check,
+                                    contentDescription = stringResource(option.labelRes),
+                                    tint = MdvColor.Primary,
+                                    modifier = Modifier.size(20.dp)
                                 )
                             }
                         }

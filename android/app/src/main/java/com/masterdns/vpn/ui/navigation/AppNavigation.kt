@@ -6,13 +6,10 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
-import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.platform.LocalLayoutDirection
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.only
 import androidx.compose.foundation.layout.safeDrawing
@@ -85,49 +82,47 @@ fun AppNavigation() {
     Scaffold(
         contentWindowInsets = WindowInsets.safeDrawing.only(WindowInsetsSides.Bottom),
         bottomBar = {
-            CompositionLocalProvider(LocalLayoutDirection provides LayoutDirection.Ltr) {
-                NavigationBar(
-                    containerColor = MdvColor.Background.copy(alpha = 0.95f),
-                    tonalElevation = 0.dp
-                ) {
-                    bottomBarScreens.forEach { screen ->
-                        val selected = currentDestination?.hierarchy?.any { it.route == screen.route } == true
-                        val title = stringResource(screen.titleRes)
-                        NavigationBarItem(
-                            icon = {
-                                Icon(
-                                    icons[screen.route] ?: Icons.Filled.Home,
-                                    contentDescription = title,
-                                    tint = if (selected) MdvColor.PrimaryContainer else MdvColor.Secondary.copy(alpha = 0.65f)
-                                )
-                            },
-                            label = {
-                                Text(
-                                    title,
-                                    style = MaterialTheme.typography.labelSmall.copy(
-                                        fontSize = 11.sp,
-                                        letterSpacing = 0.05.sp
-                                    ),
-                                    maxLines = 1,
-                                    overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis,
-                                    fontWeight = if (selected) FontWeight.Bold else FontWeight.Medium,
-                                    color = if (selected) MdvColor.Primary else MdvColor.Secondary.copy(alpha = 0.65f)
-                                )
-                            },
-                            selected = selected,
-                            colors = NavigationBarItemDefaults.colors(
-                                selectedIconColor = MdvColor.PrimaryContainer,
-                                selectedTextColor = MdvColor.Primary,
-                                unselectedIconColor = MdvColor.Secondary.copy(alpha = 0.65f),
-                                unselectedTextColor = MdvColor.Secondary.copy(alpha = 0.65f),
-                                indicatorColor = MdvColor.PrimaryContainer.copy(alpha = 0.12f)
-                            ),
-                            onClick = {
-                                navigateToRoot(screen)
-                            },
-                            alwaysShowLabel = true
-                        )
-                    }
+            NavigationBar(
+                containerColor = MdvColor.Background.copy(alpha = 0.95f),
+                tonalElevation = 0.dp
+            ) {
+                bottomBarScreens.forEach { screen ->
+                    val selected = currentDestination?.hierarchy?.any { it.route == screen.route } == true
+                    val title = stringResource(screen.titleRes)
+                    NavigationBarItem(
+                        icon = {
+                            Icon(
+                                icons[screen.route] ?: Icons.Filled.Home,
+                                contentDescription = title,
+                                tint = if (selected) MdvColor.PrimaryContainer else MdvColor.Secondary.copy(alpha = 0.65f)
+                            )
+                        },
+                        label = {
+                            Text(
+                                title,
+                                style = MaterialTheme.typography.labelSmall.copy(
+                                    fontSize = 11.sp,
+                                    letterSpacing = 0.05.sp
+                                ),
+                                maxLines = 1,
+                                overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis,
+                                fontWeight = if (selected) FontWeight.Bold else FontWeight.Medium,
+                                color = if (selected) MdvColor.Primary else MdvColor.Secondary.copy(alpha = 0.65f)
+                            )
+                        },
+                        selected = selected,
+                        colors = NavigationBarItemDefaults.colors(
+                            selectedIconColor = MdvColor.PrimaryContainer,
+                            selectedTextColor = MdvColor.Primary,
+                            unselectedIconColor = MdvColor.Secondary.copy(alpha = 0.65f),
+                            unselectedTextColor = MdvColor.Secondary.copy(alpha = 0.65f),
+                            indicatorColor = MdvColor.PrimaryContainer.copy(alpha = 0.12f)
+                        ),
+                        onClick = {
+                            navigateToRoot(screen)
+                        },
+                        alwaysShowLabel = true
+                    )
                 }
             }
         }
