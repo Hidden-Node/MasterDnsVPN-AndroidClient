@@ -342,7 +342,7 @@ private fun HowToUseCard(onOpen: () -> Unit) {
 @Composable
 private fun HowToUseDialog(onDismiss: () -> Unit) {
     val screenHeight = LocalConfiguration.current.screenHeightDp.dp
-    val maxDialogContentHeight = (screenHeight * 0.65f)
+    val maxDialogContentHeight = (screenHeight * 0.72f)
 
     AlertDialog(
         onDismissRequest = onDismiss,
@@ -358,7 +358,7 @@ private fun HowToUseDialog(onDismiss: () -> Unit) {
             ) {
                 Text(
                     text = stringResource(R.string.home_howto_body),
-                    style = MaterialTheme.typography.bodyMedium,
+                    style = MaterialTheme.typography.bodyMedium.copy(lineHeight = 22.sp),
                     color = MdvColor.OnSurface,
                     modifier = Modifier.fillMaxWidth(),
                     textAlign = TextAlign.Start
