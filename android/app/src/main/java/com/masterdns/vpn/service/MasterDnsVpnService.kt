@@ -118,6 +118,25 @@ class MasterDnsVpnService : VpnService() {
     private var notificationSpeedEnabled: Boolean = true
     private var screenStateReceiver: BroadcastReceiver? = null
 
+    private val contentPendingIntent by lazy {
+        PendingIntent.getActivity(
+            this, 0,
+            Intent(this, MainActivity::class.java),
+            PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT
+        )
+    }
+
+    private val disconnectPendingIntent by lazy {
+        PendingIntent.getService(
+            this,
+            1,
+            Intent(this, MasterDnsVpnService::class.java).apply {
+                action = ACTION_DISCONNECT
+            },
+            PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT
+        )
+    }
+
     @Inject
     lateinit var profileRepository: ProfileRepository
 
@@ -659,25 +678,7 @@ class MasterDnsVpnService : VpnService() {
         }
     }
 
-    private fun createDisconnectPendingIntent(): PendingIntent {
-        val disconnectIntent = Intent(this, MasterDnsVpnService::class.java).apply {
-            action = ACTION_DISCONNECT
-        }
-        return PendingIntent.getService(
-            this,
-            1,
-            disconnectIntent,
-            PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT
-        )
-    }
-
     private fun buildConnectingNotification(): Notification {
-        val contentPendingIntent = PendingIntent.getActivity(
-            this, 0,
-            Intent(this, MainActivity::class.java),
-            PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT
-        )
-
         return NotificationCompat.Builder(this, App.CHANNEL_ID)
             .setContentTitle(getString(R.string.app_name))
             .setContentText(getString(R.string.notification_connecting))
@@ -691,7 +692,7 @@ class MasterDnsVpnService : VpnService() {
             .addAction(
                 R.drawable.ic_vpn_key,
                 getString(R.string.notification_action_disconnect),
-                createDisconnectPendingIntent()
+                disconnectPendingIntent
             )
             .build()
     }
@@ -705,12 +706,6 @@ class MasterDnsVpnService : VpnService() {
         downTotal: Long,
         duration: Long
     ): Notification {
-        val contentPendingIntent = PendingIntent.getActivity(
-            this, 0,
-            Intent(this, MainActivity::class.java),
-            PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT
-        )
-
         val title = profileName.ifBlank { getString(R.string.app_name) }
         val speedText = getString(
             R.string.notification_speed_summary,
@@ -746,7 +741,7 @@ class MasterDnsVpnService : VpnService() {
             .addAction(
                 R.drawable.ic_vpn_key,
                 getString(R.string.notification_action_disconnect),
-                createDisconnectPendingIntent()
+                disconnectPendingIntent
             )
             .build()
     }
@@ -755,10 +750,11 @@ class MasterDnsVpnService : VpnService() {
         activeProfileName = profileName
         activeStatusText = statusText
         notificationSpeedEnabled = speedEnabled
-        registerScreenStateReceiver()
         if (speedEnabled) {
+            registerScreenStateReceiver()
             startNotificationUpdates(profileName, statusText)
         } else {
+            unregisterScreenStateReceiver()
             stopNotificationUpdates()
             val notification = buildStaticConnectedNotification(profileName, statusText)
             val manager = getSystemService(NOTIFICATION_SERVICE) as NotificationManager
@@ -767,12 +763,6 @@ class MasterDnsVpnService : VpnService() {
     }
 
     private fun buildStaticConnectedNotification(profileName: String, statusText: String): Notification {
-        val contentPendingIntent = PendingIntent.getActivity(
-            this, 0,
-            Intent(this, MainActivity::class.java),
-            PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT
-        )
-
         return NotificationCompat.Builder(this, App.CHANNEL_ID)
             .setContentTitle(profileName.ifBlank { getString(R.string.app_name) })
             .setContentText(statusText)
@@ -786,7 +776,7 @@ class MasterDnsVpnService : VpnService() {
             .addAction(
                 R.drawable.ic_vpn_key,
                 getString(R.string.notification_action_disconnect),
-                createDisconnectPendingIntent()
+                disconnectPendingIntent
             )
             .build()
     }
@@ -798,17 +788,20 @@ class MasterDnsVpnService : VpnService() {
         notificationJob = serviceScope.launch {
             val manager = getSystemService(NOTIFICATION_SERVICE) as NotificationManager
             var lastZeroSpeed = false
+            var lastDurationMinute = -1L
             while (isActive && !isStopping) {
                 val up = VpnManager.uploadSpeedBps.value
                 val down = VpnManager.downloadSpeedBps.value
                 val upTotal = VpnManager.uploadTotalBytes.value
                 val downTotal = VpnManager.downloadTotalBytes.value
                 val duration = VpnManager.connectedDurationSeconds.value
+                val currentMinute = duration / 60L
 
                 val isZeroSpeed = (up == 0L && down == 0L)
-                // Suppress redundant notify() calls when idle (speed is 0 and was already 0 in prior tick),
-                // avoiding unnecessary IPC and SystemUI layout passes.
-                if (!isZeroSpeed || !lastZeroSpeed) {
+                val minuteChanged = (currentMinute != lastDurationMinute)
+
+                // Update if traffic is flowing, if transitioning to/from zero, or once per minute when idle
+                if (!isZeroSpeed || !lastZeroSpeed || minuteChanged) {
                     val notification = buildConnectedNotification(
                         profileName = profileName,
                         statusText = statusText,
@@ -821,6 +814,7 @@ class MasterDnsVpnService : VpnService() {
                     runCatching { manager.notify(NOTIFICATION_ID, notification) }
                 }
                 lastZeroSpeed = isZeroSpeed
+                lastDurationMinute = currentMinute
                 delay(2500L)
             }
         }
