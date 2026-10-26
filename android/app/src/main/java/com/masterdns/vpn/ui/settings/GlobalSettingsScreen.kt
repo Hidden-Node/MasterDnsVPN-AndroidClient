@@ -445,9 +445,14 @@ fun GlobalSettingsScreen(vm: GlobalSettingsViewModel = viewModel()) {
                             }
                         }
 
-                        }
-                        }
+                        RowSwitch(
+                            title = stringResource(R.string.global_notification_speed),
+                            checked = draft.notificationSpeedEnabled,
+                            onChecked = { draft = draft.copy(notificationSpeedEnabled = it) }
+                        )
                     }
+                }
+            }
                     item {
                         Card(colors = CardDefaults.cardColors(containerColor = MdvColor.SurfaceHigh)) {
                             Column(

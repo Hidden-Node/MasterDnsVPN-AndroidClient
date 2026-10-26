@@ -211,6 +211,11 @@
     <string name="notification_connected">VPN متصل است</string>
     <string name="notification_connecting">در حال اتصال…</string>
     <string name="notification_proxy_active">حالت پروکسی روی پورت %1$d فعال است</string>
+    <string name="notification_action_disconnect">قطع اتصال</string>
+    <string name="notification_speed_summary">"↑ %1$s   ↓ %2$s"</string>
+    <string name="notification_detail_traffic">"ترافیک: ↑ %1$s   ↓ %2$s"</string>
+    <string name="notification_detail_duration">مدت زمان: %1$s</string>
+    <string name="global_notification_speed">نمایش سرعت در اعلان</string>
     <string name="common_unknown_error">خطای ناشناخته</string>
     <string name="vpn_go_core_error">خطای هسته Go: %1$s</string>
     <string name="vpn_private_dns_warning">قابلیت Private DNS اندروید (حالت Strict) فعال است و DNS های VPN را دور می‌زند (پاسخ‌های مسموم مانند 10.10.34.35). برای رفع: تنظیمات ← شبکه و اینترنت ← Private DNS ← خاموش (Off)، سپس دوباره متصل شوید.</string>

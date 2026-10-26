@@ -45,6 +45,7 @@ fun parseImportedSettings(raw: String): GlobalSettings? {
         internetSharingSocksPort = int("internetSharingSocksPort", defaults.internetSharingSocksPort),
         internetSharingHttpPort = int("internetSharingHttpPort", defaults.internetSharingHttpPort),
         internetSharingUser = str("internetSharingUser", defaults.internetSharingUser),
-        internetSharingPass = str("internetSharingPass", defaults.internetSharingPass)
+        internetSharingPass = str("internetSharingPass", defaults.internetSharingPass),
+        notificationSpeedEnabled = bool("notificationSpeedEnabled", defaults.notificationSpeedEnabled)
     )
 }

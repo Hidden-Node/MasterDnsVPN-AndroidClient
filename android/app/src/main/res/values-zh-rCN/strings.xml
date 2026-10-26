@@ -211,6 +211,11 @@ MasterDnsVPN 是一款基于高级 DNS 隧道技术的 VPN 协议，它将您的
     <string name="notification_connected">VPN 已连接</string>
     <string name="notification_connecting">正在连接…</string>
     <string name="notification_proxy_active">代理模式在端口 %1$d 上运行</string>
+    <string name="notification_action_disconnect">断开连接</string>
+    <string name="notification_speed_summary">"↑ %1$s   ↓ %2$s"</string>
+    <string name="notification_detail_traffic">"流量: ↑ %1$s   ↓ %2$s"</string>
+    <string name="notification_detail_duration">连接时长: %1$s</string>
+    <string name="global_notification_speed">通知栏显示网速</string>
     <string name="common_unknown_error">未知错误</string>
     <string name="vpn_go_core_error">Go 核心错误：%1$s</string>
     <string name="vpn_private_dns_warning">Android 私有 DNS（严格模式）处于活动状态，将绕过 VPN DNS（导致类似 10.10.34.35 的污染响应）。修复方法：设置 → 网络和互联网 → 私有 DNS → 关闭，然后重新连接。</string>

@@ -221,6 +221,11 @@ Important Tips &amp; Troubleshooting:
     <string name="notification_connected">VPN is connected</string>
     <string name="notification_connecting">Connecting…</string>
     <string name="notification_proxy_active">Proxy mode active on port %1$d</string>
+    <string name="notification_action_disconnect">Disconnect</string>
+    <string name="notification_speed_summary">"↑ %1$s   ↓ %2$s"</string>
+    <string name="notification_detail_traffic">"Traffic: ↑ %1$s   ↓ %2$s"</string>
+    <string name="notification_detail_duration">Duration: %1$s</string>
+    <string name="global_notification_speed">Show speed in notification</string>
     <string name="common_unknown_error">Unknown error</string>
     <string name="vpn_go_core_error">Go core error: %1$s</string>
     <string name="vpn_private_dns_warning">Android Private DNS (Strict mode) is active and will bypass VPN DNS (poisoned answers like 10.10.34.35). To fix: Settings → Network &amp; Internet → Private DNS → Off, then reconnect.</string>

@@ -32,6 +32,7 @@ import com.masterdns.vpn.ui.theme.ConnectingAmber
 import com.masterdns.vpn.ui.theme.DisconnectedRed
 import com.masterdns.vpn.ui.theme.MdvColor
 import com.masterdns.vpn.ui.theme.MdvSpace
+import com.masterdns.vpn.util.TrafficFormatters
 import com.masterdns.vpn.util.VpnManager
 
 @Composable
@@ -394,36 +395,6 @@ fun MdvErrorCard(msg: String) {
     }
 }
 
-private fun formatSpeed(bps: Long): String {
-    val kb = 1024.0
-    val mb = kb * 1024.0
-    return when {
-        bps >= mb -> String.format("%.2f MB/s", bps / mb)
-        bps >= kb -> String.format("%.1f KB/s", bps / kb)
-        else -> "${bps} B/s"
-    }
-}
-
-private fun formatBytes(bytes: Long): String {
-    val kb = 1024.0
-    val mb = kb * 1024.0
-    val gb = mb * 1024.0
-    return when {
-        bytes >= gb -> String.format("%.2f GB", bytes / gb)
-        bytes >= mb -> String.format("%.2f MB", bytes / mb)
-        bytes >= kb -> String.format("%.1f KB", bytes / kb)
-        else -> "$bytes B"
-    }
-}
-
-private fun formatDuration(seconds: Long): String {
-    val safeSeconds = seconds.coerceAtLeast(0L)
-    val hours = safeSeconds / 3600L
-    val minutes = (safeSeconds % 3600L) / 60L
-    val secs = safeSeconds % 60L
-    return if (hours > 0) {
-        "%d:%02d:%02d".format(hours, minutes, secs)
-    } else {
-        "%02d:%02d".format(minutes, secs)
-    }
-}
+private fun formatSpeed(bps: Long): String = TrafficFormatters.formatSpeed(bps)
+private fun formatBytes(bytes: Long): String = TrafficFormatters.formatBytes(bytes)
+private fun formatDuration(seconds: Long): String = TrafficFormatters.formatDuration(seconds)
