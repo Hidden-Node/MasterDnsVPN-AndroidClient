@@ -1,8 +1,12 @@
 package com.masterdns.vpn.service
 
 import android.app.Notification
+import android.app.NotificationManager
 import android.app.PendingIntent
+import android.content.BroadcastReceiver
+import android.content.Context
 import android.content.Intent
+import android.content.IntentFilter
 import android.net.VpnService
 import android.net.Uri
 import android.os.Build
@@ -17,6 +21,7 @@ import com.masterdns.vpn.R
 import com.masterdns.vpn.data.repository.ProfileRepository
 import com.masterdns.vpn.util.ConfigGenerator
 import com.masterdns.vpn.util.GlobalSettingsStore
+import com.masterdns.vpn.util.TrafficFormatters
 import com.masterdns.vpn.util.VpnManager
 import com.masterdns.vpn.util.parseAdvancedJson
 import dagger.hilt.android.AndroidEntryPoint
@@ -104,6 +109,11 @@ class MasterDnsVpnService : VpnService() {
     private var sessionBusyWarningShown = false
     @Volatile
     private var activeLocalSocksPort: Int = DEFAULT_SOCKS_PORT
+    private var notificationJob: Job? = null
+    private var activeProfileName: String = ""
+    private var activeStatusText: String = ""
+    private var notificationSpeedEnabled: Boolean = true
+    private var screenStateReceiver: BroadcastReceiver? = null
 
     @Inject
     lateinit var profileRepository: ProfileRepository
@@ -135,7 +145,7 @@ class MasterDnsVpnService : VpnService() {
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         when (intent?.action) {
             ACTION_CONNECT -> {
-                startForeground(NOTIFICATION_ID, buildNotification(getString(R.string.notification_connecting)))
+                startForeground(NOTIFICATION_ID, buildConnectingNotification())
                 val profileId = intent.getLongExtra(EXTRA_PROFILE_ID, -1)
                 if (profileId > 0) {
                     startVpn(profileId)
@@ -155,6 +165,8 @@ class MasterDnsVpnService : VpnService() {
                 }
             }
             ACTION_DISCONNECT -> {
+                VpnManager.updateState(VpnManager.VpnState.DISCONNECTING)
+                VpnManager.stopTrafficMonitor()
                 stopVpn()
             }
         }
@@ -220,9 +232,17 @@ class MasterDnsVpnService : VpnService() {
                     VpnManager.updateState(VpnManager.VpnState.CONNECTED)
                     releaseWakeLock()
                     VpnManager.startTrafficMonitor()
-                    val notification = buildNotification(getString(R.string.notification_proxy_active, inputs.socksPort))
-                    val manager = getSystemService(NOTIFICATION_SERVICE) as android.app.NotificationManager
-                    manager.notify(NOTIFICATION_ID, notification)
+                    activeProfileName = inputs.profile.name
+                    activeStatusText = getString(R.string.notification_proxy_active, inputs.socksPort)
+                    notificationSpeedEnabled = inputs.globalSettings.notificationSpeedEnabled
+                    registerScreenStateReceiver()
+                    if (notificationSpeedEnabled) {
+                        startNotificationUpdates(activeProfileName, activeStatusText)
+                    } else {
+                        val notification = buildStaticConnectedNotification(activeProfileName, activeStatusText)
+                        val manager = getSystemService(NOTIFICATION_SERVICE) as NotificationManager
+                        manager.notify(NOTIFICATION_ID, notification)
+                    }
                     return@launch
                 }
 
@@ -234,9 +254,17 @@ class MasterDnsVpnService : VpnService() {
                 VpnManager.startTrafficMonitor()
                 VpnManager.appendLog("VPN connected successfully!")
 
-                val notification = buildNotification(getString(R.string.notification_connected))
-                val manager = getSystemService(NOTIFICATION_SERVICE) as android.app.NotificationManager
-                manager.notify(NOTIFICATION_ID, notification)
+                activeProfileName = inputs.profile.name
+                activeStatusText = getString(R.string.notification_connected)
+                notificationSpeedEnabled = inputs.globalSettings.notificationSpeedEnabled
+                registerScreenStateReceiver()
+                if (notificationSpeedEnabled) {
+                    startNotificationUpdates(activeProfileName, activeStatusText)
+                } else {
+                    val notification = buildStaticConnectedNotification(activeProfileName, activeStatusText)
+                    val manager = getSystemService(NOTIFICATION_SERVICE) as NotificationManager
+                    manager.notify(NOTIFICATION_ID, notification)
+                }
             } catch (e: CancellationException) {
                 VpnManager.appendLog("Connection canceled")
                 throw e
@@ -566,6 +594,9 @@ class MasterDnsVpnService : VpnService() {
                 }
                 releaseWakeLock()
 
+                stopNotificationUpdates()
+                unregisterScreenStateReceiver()
+
                 runCatching {
                     if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) {
                         stopForeground(STOP_FOREGROUND_REMOVE)
@@ -601,8 +632,53 @@ class MasterDnsVpnService : VpnService() {
         }
     }
 
-    private fun buildNotification(text: String): Notification {
-        val pendingIntent = PendingIntent.getActivity(
+    private fun registerScreenStateReceiver() {
+        if (screenStateReceiver != null) return
+        val filter = IntentFilter().apply {
+            addAction(Intent.ACTION_SCREEN_OFF)
+            addAction(Intent.ACTION_SCREEN_ON)
+        }
+        val receiver = object : BroadcastReceiver() {
+            override fun onReceive(context: Context?, intent: Intent?) {
+                when (intent?.action) {
+                    Intent.ACTION_SCREEN_OFF -> {
+                        // Suspend ticker while screen is off to permit deep sleep / Doze
+                        stopNotificationUpdates()
+                    }
+                    Intent.ACTION_SCREEN_ON -> {
+                        // Resume ticker if VPN is still active, not stopping, and user enabled speed notifications
+                        if (!isStopping && VpnManager.state.value == VpnManager.VpnState.CONNECTED && notificationSpeedEnabled) {
+                            startNotificationUpdates(activeProfileName, activeStatusText)
+                        }
+                    }
+                }
+            }
+        }
+        screenStateReceiver = receiver
+        runCatching { registerReceiver(receiver, filter) }
+    }
+
+    private fun unregisterScreenStateReceiver() {
+        screenStateReceiver?.let {
+            runCatching { unregisterReceiver(it) }
+            screenStateReceiver = null
+        }
+    }
+
+    private fun createDisconnectPendingIntent(): PendingIntent {
+        val disconnectIntent = Intent(this, MasterDnsVpnService::class.java).apply {
+            action = ACTION_DISCONNECT
+        }
+        return PendingIntent.getService(
+            this,
+            1,
+            disconnectIntent,
+            PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT
+        )
+    }
+
+    private fun buildConnectingNotification(): Notification {
+        val contentPendingIntent = PendingIntent.getActivity(
             this, 0,
             Intent(this, MainActivity::class.java),
             PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT
@@ -610,14 +686,146 @@ class MasterDnsVpnService : VpnService() {
 
         return NotificationCompat.Builder(this, App.CHANNEL_ID)
             .setContentTitle(getString(R.string.app_name))
-            .setContentText(text)
+            .setContentText(getString(R.string.notification_connecting))
             .setSmallIcon(R.drawable.ic_vpn_key)
-            .setContentIntent(pendingIntent)
+            .setContentIntent(contentPendingIntent)
             .setOngoing(true)
+            .setShowWhen(false)
+            .setOnlyAlertOnce(true)
+            .setPriority(NotificationCompat.PRIORITY_LOW)
+            .setCategory(NotificationCompat.CATEGORY_SERVICE)
+            .addAction(
+                R.drawable.ic_vpn_key,
+                getString(R.string.notification_action_disconnect),
+                createDisconnectPendingIntent()
+            )
             .build()
     }
 
+    private fun buildConnectedNotification(
+        profileName: String,
+        statusText: String,
+        upBps: Long,
+        downBps: Long,
+        upTotal: Long,
+        downTotal: Long,
+        duration: Long
+    ): Notification {
+        val contentPendingIntent = PendingIntent.getActivity(
+            this, 0,
+            Intent(this, MainActivity::class.java),
+            PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT
+        )
+
+        val title = profileName.ifBlank { getString(R.string.app_name) }
+        val speedText = getString(
+            R.string.notification_speed_summary,
+            TrafficFormatters.formatSpeed(upBps),
+            TrafficFormatters.formatSpeed(downBps)
+        )
+
+        val expandedText = buildString {
+            append(statusText).append("\n")
+            append(speedText).append("\n")
+            append(getString(
+                R.string.notification_detail_traffic,
+                TrafficFormatters.formatBytes(upTotal),
+                TrafficFormatters.formatBytes(downTotal)
+            )).append("\n")
+            append(getString(
+                R.string.notification_detail_duration,
+                TrafficFormatters.formatDuration(duration)
+            ))
+        }
+
+        return NotificationCompat.Builder(this, App.CHANNEL_ID)
+            .setContentTitle(title)
+            .setContentText(speedText)
+            .setStyle(NotificationCompat.BigTextStyle().bigText(expandedText))
+            .setSmallIcon(R.drawable.ic_vpn_key)
+            .setContentIntent(contentPendingIntent)
+            .setOngoing(true)
+            .setShowWhen(false)
+            .setOnlyAlertOnce(true)
+            .setPriority(NotificationCompat.PRIORITY_LOW)
+            .setCategory(NotificationCompat.CATEGORY_SERVICE)
+            .addAction(
+                R.drawable.ic_vpn_key,
+                getString(R.string.notification_action_disconnect),
+                createDisconnectPendingIntent()
+            )
+            .build()
+    }
+
+    private fun buildStaticConnectedNotification(profileName: String, statusText: String): Notification {
+        val contentPendingIntent = PendingIntent.getActivity(
+            this, 0,
+            Intent(this, MainActivity::class.java),
+            PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT
+        )
+
+        return NotificationCompat.Builder(this, App.CHANNEL_ID)
+            .setContentTitle(profileName.ifBlank { getString(R.string.app_name) })
+            .setContentText(statusText)
+            .setSmallIcon(R.drawable.ic_vpn_key)
+            .setContentIntent(contentPendingIntent)
+            .setOngoing(true)
+            .setShowWhen(false)
+            .setOnlyAlertOnce(true)
+            .setPriority(NotificationCompat.PRIORITY_LOW)
+            .setCategory(NotificationCompat.CATEGORY_SERVICE)
+            .addAction(
+                R.drawable.ic_vpn_key,
+                getString(R.string.notification_action_disconnect),
+                createDisconnectPendingIntent()
+            )
+            .build()
+    }
+
+    @Synchronized
+    private fun startNotificationUpdates(profileName: String, statusText: String) {
+        if (isStopping) return
+        stopNotificationUpdates()
+        notificationJob = serviceScope.launch {
+            val manager = getSystemService(NOTIFICATION_SERVICE) as NotificationManager
+            var lastZeroSpeed = false
+            while (isActive && !isStopping) {
+                val up = VpnManager.uploadSpeedBps.value
+                val down = VpnManager.downloadSpeedBps.value
+                val upTotal = VpnManager.uploadTotalBytes.value
+                val downTotal = VpnManager.downloadTotalBytes.value
+                val duration = VpnManager.connectedDurationSeconds.value
+
+                val isZeroSpeed = (up == 0L && down == 0L)
+                // Suppress redundant notify() calls when idle (speed is 0 and was already 0 in prior tick),
+                // avoiding unnecessary IPC and SystemUI layout passes.
+                if (!isZeroSpeed || !lastZeroSpeed) {
+                    val notification = buildConnectedNotification(
+                        profileName = profileName,
+                        statusText = statusText,
+                        upBps = up,
+                        downBps = down,
+                        upTotal = upTotal,
+                        downTotal = downTotal,
+                        duration = duration
+                    )
+                    manager.notify(NOTIFICATION_ID, notification)
+                }
+                lastZeroSpeed = isZeroSpeed
+                delay(2500L)
+            }
+        }
+    }
+
+    @Synchronized
+    private fun stopNotificationUpdates() {
+        notificationJob?.cancel()
+        notificationJob = null
+    }
+
     override fun onDestroy() {
+        stopNotificationUpdates()
+        unregisterScreenStateReceiver()
         // plan 014: let any in-flight stopVpn() finish before cancelling serviceScope.
         val inFlightStop = stopJob
         if (inFlightStop != null && inFlightStop.isActive) {
