@@ -110,8 +110,11 @@ class MasterDnsVpnService : VpnService() {
     @Volatile
     private var activeLocalSocksPort: Int = DEFAULT_SOCKS_PORT
     private var notificationJob: Job? = null
+    @Volatile
     private var activeProfileName: String = ""
+    @Volatile
     private var activeStatusText: String = ""
+    @Volatile
     private var notificationSpeedEnabled: Boolean = true
     private var screenStateReceiver: BroadcastReceiver? = null
 
@@ -165,6 +168,7 @@ class MasterDnsVpnService : VpnService() {
                 }
             }
             ACTION_DISCONNECT -> {
+                stopNotificationUpdates()
                 VpnManager.updateState(VpnManager.VpnState.DISCONNECTING)
                 VpnManager.stopTrafficMonitor()
                 stopVpn()
@@ -233,18 +237,11 @@ class MasterDnsVpnService : VpnService() {
                     VpnManager.updateState(VpnManager.VpnState.CONNECTED)
                     releaseWakeLock()
                     VpnManager.startTrafficMonitor()
-                    activeProfileName = inputs.profile.name
-                    activeStatusText = getString(R.string.notification_proxy_active, inputs.socksPort)
-                    notificationSpeedEnabled = inputs.globalSettings.notificationSpeedEnabled
-                    registerScreenStateReceiver()
-                    if (notificationSpeedEnabled) {
-                        startNotificationUpdates(activeProfileName, activeStatusText)
-                    } else {
-                        stopNotificationUpdates()
-                        val notification = buildStaticConnectedNotification(activeProfileName, activeStatusText)
-                        val manager = getSystemService(NOTIFICATION_SERVICE) as NotificationManager
-                        manager.notify(NOTIFICATION_ID, notification)
-                    }
+                    showConnectedNotification(
+                        profileName = inputs.profile.name,
+                        statusText = getString(R.string.notification_proxy_active, inputs.socksPort),
+                        speedEnabled = inputs.globalSettings.notificationSpeedEnabled
+                    )
                     return@launch
                 }
 
@@ -256,18 +253,11 @@ class MasterDnsVpnService : VpnService() {
                 VpnManager.startTrafficMonitor()
                 VpnManager.appendLog("VPN connected successfully!")
 
-                activeProfileName = inputs.profile.name
-                activeStatusText = getString(R.string.notification_connected)
-                notificationSpeedEnabled = inputs.globalSettings.notificationSpeedEnabled
-                registerScreenStateReceiver()
-                if (notificationSpeedEnabled) {
-                    startNotificationUpdates(activeProfileName, activeStatusText)
-                } else {
-                    stopNotificationUpdates()
-                    val notification = buildStaticConnectedNotification(activeProfileName, activeStatusText)
-                    val manager = getSystemService(NOTIFICATION_SERVICE) as NotificationManager
-                    manager.notify(NOTIFICATION_ID, notification)
-                }
+                showConnectedNotification(
+                    profileName = inputs.profile.name,
+                    statusText = getString(R.string.notification_connected),
+                    speedEnabled = inputs.globalSettings.notificationSpeedEnabled
+                )
             } catch (e: CancellationException) {
                 VpnManager.appendLog("Connection canceled")
                 throw e
@@ -538,6 +528,7 @@ class MasterDnsVpnService : VpnService() {
         val genAtStop = sessionGeneration.get()
         if (isStopping) return
         isStopping = true
+        stopNotificationUpdates()
 
         // plan 014: retain the cleanup Job in stopJob so a process pause/resume
         // can't GC it mid-teardown; onDestroy() joins it before cancelling scope.
@@ -760,6 +751,21 @@ class MasterDnsVpnService : VpnService() {
             .build()
     }
 
+    private fun showConnectedNotification(profileName: String, statusText: String, speedEnabled: Boolean) {
+        activeProfileName = profileName
+        activeStatusText = statusText
+        notificationSpeedEnabled = speedEnabled
+        registerScreenStateReceiver()
+        if (speedEnabled) {
+            startNotificationUpdates(profileName, statusText)
+        } else {
+            stopNotificationUpdates()
+            val notification = buildStaticConnectedNotification(profileName, statusText)
+            val manager = getSystemService(NOTIFICATION_SERVICE) as NotificationManager
+            runCatching { manager.notify(NOTIFICATION_ID, notification) }
+        }
+    }
+
     private fun buildStaticConnectedNotification(profileName: String, statusText: String): Notification {
         val contentPendingIntent = PendingIntent.getActivity(
             this, 0,
@@ -812,7 +818,7 @@ class MasterDnsVpnService : VpnService() {
                         downTotal = downTotal,
                         duration = duration
                     )
-                    manager.notify(NOTIFICATION_ID, notification)
+                    runCatching { manager.notify(NOTIFICATION_ID, notification) }
                 }
                 lastZeroSpeed = isZeroSpeed
                 delay(2500L)
