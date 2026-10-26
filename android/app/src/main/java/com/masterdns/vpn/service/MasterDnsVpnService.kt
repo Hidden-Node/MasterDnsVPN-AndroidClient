@@ -189,6 +189,7 @@ class MasterDnsVpnService : VpnService() {
     private fun startVpn(profileId: Long) {
         sessionGeneration.incrementAndGet()
         connectJob?.cancel()
+        stopNotificationUpdates()
         connectJob = serviceScope.launch {
             try {
                 VpnManager.updateState(VpnManager.VpnState.CONNECTING)
@@ -239,6 +240,7 @@ class MasterDnsVpnService : VpnService() {
                     if (notificationSpeedEnabled) {
                         startNotificationUpdates(activeProfileName, activeStatusText)
                     } else {
+                        stopNotificationUpdates()
                         val notification = buildStaticConnectedNotification(activeProfileName, activeStatusText)
                         val manager = getSystemService(NOTIFICATION_SERVICE) as NotificationManager
                         manager.notify(NOTIFICATION_ID, notification)
@@ -261,6 +263,7 @@ class MasterDnsVpnService : VpnService() {
                 if (notificationSpeedEnabled) {
                     startNotificationUpdates(activeProfileName, activeStatusText)
                 } else {
+                    stopNotificationUpdates()
                     val notification = buildStaticConnectedNotification(activeProfileName, activeStatusText)
                     val manager = getSystemService(NOTIFICATION_SERVICE) as NotificationManager
                     manager.notify(NOTIFICATION_ID, notification)
