@@ -210,6 +210,11 @@ MasterDnsVPN — это передовой протокол VPN на основ�
     <string name="notification_connected">VPN подключен</string>
     <string name="notification_connecting">Подключение…</string>
     <string name="notification_proxy_active">Режим прокси активен на порту %1$d</string>
+    <string name="notification_action_disconnect">Отключить</string>
+    <string name="notification_speed_summary">"↑ %1$s   ↓ %2$s"</string>
+    <string name="notification_detail_traffic">"Трафик: ↑ %1$s   ↓ %2$s"</string>
+    <string name="notification_detail_duration">Длительность: %1$s</string>
+    <string name="global_notification_speed">Показывать скорость в уведомлении</string>
     <string name="common_unknown_error">Неизвестная ошибка</string>
     <string name="vpn_go_core_error">Ошибка ядра Go: %1$s</string>
     <string name="vpn_private_dns_warning">Активен режим Private DNS Android (строгий режим), который обходит DNS VPN (поддельные ответы вроде 10.10.34.35). Для исправления: Настройки → Сеть и интернет → Персональный DNS-сервер → Отключено, затем переподключитесь.</string>
