@@ -1,15 +1,21 @@
 package com.masterdns.vpn.util
 
 import android.content.Context
+import android.util.Log
 import androidx.datastore.preferences.core.Preferences
 import androidx.datastore.preferences.core.booleanPreferencesKey
 import androidx.datastore.preferences.core.edit
 import androidx.datastore.preferences.core.intPreferencesKey
 import androidx.datastore.preferences.core.stringPreferencesKey
 import androidx.datastore.preferences.preferencesDataStore
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.launch
 
 enum class SplitTunnelMode { INCLUDE, EXCLUDE }
 
@@ -26,7 +32,11 @@ data class GlobalSettings(
 )
 
 object GlobalSettingsStore {
+    private const val TAG = "GlobalSettingsStore"
     private val Context.dataStore by preferencesDataStore(name = "global_settings")
+
+    @OptIn(kotlinx.coroutines.ExperimentalCoroutinesApi::class)
+    private val storeScope = CoroutineScope(SupervisorJob() + Dispatchers.IO.limitedParallelism(1))
 
     private val KEY_CONNECTION_MODE = stringPreferencesKey("connection_mode")
     private val KEY_SPLIT_TUNNELING_ENABLED = booleanPreferencesKey("split_tunneling_enabled")
@@ -49,6 +59,12 @@ object GlobalSettingsStore {
     // Shared-port floor: Android non-root processes cannot bind < 1025.
     internal fun coerceSharingPort(port: Int): Int = port.coerceIn(1025, 65535)
 
+    internal fun parseSplitTunnelMode(raw: String?): SplitTunnelMode {
+        if (raw.isNullOrBlank()) return SplitTunnelMode.INCLUDE
+        val normalized = raw.trim().uppercase(java.util.Locale.ROOT)
+        return runCatching { SplitTunnelMode.valueOf(normalized) }.getOrDefault(SplitTunnelMode.INCLUDE)
+    }
+
     suspend fun save(context: Context, settings: GlobalSettings) {
         context.dataStore.edit { prefs ->
             prefs[KEY_CONNECTION_MODE] = settings.connectionMode
@@ -63,11 +79,19 @@ object GlobalSettingsStore {
         }
     }
 
+    fun saveAsync(context: Context, settings: GlobalSettings): Job = storeScope.launch {
+        runCatching {
+            save(context.applicationContext, settings)
+        }.onFailure { e ->
+            Log.e(TAG, "Failed to save settings asynchronously", e)
+        }
+    }
+
     private fun Preferences.toModel(): GlobalSettings {
         return GlobalSettings(
             connectionMode = this[KEY_CONNECTION_MODE] ?: "VPN",
             splitTunnelingEnabled = this[KEY_SPLIT_TUNNELING_ENABLED] ?: false,
-            splitTunnelMode = runCatching { SplitTunnelMode.valueOf(this[KEY_SPLIT_TUNNEL_MODE] ?: "INCLUDE") }.getOrDefault(SplitTunnelMode.INCLUDE),
+            splitTunnelMode = parseSplitTunnelMode(this[KEY_SPLIT_TUNNEL_MODE]),
             splitPackagesCsv = this[KEY_SPLIT_PACKAGES] ?: "",
             internetSharingEnabled = this[KEY_INTERNET_SHARING_ENABLED] ?: false,
             internetSharingSocksPort = this[KEY_INTERNET_SHARING_SOCKS_PORT] ?: 8090,

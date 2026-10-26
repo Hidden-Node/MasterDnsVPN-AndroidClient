@@ -54,9 +54,7 @@ class GlobalSettingsViewModel(app: Application) : AndroidViewModel(app) {
     }
 
     fun save(settings: GlobalSettings) {
-        viewModelScope.launch {
-            GlobalSettingsStore.save(getApplication(), settings)
-        }
+        GlobalSettingsStore.saveAsync(getApplication(), settings)
     }
 
     fun loadInstalledAppsIfNeeded() {
