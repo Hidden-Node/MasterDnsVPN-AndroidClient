@@ -42,6 +42,7 @@ import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.ExposedDropdownMenuBox
+import androidx.compose.material3.FilterChipDefaults
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -56,6 +57,7 @@ import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.MutableState
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.derivedStateOf
@@ -63,6 +65,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.saveable.Saver
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
@@ -240,10 +243,24 @@ fun GlobalSettingsScreen(vm: GlobalSettingsViewModel = viewModel()) {
     val splitPackagesCount by remember(draft.splitPackagesCsv) {
         derivedStateOf { parseCsv(draft.splitPackagesCsv).size }
     }
-    LaunchedEffect(draft) {
+    var lastSaved by remember(current) { mutableStateOf(current) }
+    val flushAutosave = {
         val normalized = normalize(draft)
-        if (normalized != current) {
+        if (normalized != lastSaved) {
+            lastSaved = normalized
             vm.save(normalized)
+        }
+    }
+    val currentFlushAutosave by rememberUpdatedState(flushAutosave)
+
+    LaunchedEffect(draft) {
+        kotlinx.coroutines.delay(300)
+        flushAutosave()
+    }
+
+    DisposableEffect(Unit) {
+        onDispose {
+            currentFlushAutosave()
         }
     }
     Scaffold(
@@ -369,12 +386,32 @@ fun GlobalSettingsScreen(vm: GlobalSettingsViewModel = viewModel()) {
                                     selected = draft.splitTunnelMode == SplitTunnelMode.INCLUDE,
                                     onClick = { draft = draft.copy(splitTunnelMode = SplitTunnelMode.INCLUDE) },
                                     label = stringResource(R.string.split_tunnel_mode_include),
+                                    leadingIcon = if (draft.splitTunnelMode == SplitTunnelMode.INCLUDE) {
+                                        {
+                                            Icon(
+                                                imageVector = Icons.Filled.Check,
+                                                contentDescription = null,
+                                                modifier = Modifier.size(FilterChipDefaults.IconSize),
+                                                tint = MdvColor.Primary
+                                            )
+                                        }
+                                    } else null,
                                     modifier = Modifier.weight(1f)
                                 )
                                 MdvFilterChip(
                                     selected = draft.splitTunnelMode == SplitTunnelMode.EXCLUDE,
                                     onClick = { draft = draft.copy(splitTunnelMode = SplitTunnelMode.EXCLUDE) },
                                     label = stringResource(R.string.split_tunnel_mode_exclude),
+                                    leadingIcon = if (draft.splitTunnelMode == SplitTunnelMode.EXCLUDE) {
+                                        {
+                                            Icon(
+                                                imageVector = Icons.Filled.Check,
+                                                contentDescription = null,
+                                                modifier = Modifier.size(FilterChipDefaults.IconSize),
+                                                tint = MdvColor.Primary
+                                            )
+                                        }
+                                    } else null,
                                     modifier = Modifier.weight(1f)
                                 )
                             }
