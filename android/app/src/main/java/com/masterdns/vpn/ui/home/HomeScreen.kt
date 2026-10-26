@@ -41,6 +41,7 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
@@ -170,38 +171,30 @@ fun HomeScreen(
             }
         }
 
-        if (metrics.isWide) {
-            Column(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .verticalScroll(rememberScrollState())
-                    .padding(horizontal = metrics.horizontalPadding, vertical = metrics.verticalPadding)
-            ) {
-                MdvHomeHeader(onOpenInfo = onOpenInfo)
-                Spacer(modifier = Modifier.height(MdvSpace.S4))
+        val profileDisplayName = selectedProfile?.name ?: stringResource(R.string.home_no_profile_selected)
+        val profileSelectorName = selectedProfile?.name ?: stringResource(R.string.profiles_create)
+
+        Column(
+            modifier = Modifier
+                .fillMaxSize()
+                .verticalScroll(rememberScrollState())
+                .padding(horizontal = metrics.horizontalPadding, vertical = metrics.verticalPadding)
+                .then(if (!metrics.isWide) Modifier.widthIn(max = 640.dp) else Modifier),
+            horizontalAlignment = if (!metrics.isWide) Alignment.CenterHorizontally else Alignment.Start
+        ) {
+            MdvHomeHeader(onOpenInfo = onOpenInfo)
+            Spacer(modifier = Modifier.height(MdvSpace.S4))
+
+            if (metrics.isWide) {
                 Row(modifier = Modifier.fillMaxWidth()) {
                     Column(
                         modifier = Modifier.weight(1f),
                         horizontalAlignment = Alignment.CenterHorizontally
                     ) {
-                        Text(
-                            text = stringResource(R.string.home_network_status),
-                            style = MaterialTheme.typography.labelSmall,
-                            color = MdvColor.OnSurfaceVariant
-                        )
-                        Spacer(modifier = Modifier.height(MdvSpace.S2))
-                        Text(
-                            text = statusText,
-                            style = MaterialTheme.typography.headlineMedium.copy(
-                                fontWeight = FontWeight.Bold,
-                                letterSpacing = 1.sp
-                            ),
-                            color = statusColor
-                        )
-                        Text(
-                            text = selectedProfile?.name ?: stringResource(R.string.home_no_profile_selected),
-                            style = MaterialTheme.typography.bodyLarge,
-                            color = MdvColor.OnSurfaceVariant
+                        HomeStatusSummary(
+                            statusText = statusText,
+                            statusColor = statusColor,
+                            profileName = profileDisplayName
                         )
                         Spacer(modifier = Modifier.height(MdvSpace.S6))
                         MdvConnectionNodeButton(
@@ -215,64 +208,29 @@ fun HomeScreen(
 
                     Spacer(modifier = Modifier.width(MdvSpace.S6))
 
-                    Column(
+                    HomeCardsColumn(
+                        vpnState = vpnState,
+                        proxyHost = proxyHost,
+                        proxyPort = proxyPort,
+                        socksAuthEnabled = socksAuthEnabled,
+                        socksUser = socksUser,
+                        socksPass = socksPass,
+                        isConnecting = isConnecting,
+                        connectionWarning = connectionWarning,
+                        profileName = profileSelectorName,
+                        onNavigateToProfiles = onNavigateToProfiles,
+                        error = error,
+                        onOpenHowToUse = { showHowToUse = true },
                         modifier = Modifier
                             .weight(1f)
                             .widthIn(max = 560.dp)
-                    ) {
-                        MdvConnectionTelemetryCard(
-                            vpnState = vpnState,
-                            proxyHost = proxyHost,
-                            proxyPort = proxyPort,
-                            socksAuthEnabled = socksAuthEnabled,
-                            socksUser = socksUser,
-                            socksPass = socksPass,
-                            isConnecting = isConnecting,
-                            connectionWarning = connectionWarning
-                        )
-                        Spacer(modifier = Modifier.height(MdvSpace.S3))
-                        MdvProfileSelectorCard(
-                            profileName = selectedProfile?.name ?: stringResource(R.string.profiles_create),
-                            onNavigateToProfiles = onNavigateToProfiles
-                        )
-                        error?.let { msg ->
-                            Spacer(modifier = Modifier.height(MdvSpace.S4))
-                            MdvErrorCard(msg = msg)
-                        }
-                        Spacer(modifier = Modifier.height(MdvSpace.S3))
-                        HowToUseCard(onOpen = { showHowToUse = true })
-                    }
+                    )
                 }
-            }
-        } else {
-            Column(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .verticalScroll(rememberScrollState())
-                    .padding(horizontal = metrics.horizontalPadding, vertical = metrics.verticalPadding)
-                    .widthIn(max = 640.dp),
-                horizontalAlignment = Alignment.CenterHorizontally
-            ) {
-                MdvHomeHeader(onOpenInfo = onOpenInfo)
-                Spacer(modifier = Modifier.height(MdvSpace.S4))
-                Text(
-                    text = stringResource(R.string.home_network_status),
-                    style = MaterialTheme.typography.labelSmall,
-                    color = MdvColor.OnSurfaceVariant
-                )
-                Spacer(modifier = Modifier.height(MdvSpace.S2))
-                Text(
-                    text = statusText,
-                    style = MaterialTheme.typography.headlineMedium.copy(
-                        fontWeight = FontWeight.Bold,
-                        letterSpacing = 1.sp
-                    ),
-                    color = statusColor
-                )
-                Text(
-                    text = selectedProfile?.name ?: stringResource(R.string.home_no_profile_selected),
-                    style = MaterialTheme.typography.bodyLarge,
-                    color = MdvColor.OnSurfaceVariant
+            } else {
+                HomeStatusSummary(
+                    statusText = statusText,
+                    statusColor = statusColor,
+                    profileName = profileDisplayName
                 )
                 Spacer(modifier = Modifier.height(MdvSpace.S6))
 
@@ -286,7 +244,7 @@ fun HomeScreen(
 
                 Spacer(modifier = Modifier.height(MdvSpace.S6))
 
-                MdvConnectionTelemetryCard(
+                HomeCardsColumn(
                     vpnState = vpnState,
                     proxyHost = proxyHost,
                     proxyPort = proxyPort,
@@ -294,28 +252,93 @@ fun HomeScreen(
                     socksUser = socksUser,
                     socksPass = socksPass,
                     isConnecting = isConnecting,
-                    connectionWarning = connectionWarning
+                    connectionWarning = connectionWarning,
+                    profileName = profileSelectorName,
+                    onNavigateToProfiles = onNavigateToProfiles,
+                    error = error,
+                    onOpenHowToUse = { showHowToUse = true },
+                    modifier = Modifier.fillMaxWidth()
                 )
-
-                Spacer(modifier = Modifier.height(MdvSpace.S3))
-
-                MdvProfileSelectorCard(
-                    profileName = selectedProfile?.name ?: stringResource(R.string.profiles_create),
-                    onNavigateToProfiles = onNavigateToProfiles
-                )
-
-                error?.let { msg ->
-                    Spacer(modifier = Modifier.height(MdvSpace.S4))
-                    MdvErrorCard(msg = msg)
-                }
-                Spacer(modifier = Modifier.height(MdvSpace.S3))
-                HowToUseCard(onOpen = { showHowToUse = true })
             }
         }
     }
 
     if (showHowToUse) {
         HowToUseDialog(onDismiss = { showHowToUse = false })
+    }
+}
+
+@Composable
+private fun HomeStatusSummary(
+    statusText: String,
+    statusColor: Color,
+    profileName: String,
+    modifier: Modifier = Modifier
+) {
+    Column(
+        modifier = modifier,
+        horizontalAlignment = Alignment.CenterHorizontally
+    ) {
+        Text(
+            text = stringResource(R.string.home_network_status),
+            style = MaterialTheme.typography.labelSmall,
+            color = MdvColor.OnSurfaceVariant
+        )
+        Spacer(modifier = Modifier.height(MdvSpace.S2))
+        Text(
+            text = statusText,
+            style = MaterialTheme.typography.headlineMedium.copy(
+                fontWeight = FontWeight.Bold,
+                letterSpacing = 1.sp
+            ),
+            color = statusColor
+        )
+        Text(
+            text = profileName,
+            style = MaterialTheme.typography.bodyLarge,
+            color = MdvColor.OnSurfaceVariant
+        )
+    }
+}
+
+@Composable
+private fun HomeCardsColumn(
+    vpnState: VpnManager.VpnState,
+    proxyHost: String,
+    proxyPort: Int,
+    socksAuthEnabled: Boolean,
+    socksUser: String,
+    socksPass: String,
+    isConnecting: Boolean,
+    connectionWarning: String?,
+    profileName: String,
+    onNavigateToProfiles: () -> Unit,
+    error: String?,
+    onOpenHowToUse: () -> Unit,
+    modifier: Modifier = Modifier
+) {
+    Column(modifier = modifier) {
+        MdvConnectionTelemetryCard(
+            vpnState = vpnState,
+            proxyHost = proxyHost,
+            proxyPort = proxyPort,
+            socksAuthEnabled = socksAuthEnabled,
+            socksUser = socksUser,
+            socksPass = socksPass,
+            isConnecting = isConnecting,
+            connectionWarning = connectionWarning
+        )
+        Spacer(modifier = Modifier.height(MdvSpace.S3))
+        MdvProfileSelectorCard(
+            profileName = profileName,
+            onNavigateToProfiles = onNavigateToProfiles
+        )
+        error?.let { msg ->
+            Spacer(modifier = Modifier.height(MdvSpace.S4))
+            MdvErrorCard(msg = msg)
+        }
+        Spacer(modifier = Modifier.height(MdvSpace.S3))
+        HowToUseCard(onOpen = onOpenHowToUse)
     }
 }
 
