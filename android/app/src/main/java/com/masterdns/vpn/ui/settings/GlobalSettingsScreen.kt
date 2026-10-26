@@ -243,7 +243,7 @@ fun GlobalSettingsScreen(vm: GlobalSettingsViewModel = viewModel()) {
     val splitPackagesCount by remember(draft.splitPackagesCsv) {
         derivedStateOf { parseCsv(draft.splitPackagesCsv).size }
     }
-    var lastSaved by remember { mutableStateOf(current) }
+    var lastSaved by remember(current) { mutableStateOf(current) }
     val flushAutosave = {
         val normalized = normalize(draft)
         if (normalized != lastSaved) {
@@ -254,6 +254,7 @@ fun GlobalSettingsScreen(vm: GlobalSettingsViewModel = viewModel()) {
     val currentFlushAutosave by rememberUpdatedState(flushAutosave)
 
     LaunchedEffect(draft) {
+        kotlinx.coroutines.delay(300)
         flushAutosave()
     }
 

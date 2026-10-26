@@ -80,9 +80,11 @@ object GlobalSettingsStore {
     }
 
     fun saveAsync(context: Context, settings: GlobalSettings): Job = storeScope.launch {
-        runCatching {
+        try {
             save(context.applicationContext, settings)
-        }.onFailure { e ->
+        } catch (e: kotlinx.coroutines.CancellationException) {
+            throw e
+        } catch (e: Exception) {
             Log.e(TAG, "Failed to save settings asynchronously", e)
         }
     }
