@@ -23,6 +23,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.masterdns.vpn.R
 import com.masterdns.vpn.ui.components.mdv.cards.MdvCardLow
+import com.masterdns.vpn.ui.components.mdv.controls.MdvTopAppBar
 import com.masterdns.vpn.ui.theme.ConnectedGreen
 import com.masterdns.vpn.ui.theme.MdvColor
 import com.masterdns.vpn.ui.theme.MdvSpace
@@ -39,15 +40,8 @@ fun ResolversScreen() {
             .fillMaxSize()
             .background(MdvColor.Background)
     ) {
-        TopAppBar(
-            title = {
-                Text(
-                    text = stringResource(R.string.title_resolvers),
-                    style = MaterialTheme.typography.titleLarge,
-                    fontWeight = FontWeight.Bold,
-                    color = MdvColor.OnSurface
-                )
-            },
+        MdvTopAppBar(
+            title = stringResource(R.string.title_resolvers),
             actions = {
                 IconButton(onClick = {
                     val textToCopy = activeResolvers.joinToString("\n")
@@ -78,12 +72,7 @@ fun ResolversScreen() {
                 }) {
                     Icon(Icons.Filled.Share, contentDescription = stringResource(R.string.resolvers_share_desc), tint = MdvColor.PrimaryContainer)
                 }
-            },
-            colors = TopAppBarDefaults.topAppBarColors(
-                containerColor = MdvColor.Background,
-                titleContentColor = MdvColor.OnSurface,
-                actionIconContentColor = MdvColor.OnSurfaceVariant
-            )
+            }
         )
 
         if (activeResolvers.isEmpty()) {
