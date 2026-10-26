@@ -44,4 +44,10 @@ class GlobalSettingsStoreTest {
             GlobalSettings::class.java
         )
     }
+
+    @Test
+    fun defaultSettings_hasNotificationSpeedEnabledTrue() {
+        val settings = GlobalSettings()
+        assertThat(settings.notificationSpeedEnabled).isTrue()
+    }
 }

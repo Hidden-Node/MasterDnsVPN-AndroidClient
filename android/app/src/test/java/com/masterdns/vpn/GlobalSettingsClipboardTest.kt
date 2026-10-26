@@ -93,4 +93,13 @@ class GlobalSettingsClipboardTest {
         assertThat(parsed).isNotNull()
         assertThat(parsed!!.splitTunnelMode).isEqualTo(SplitTunnelMode.EXCLUDE)
     }
+
+    @Test
+    fun roundTrip_preservesNotificationSpeedEnabledFalse() {
+        val original = GlobalSettings(notificationSpeedEnabled = false)
+        val json = original.toExportJson()
+        val parsed = parseImportedSettings(json)
+        assertThat(parsed).isNotNull()
+        assertThat(parsed!!.notificationSpeedEnabled).isFalse()
+    }
 }

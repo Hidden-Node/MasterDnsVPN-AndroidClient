@@ -28,7 +28,8 @@ data class GlobalSettings(
     val internetSharingSocksPort: Int = 8090,
     val internetSharingHttpPort: Int = 8091,
     val internetSharingUser: String = "",
-    val internetSharingPass: String = ""
+    val internetSharingPass: String = "",
+    val notificationSpeedEnabled: Boolean = true
 )
 
 object GlobalSettingsStore {
@@ -47,6 +48,7 @@ object GlobalSettingsStore {
     private val KEY_INTERNET_SHARING_HTTP_PORT = intPreferencesKey("internet_sharing_http_port_v2")
     private val KEY_INTERNET_SHARING_USER = stringPreferencesKey("internet_sharing_user")
     private val KEY_INTERNET_SHARING_PASS = stringPreferencesKey("internet_sharing_pass")
+    private val KEY_NOTIFICATION_SPEED_ENABLED = booleanPreferencesKey("notification_speed_enabled")
 
     fun observe(context: Context): Flow<GlobalSettings> {
         return context.dataStore.data.map { prefs -> prefs.toModel() }
@@ -76,6 +78,7 @@ object GlobalSettingsStore {
             prefs[KEY_INTERNET_SHARING_HTTP_PORT] = coerceSharingPort(settings.internetSharingHttpPort)
             prefs[KEY_INTERNET_SHARING_USER] = settings.internetSharingUser
             prefs[KEY_INTERNET_SHARING_PASS] = settings.internetSharingPass
+            prefs[KEY_NOTIFICATION_SPEED_ENABLED] = settings.notificationSpeedEnabled
         }
     }
 
@@ -99,7 +102,8 @@ object GlobalSettingsStore {
             internetSharingSocksPort = this[KEY_INTERNET_SHARING_SOCKS_PORT] ?: 8090,
             internetSharingHttpPort = this[KEY_INTERNET_SHARING_HTTP_PORT] ?: 8091,
             internetSharingUser = this[KEY_INTERNET_SHARING_USER] ?: "",
-            internetSharingPass = this[KEY_INTERNET_SHARING_PASS] ?: ""
+            internetSharingPass = this[KEY_INTERNET_SHARING_PASS] ?: "",
+            notificationSpeedEnabled = this[KEY_NOTIFICATION_SPEED_ENABLED] ?: true
         )
     }
 }
