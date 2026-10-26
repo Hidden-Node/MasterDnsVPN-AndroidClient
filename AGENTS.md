@@ -66,8 +66,22 @@ the Kotlin side must add the scaffolding first (see `plans/005-kotlin-test-basel
   StateFlow via `... .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), defaultValue)`.
   Exemplar: `ui/home/HomeViewModel.kt`.
 - **Room entity + DAO**: exemplar `data/local/ProfileEntity.kt` + `ProfileDao.kt`.
-- **Compose screen**: exemplar files in `ui/<feature>/`. Use `MdvColor` from
-  `ui/theme/MdvTokens.kt` for colors — do not hardcode hex.
+- **Compose screens & UI components**:
+  - **Design tokens**: Use `MdvColor`, `MdvSpace`, and `MdvRadius` from
+    `ui/theme/MdvTokens.kt`. Never hardcode raw hex colors (e.g. `Color(0xFF...)`),
+    raw dimensions when tokens exist, or stock Compose colors like `Color.Gray`.
+    Declare missing semantic tokens in `MdvTokens.kt` before consuming them.
+  - **Reusable MDV primitives**: Always use standard components under
+    `ui/components/mdv/` (`MdvTopAppBar`/`MdvBackTopAppBar` for headers,
+    `MdvCardLow`/`MdvCardHigh`/`MdvSectionCard` for cards, `MdvFilterChip`,
+    `MdvPrimaryActionButton`) rather than building raw ad-hoc equivalents.
+  - **Responsive layouts (No code duplication)**: When supporting wide/portrait
+    modes (e.g. `metrics.isWide`), never copy-paste child widget trees across
+    `if-else` branches. Extract sub-composables and keep the single source of truth;
+    responsive branching should only toggle container arrangement (`Row` vs `Column`),
+    alignment, and modifier constraints.
+  - **No speculative/dead code**: Never create components, helpers, or tokens
+    "for the future" without an immediate live call-site. Delete dead UI code proactively.
 - **DI**: Hilt module under `di/`. Exemplar: `di/AppModule.kt`.
 - **Error handling**: prefer `runCatching { }.onFailure { }` for I/O / IPC;
   swallow only with a logged `VpnManager.appendLog(...)` call.
