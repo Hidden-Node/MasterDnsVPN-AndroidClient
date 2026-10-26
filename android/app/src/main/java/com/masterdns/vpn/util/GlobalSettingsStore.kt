@@ -81,7 +81,7 @@ object GlobalSettingsStore {
 
     fun saveAsync(context: Context, settings: GlobalSettings): Job = storeScope.launch {
         try {
-            save(context.applicationContext, settings)
+            save(context.applicationContext ?: context, settings)
         } catch (e: kotlinx.coroutines.CancellationException) {
             throw e
         } catch (e: Exception) {
