@@ -756,7 +756,23 @@ class MasterDnsVpnService : VpnService() {
         notificationSpeedEnabled = speedEnabled
         if (speedEnabled) {
             registerScreenStateReceiver()
-            startNotificationUpdates(profileName, statusText)
+            val isInteractive = (getSystemService(Context.POWER_SERVICE) as? PowerManager)?.isInteractive ?: true
+            if (isInteractive) {
+                startNotificationUpdates(profileName, statusText)
+            } else {
+                // Screen is already off: post initial snapshot without starting ticker loop until screen turns on
+                val notification = buildConnectedNotification(
+                    profileName = profileName,
+                    statusText = statusText,
+                    upBps = VpnManager.uploadSpeedBps.value,
+                    downBps = VpnManager.downloadSpeedBps.value,
+                    upTotal = VpnManager.uploadTotalBytes.value,
+                    downTotal = VpnManager.downloadTotalBytes.value,
+                    duration = VpnManager.connectedDurationSeconds.value
+                )
+                val manager = getSystemService(NOTIFICATION_SERVICE) as NotificationManager
+                runCatching { manager.notify(NOTIFICATION_ID, notification) }
+            }
         } else {
             unregisterScreenStateReceiver()
             stopNotificationUpdates()
