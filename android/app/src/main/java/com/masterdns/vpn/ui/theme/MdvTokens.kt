@@ -14,8 +14,11 @@ object MdvColor {
 
     val Primary = Color(0xFFC3F5FF)
     val PrimaryContainer = Color(0xFF00E5FF)
+    val OnPrimary = Color(0xFF00363D)
+    val OnPrimaryContainer = Color(0xFF001F24)
     val PrimaryDim = Color(0xFF00DAF3)
     val Secondary = Color(0xFFBAC8DC)
+    val OnSecondary = Color(0xFF243141)
     val Tertiary = Color(0xFFE3EEFF)
 
     val OnSurface = Color(0xFFDFE2EB)

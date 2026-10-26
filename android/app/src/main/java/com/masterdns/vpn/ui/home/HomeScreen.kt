@@ -41,7 +41,6 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
@@ -106,7 +105,7 @@ fun HomeScreen(
             VpnManager.VpnState.CONNECTING,
             VpnManager.VpnState.DISCONNECTING -> ConnectingAmber
             VpnManager.VpnState.ERROR -> DisconnectedRed
-            else -> Color.Gray
+            else -> MdvColor.Outline
         },
         animationSpec = tween(500),
         label = "statusColor"

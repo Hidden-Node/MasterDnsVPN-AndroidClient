@@ -2,7 +2,6 @@ package com.masterdns.vpn.ui.theme
 
 import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.Font
@@ -18,11 +17,11 @@ val ConnectingAmber = MdvColor.PrimaryDim
 
 private val StitchColorScheme = darkColorScheme(
     primary = MdvColor.Primary,
-    onPrimary = Color(0xFF00363D),
+    onPrimary = MdvColor.OnPrimary,
     primaryContainer = MdvColor.PrimaryContainer,
-    onPrimaryContainer = Color(0xFF001F24),
+    onPrimaryContainer = MdvColor.OnPrimaryContainer,
     secondary = MdvColor.Secondary,
-    onSecondary = Color(0xFF243141),
+    onSecondary = MdvColor.OnSecondary,
     background = MdvColor.Background,
     onBackground = MdvColor.OnSurface,
     surface = MdvColor.Surface,
