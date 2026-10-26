@@ -116,6 +116,7 @@ class MasterDnsVpnService : VpnService() {
     private var activeStatusText: String = ""
     @Volatile
     private var notificationSpeedEnabled: Boolean = true
+    @Volatile
     private var screenStateReceiver: BroadcastReceiver? = null
 
     private val contentPendingIntent by lazy {
@@ -667,8 +668,10 @@ class MasterDnsVpnService : VpnService() {
                 }
             }
         }
-        screenStateReceiver = receiver
-        runCatching { registerReceiver(receiver, filter) }
+        runCatching {
+            registerReceiver(receiver, filter)
+            screenStateReceiver = receiver
+        }
     }
 
     private fun unregisterScreenStateReceiver() {
@@ -747,6 +750,7 @@ class MasterDnsVpnService : VpnService() {
     }
 
     private fun showConnectedNotification(profileName: String, statusText: String, speedEnabled: Boolean) {
+        if (isStopping) return
         activeProfileName = profileName
         activeStatusText = statusText
         notificationSpeedEnabled = speedEnabled
