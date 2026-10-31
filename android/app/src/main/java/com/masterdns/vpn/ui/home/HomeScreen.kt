@@ -376,15 +376,22 @@ private fun HowToUseDialog(onDismiss: () -> Unit) {
                     .fillMaxWidth()
                     .heightIn(max = maxDialogContentHeight)
                     .verticalScroll(rememberScrollState()),
-                verticalArrangement = Arrangement.spacedBy(MdvSpace.S2)
+                verticalArrangement = Arrangement.spacedBy(MdvSpace.S3)
             ) {
-                Text(
-                    text = stringResource(R.string.home_howto_body),
-                    style = MaterialTheme.typography.bodyMedium.copy(lineHeight = 22.sp),
-                    color = MdvColor.OnSurface,
-                    modifier = Modifier.fillMaxWidth(),
-                    textAlign = TextAlign.Start
-                )
+                val sections = stringResource(R.string.home_howto_body)
+                    .split("\n\n")
+                    .map { it.trim() }
+                    .filter { it.isNotEmpty() }
+
+                sections.forEach { section ->
+                    Text(
+                        text = section,
+                        style = MaterialTheme.typography.bodyMedium.copy(lineHeight = 24.sp),
+                        color = MdvColor.OnSurface,
+                        modifier = Modifier.fillMaxWidth(),
+                        textAlign = TextAlign.Start
+                    )
+                }
             }
         }
     )
