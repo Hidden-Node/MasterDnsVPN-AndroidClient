@@ -301,4 +301,14 @@
     <string name="settings_helper_arq_terminal_drain_timeout_seconds">ARQ 终结排空超时秒数</string>
     <string name="settings_helper_arq_terminal_ack_wait_timeout_seconds">ARQ 终结 ACK 等待超时秒数</string>
     <string name="settings_helper_log_level">客户端日志级别</string>
+    <string name="profiles_share">分享</string>
+    <string name="profiles_share_dialog_title">分享配置文件链接</string>
+    <string name="profiles_share_copied">配置文件链接已复制到剪贴板</string>
+    <string name="profiles_import_link_short">导入链接</string>
+    <string name="profiles_import_clipboard">从剪贴板导入</string>
+    <string name="profiles_invalid_link_msg">无效的配置文件链接</string>
+    <string name="profiles_link_imported_msg">配置文件已从链接成功导入</string>
+    <string name="profiles_import_link_dialog_title">从链接导入配置文件</string>
+    <string name="profiles_import_link_hint">在此粘贴 masterdns:// 链接</string>
+    <string name="btn_copy">复制</string>
 </resources>

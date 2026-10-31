@@ -301,4 +301,14 @@
     <string name="settings_helper_arq_terminal_drain_timeout_seconds">Тайм-аут сброса терминала ARQ в секундах</string>
     <string name="settings_helper_arq_terminal_ack_wait_timeout_seconds">Тайм-аут ожидания ACK терминала ARQ в секундах</string>
     <string name="settings_helper_log_level">Уровень журнала клиента</string>
+    <string name="profiles_share">Поделиться</string>
+    <string name="profiles_share_dialog_title">Поделиться ссылкой профиля</string>
+    <string name="profiles_share_copied">Ссылка профиля скопирована в буфер обмена</string>
+    <string name="profiles_import_link_short">Импорт ссылки</string>
+    <string name="profiles_import_clipboard">Импорт из буфера</string>
+    <string name="profiles_invalid_link_msg">Неверная ссылка профиля</string>
+    <string name="profiles_link_imported_msg">Профиль успешно импортирован по ссылке</string>
+    <string name="profiles_import_link_dialog_title">Импорт профиля по ссылке</string>
+    <string name="profiles_import_link_hint">Вставьте ссылку masterdns:// сюда</string>
+    <string name="btn_copy">Копировать</string>
 </resources>
