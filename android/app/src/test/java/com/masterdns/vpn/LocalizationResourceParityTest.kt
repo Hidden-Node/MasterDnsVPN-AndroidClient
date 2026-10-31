@@ -77,4 +77,26 @@ class LocalizationResourceParityTest {
             }
         }
     }
+
+    @Test
+    fun testHowToBodyPreservesNewlinesAcrossLocales() {
+        val resDir = resolveResDir()
+        val locales = listOf("values", "values-fa", "values-zh-rCN", "values-ru")
+
+        for (locale in locales) {
+            val localeFile = File(resDir, "$locale/strings.xml")
+            val strings = parseStringsXml(localeFile)
+            val entry = strings["home_howto_body"]
+            assertTrue("Missing home_howto_body in $locale", entry != null)
+            val text = entry!!.text
+            assertTrue(
+                "home_howto_body in $locale must contain '\\n' escape sequence to prevent AAPT whitespace collapsing",
+                text.contains("\\n")
+            )
+            assertTrue(
+                "home_howto_body in $locale must contain multiple sections separated by '\\n\\n'",
+                text.contains("\\n\\n")
+            )
+        }
+    }
 }
