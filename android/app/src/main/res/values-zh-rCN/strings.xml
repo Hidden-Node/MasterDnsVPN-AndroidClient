@@ -80,8 +80,8 @@
     <string name="home_state_disconnected">未连接</string>
     <string name="home_connection_status_title">连接状态</string>
     <string name="home_connection_running">已连接并运行</string>
-    <string name="home_connection_preparing">正在准备隧道
-（再次点击取消）</string>
+    <string name="home_connection_preparing">正在准备隧道...</string>
+    <string name="home_connection_tap_to_cancel">再次点击以取消</string>
     <string name="home_connection_error_check_logs">错误 - 请检查日志</string>
     <string name="home_profile_title">配置文件</string>
     <string name="home_connect">连接</string>
