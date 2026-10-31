@@ -42,13 +42,15 @@ import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.ExposedDropdownMenuBox
-import androidx.compose.material3.FilterChipDefaults
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.SegmentedButton
+import androidx.compose.material3.SegmentedButtonDefaults
+import androidx.compose.material3.SingleChoiceSegmentedButtonRow
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.foundation.text.KeyboardOptions
@@ -80,6 +82,7 @@ import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.PasswordVisualTransformation
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Dialog
 import androidx.core.os.LocaleListCompat
@@ -376,43 +379,52 @@ fun GlobalSettingsScreen(vm: GlobalSettingsViewModel = viewModel()) {
                         )
 
                         if (draft.splitTunnelingEnabled) {
-                            Row(
+                            SingleChoiceSegmentedButtonRow(
                                 modifier = Modifier
                                     .fillMaxWidth()
-                                    .padding(horizontal = MdvSpace.S3),
-                                horizontalArrangement = Arrangement.spacedBy(MdvSpace.S2)
+                                    .padding(horizontal = MdvSpace.S3)
                             ) {
-                                MdvFilterChip(
+                                SegmentedButton(
                                     selected = draft.splitTunnelMode == SplitTunnelMode.INCLUDE,
                                     onClick = { draft = draft.copy(splitTunnelMode = SplitTunnelMode.INCLUDE) },
-                                    label = stringResource(R.string.split_tunnel_mode_include),
-                                    leadingIcon = if (draft.splitTunnelMode == SplitTunnelMode.INCLUDE) {
-                                        {
-                                            Icon(
-                                                imageVector = Icons.Filled.Check,
-                                                contentDescription = null,
-                                                modifier = Modifier.size(FilterChipDefaults.IconSize),
-                                                tint = MdvColor.Primary
-                                            )
-                                        }
-                                    } else null,
-                                    modifier = Modifier.weight(1f)
+                                    shape = SegmentedButtonDefaults.itemShape(index = 0, count = 2),
+                                    icon = {},
+                                    colors = SegmentedButtonDefaults.colors(
+                                        activeContainerColor = MdvColor.PrimaryContainer.copy(alpha = 0.22f),
+                                        activeContentColor = MdvColor.Primary,
+                                        inactiveContainerColor = MdvColor.SurfaceHigh,
+                                        inactiveContentColor = MdvColor.OnSurfaceVariant,
+                                        activeBorderColor = MdvColor.Primary,
+                                        inactiveBorderColor = MdvColor.OutlineVariant
+                                    ),
+                                    label = {
+                                        Text(
+                                            text = stringResource(R.string.split_tunnel_mode_include),
+                                            style = MaterialTheme.typography.labelMedium,
+                                            textAlign = TextAlign.Center
+                                        )
+                                    }
                                 )
-                                MdvFilterChip(
+                                SegmentedButton(
                                     selected = draft.splitTunnelMode == SplitTunnelMode.EXCLUDE,
                                     onClick = { draft = draft.copy(splitTunnelMode = SplitTunnelMode.EXCLUDE) },
-                                    label = stringResource(R.string.split_tunnel_mode_exclude),
-                                    leadingIcon = if (draft.splitTunnelMode == SplitTunnelMode.EXCLUDE) {
-                                        {
-                                            Icon(
-                                                imageVector = Icons.Filled.Check,
-                                                contentDescription = null,
-                                                modifier = Modifier.size(FilterChipDefaults.IconSize),
-                                                tint = MdvColor.Primary
-                                            )
-                                        }
-                                    } else null,
-                                    modifier = Modifier.weight(1f)
+                                    shape = SegmentedButtonDefaults.itemShape(index = 1, count = 2),
+                                    icon = {},
+                                    colors = SegmentedButtonDefaults.colors(
+                                        activeContainerColor = MdvColor.PrimaryContainer.copy(alpha = 0.22f),
+                                        activeContentColor = MdvColor.Primary,
+                                        inactiveContainerColor = MdvColor.SurfaceHigh,
+                                        inactiveContentColor = MdvColor.OnSurfaceVariant,
+                                        activeBorderColor = MdvColor.Primary,
+                                        inactiveBorderColor = MdvColor.OutlineVariant
+                                    ),
+                                    label = {
+                                        Text(
+                                            text = stringResource(R.string.split_tunnel_mode_exclude),
+                                            style = MaterialTheme.typography.labelMedium,
+                                            textAlign = TextAlign.Center
+                                        )
+                                    }
                                 )
                             }
                             androidx.compose.foundation.layout.Spacer(modifier = Modifier.height(MdvSpace.S2))
