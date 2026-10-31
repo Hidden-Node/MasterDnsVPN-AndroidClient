@@ -44,6 +44,7 @@ import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.derivedStateOf
@@ -57,11 +58,14 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalLayoutDirection
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextDirection
 import androidx.compose.ui.unit.Dp
+import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import com.masterdns.vpn.R
@@ -594,68 +598,73 @@ private fun ConfigFieldCard(
                 FieldType.OPTION -> {
                     var expanded by remember(field.key) { mutableStateOf(false) }
                     val displayLabel = field.options.firstOrNull { it.value == value }?.let { stringResource(it.labelRes) } ?: value
-                    ExposedDropdownMenuBox(
-                        expanded = expanded,
-                        onExpandedChange = { expanded = !expanded }
-                    ) {
-                        OutlinedTextField(
-                            value = displayLabel,
-                            onValueChange = {},
-                            readOnly = true,
-                            label = { Text(field.key) },
-                            textStyle = LocalTextStyle.current.copy(textDirection = TextDirection.Content),
-                            supportingText = {
-                                Text(
-                                    text = stringResource(field.helperRes),
-                                    style = LocalTextStyle.current.copy(textDirection = TextDirection.Content)
-                                )
-                            },
-                            trailingIcon = {
-                                Icon(
-                                    imageVector = Icons.Filled.ArrowDropDown,
-                                    contentDescription = null
-                                )
-                            },
-                            modifier = Modifier
-                                .menuAnchor()
-                                .fillMaxWidth()
-                        )
-                        DropdownMenu(
+                    CompositionLocalProvider(LocalLayoutDirection provides LayoutDirection.Ltr) {
+                        ExposedDropdownMenuBox(
                             expanded = expanded,
-                            onDismissRequest = { expanded = false }
+                            onExpandedChange = { expanded = !expanded }
                         ) {
-                            field.options.forEach { option ->
-                                DropdownMenuItem(
-                                    text = {
-                                        Text(
-                                            text = stringResource(option.labelRes),
-                                            style = LocalTextStyle.current.copy(textDirection = TextDirection.Content)
-                                        )
-                                    },
-                                    onClick = {
-                                        onChange(option.value)
-                                        expanded = false
-                                    }
-                                )
+                            OutlinedTextField(
+                                value = displayLabel,
+                                onValueChange = {},
+                                readOnly = true,
+                                label = { Text(field.key) },
+                                textStyle = LocalTextStyle.current.copy(textDirection = TextDirection.Content),
+                                supportingText = {
+                                    Text(
+                                        text = stringResource(field.helperRes),
+                                        style = LocalTextStyle.current.copy(textDirection = TextDirection.Content)
+                                    )
+                                },
+                                trailingIcon = {
+                                    Icon(
+                                        imageVector = Icons.Filled.ArrowDropDown,
+                                        contentDescription = null
+                                    )
+                                },
+                                modifier = Modifier
+                                    .menuAnchor()
+                                    .fillMaxWidth()
+                            )
+                            DropdownMenu(
+                                expanded = expanded,
+                                onDismissRequest = { expanded = false }
+                            ) {
+                                field.options.forEach { option ->
+                                    DropdownMenuItem(
+                                        text = {
+                                            Text(
+                                                text = stringResource(option.labelRes),
+                                                style = LocalTextStyle.current.copy(textDirection = TextDirection.Content)
+                                            )
+                                        },
+                                        onClick = {
+                                            onChange(option.value)
+                                            expanded = false
+                                        }
+                                    )
+                                }
                             }
                         }
                     }
                 }
 
                 FieldType.TEXT -> {
-                    OutlinedTextField(
-                        value = value,
-                        onValueChange = onChange,
-                        label = { Text(field.key) },
-                        supportingText = {
-                            Text(
-                                text = stringResource(field.helperRes),
-                                style = LocalTextStyle.current.copy(textDirection = TextDirection.Content)
-                            )
-                        },
-                        modifier = Modifier.fillMaxWidth(),
-                        keyboardOptions = KeyboardOptions(keyboardType = field.keyboardType)
-                    )
+                    CompositionLocalProvider(LocalLayoutDirection provides LayoutDirection.Ltr) {
+                        OutlinedTextField(
+                            value = value,
+                            onValueChange = onChange,
+                            label = { Text(field.key) },
+                            textStyle = LocalTextStyle.current.copy(textDirection = TextDirection.Ltr, textAlign = TextAlign.Start),
+                            supportingText = {
+                                Text(
+                                    text = stringResource(field.helperRes),
+                                    style = LocalTextStyle.current.copy(textDirection = TextDirection.Content)
+                                )
+                            },
+                            modifier = Modifier.fillMaxWidth(),
+                            keyboardOptions = KeyboardOptions(keyboardType = field.keyboardType)
+                        )
+                    }
                 }
             }
         }
