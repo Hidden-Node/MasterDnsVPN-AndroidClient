@@ -90,8 +90,8 @@
     <string name="home_state_disconnected">Disconnected</string>
     <string name="home_connection_status_title">CONNECTION STATUS</string>
     <string name="home_connection_running">Connected and running</string>
-    <string name="home_connection_preparing">Preparing tunnel
-(tap again to cancel)</string>
+    <string name="home_connection_preparing">Preparing tunnel...</string>
+    <string name="home_connection_tap_to_cancel">Tap again to cancel</string>
     <string name="home_connection_error_check_logs">Error - check logs</string>
     <string name="home_profile_title">PROFILE</string>
     <string name="home_connect">Connect</string>

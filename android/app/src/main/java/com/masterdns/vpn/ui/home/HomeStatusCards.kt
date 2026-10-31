@@ -23,6 +23,7 @@ import androidx.compose.ui.text.SpanStyle
 import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.masterdns.vpn.R
 import com.masterdns.vpn.ui.components.mdv.cards.MdvCardHigh
@@ -69,7 +70,7 @@ fun MdvConnectionTelemetryCard(
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically
+                verticalAlignment = Alignment.Top
             ) {
                 Column(modifier = Modifier.weight(1f)) {
                     Text(
@@ -95,8 +96,18 @@ fun MdvConnectionTelemetryCard(
                         text = statusText,
                         style = MaterialTheme.typography.titleMedium,
                         color = statusColor,
-                        fontWeight = FontWeight.Bold
+                        fontWeight = FontWeight.Bold,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
                     )
+                    if (vpnState == VpnManager.VpnState.CONNECTING) {
+                        androidx.compose.foundation.layout.Spacer(modifier = Modifier.height(2.dp))
+                        Text(
+                            text = stringResource(R.string.home_connection_tap_to_cancel),
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MdvColor.OnSurfaceVariant
+                        )
+                    }
                 }
 
                 if (connectedDurationSeconds > 0 ||
