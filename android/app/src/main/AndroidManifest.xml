@@ -64,6 +64,12 @@
                 <data android:scheme="content" />
                 <data android:pathPattern=".*\\.toml" />
             </intent-filter>
+            <intent-filter>
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.BROWSABLE" />
+                <data android:scheme="masterdns" />
+            </intent-filter>
         </activity>
 
         <service

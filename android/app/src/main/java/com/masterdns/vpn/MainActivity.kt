@@ -14,9 +14,11 @@ import com.masterdns.vpn.data.repository.ProfileRepository
 import com.masterdns.vpn.ui.navigation.AppNavigation
 import com.masterdns.vpn.ui.theme.MasterDnsVPNTheme
 import com.masterdns.vpn.util.ImportIntentGate
+import com.masterdns.vpn.util.ProfileUrlCodec
 import com.masterdns.vpn.util.readDisplayName
 import com.masterdns.vpn.util.readTextFromUri
 import dagger.hilt.android.AndroidEntryPoint
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -35,6 +37,7 @@ class MainActivity : AppCompatActivity() {
         super.onCreate(savedInstanceState)
         lastHandledImportUri =
             savedInstanceState?.getString(ImportIntentGate.KEY_LAST_HANDLED_URI)
+        handleDeepLinkIntent(intent, isFirstCreation = savedInstanceState == null)
         if (savedInstanceState == null) handleTomlImportIntent(intent,
             isFirstCreation = true)
         enableEdgeToEdge()
@@ -53,8 +56,40 @@ class MainActivity : AppCompatActivity() {
     override fun onNewIntent(intent: Intent) {
         super.onNewIntent(intent)
         setIntent(intent)
+        handleDeepLinkIntent(intent, isFirstCreation = true)
         handleTomlImportIntent(intent,
             isFirstCreation = true)
+    }
+
+    private fun handleDeepLinkIntent(intent: Intent?, isFirstCreation: Boolean) {
+        val data = intent?.data ?: return
+        if (intent.action != Intent.ACTION_VIEW || data.scheme != ProfileUrlCodec.SCHEME_MASTERDNS) return
+
+        val uriToken = data.toString()
+        if (!ImportIntentGate.shouldHandle(isFirstCreation, uriToken, lastHandledImportUri)) return
+
+        lastHandledImportUri = uriToken
+        intent.action = null
+        intent.data = null
+        setIntent(intent)
+
+        val draft = runCatching { ProfileUrlCodec.decode(uriToken) }.getOrNull()
+        if (draft == null) {
+            Toast.makeText(this, getString(R.string.profiles_invalid_link_msg), Toast.LENGTH_LONG).show()
+            lastHandledImportUri = null
+            return
+        }
+
+        lifecycleScope.launch {
+            withContext(NonCancellable + Dispatchers.IO) {
+                val entity = draft.toProfileEntity()
+                val id = profileRepository.insertProfile(entity)
+                profileRepository.setSelectedProfile(id)
+                withContext(Dispatchers.Main) {
+                    Toast.makeText(this@MainActivity, getString(R.string.profiles_link_imported_msg), Toast.LENGTH_SHORT).show()
+                }
+            }
+        }
     }
 
     private fun handleTomlImportIntent(intent: Intent?,
