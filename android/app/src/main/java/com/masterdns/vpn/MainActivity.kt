@@ -1,12 +1,17 @@
 package com.masterdns.vpn
 
+import android.Manifest
 import android.content.Intent
+import android.content.pm.PackageManager
 import android.net.Uri
+import android.os.Build
 import android.os.Bundle
 import android.widget.Toast
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.appcompat.app.AppCompatActivity
+import androidx.core.content.ContextCompat
 import androidx.lifecycle.lifecycleScope
 import com.google.gson.Gson
 import com.masterdns.vpn.data.local.ProfileEntity
@@ -31,16 +36,33 @@ class MainActivity : AppCompatActivity() {
     @Volatile
     private var lastHandledImportUri: String? = null
 
+    private val notificationPermissionLauncher =
+        registerForActivityResult(ActivityResultContracts.RequestPermission()) { /* no-op: user decision */ }
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         lastHandledImportUri =
             savedInstanceState?.getString(ImportIntentGate.KEY_LAST_HANDLED_URI)
-        if (savedInstanceState == null) handleTomlImportIntent(intent,
-            isFirstCreation = true)
+        if (savedInstanceState == null) {
+            handleTomlImportIntent(intent, isFirstCreation = true)
+            requestNotificationPermissionOnStartup()
+        }
         enableEdgeToEdge()
         setContent {
             MasterDnsVPNTheme {
                 AppNavigation()
+            }
+        }
+    }
+
+    private fun requestNotificationPermissionOnStartup() {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            if (ContextCompat.checkSelfPermission(
+                    this,
+                    Manifest.permission.POST_NOTIFICATIONS
+                ) != PackageManager.PERMISSION_GRANTED
+            ) {
+                notificationPermissionLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
             }
         }
     }

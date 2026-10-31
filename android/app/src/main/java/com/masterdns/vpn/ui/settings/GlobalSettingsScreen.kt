@@ -1,7 +1,13 @@
 package com.masterdns.vpn.ui.settings
 
+import android.Manifest
+import android.content.pm.PackageManager
+import android.os.Build
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.annotation.StringRes
 import androidx.appcompat.app.AppCompatDelegate
+import androidx.core.content.ContextCompat
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.clickable
@@ -215,6 +221,13 @@ fun GlobalSettingsScreen(vm: GlobalSettingsViewModel = viewModel()) {
     val localIp by vm.localIp.collectAsState()
     LaunchedEffect(Unit) { vm.refreshLocalIp() }
     var draft by remember(current) { mutableStateOf(current) }
+    val notificationPermissionLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.RequestPermission()
+    ) { isGranted ->
+        if (!isGranted) {
+            draft = draft.copy(notificationSpeedEnabled = false)
+        }
+    }
     var sharingSocksPortText by remember(current.internetSharingSocksPort) {
         mutableStateOf(current.internetSharingSocksPort.toString())
     }
@@ -448,7 +461,18 @@ fun GlobalSettingsScreen(vm: GlobalSettingsViewModel = viewModel()) {
                         RowSwitch(
                             title = stringResource(R.string.global_notification_speed),
                             checked = draft.notificationSpeedEnabled,
-                            onChecked = { draft = draft.copy(notificationSpeedEnabled = it) }
+                            onChecked = { enabled ->
+                                draft = draft.copy(notificationSpeedEnabled = enabled)
+                                if (enabled && Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+                                    if (ContextCompat.checkSelfPermission(
+                                            context,
+                                            Manifest.permission.POST_NOTIFICATIONS
+                                        ) != PackageManager.PERMISSION_GRANTED
+                                    ) {
+                                        notificationPermissionLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
+                                    }
+                                }
+                            }
                         )
                     }
                 }
