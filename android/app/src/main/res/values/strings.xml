@@ -350,4 +350,14 @@ Important Tips &amp; Troubleshooting:
     <string name="settings_helper_arq_terminal_drain_timeout_seconds">ARQ terminal drain timeout seconds</string>
     <string name="settings_helper_arq_terminal_ack_wait_timeout_seconds">ARQ terminal ACK wait timeout seconds</string>
     <string name="settings_helper_log_level">Client log level</string>
+    <string name="profiles_share">Share</string>
+    <string name="profiles_share_dialog_title">Share Profile URL</string>
+    <string name="profiles_share_copied">Profile URL copied to clipboard</string>
+    <string name="profiles_import_link_short">Import Link</string>
+    <string name="profiles_import_clipboard">Import from Clipboard</string>
+    <string name="profiles_invalid_link_msg">Invalid profile link</string>
+    <string name="profiles_link_imported_msg">Profile imported from link</string>
+    <string name="profiles_import_link_dialog_title">Import Profile from URL</string>
+    <string name="profiles_import_link_hint">Paste masterdns:// link here</string>
+    <string name="btn_copy">Copy</string>
 </resources>

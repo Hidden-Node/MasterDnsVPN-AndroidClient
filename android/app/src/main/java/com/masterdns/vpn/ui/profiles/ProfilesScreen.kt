@@ -1,5 +1,10 @@
 package com.masterdns.vpn.ui.profiles
 
+import android.content.ClipData
+import android.content.ClipboardManager
+import android.content.Context
+import android.content.Intent
+import android.widget.Toast
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.*
@@ -19,12 +24,17 @@ import androidx.compose.runtime.snapshots.SnapshotStateList
 import androidx.compose.runtime.toMutableStateList
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalLayoutDirection
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.text.input.VisualTransformation
+import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextDirection
 import androidx.compose.ui.focus.onFocusChanged
+import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import com.google.gson.Gson
@@ -34,6 +44,7 @@ import com.masterdns.vpn.ui.components.mdv.controls.MdvBackTopAppBar
 import com.masterdns.vpn.ui.theme.ConnectedGreen
 import com.masterdns.vpn.ui.theme.MdvColor
 import com.masterdns.vpn.ui.theme.MdvSpace
+import com.masterdns.vpn.util.ProfileUrlCodec
 import com.masterdns.vpn.util.ResolverAnalyzer
 import com.masterdns.vpn.util.ResolverImportResult
 import com.masterdns.vpn.util.ResolverImportStats
@@ -63,6 +74,7 @@ fun ProfilesScreen(
     var importedDraft by remember { mutableStateOf<ImportedProfileDraft?>(null) }
     var importedResolvers by remember { mutableStateOf<ResolverImportResult?>(null) }
     var pendingDeleteId by rememberSaveable { mutableStateOf<Long?>(null) }
+    var sharingProfile by remember { mutableStateOf<ProfileEntity?>(null) }
     val context = androidx.compose.ui.platform.LocalContext.current
     val snackbarHostState = remember { SnackbarHostState() }
     val scope = rememberCoroutineScope()
@@ -223,11 +235,19 @@ fun ProfilesScreen(
                             editingId = profile.id
                             showEditor = true
                         },
-                        onDelete = { pendingDeleteId = profile.id }
+                        onDelete = { pendingDeleteId = profile.id },
+                        onShare = { sharingProfile = profile }
                     )
                 }
             }
         }
+    }
+
+    sharingProfile?.let { profile ->
+        ShareProfileDialog(
+            profile = profile,
+            onDismiss = { sharingProfile = null }
+        )
     }
 
     pendingDeleteId?.let { id -> profiles.find { it.id == id } }?.let { profile ->
@@ -267,7 +287,8 @@ fun ProfileCard(
     onSelect: () -> Unit,
     onSettings: () -> Unit,
     onEdit: () -> Unit,
-    onDelete: () -> Unit
+    onDelete: () -> Unit,
+    onShare: () -> Unit = {}
 ) {
     Card(
         onClick = onSelect,
@@ -308,14 +329,17 @@ fun ProfileCard(
                 )
             }
 
-            IconButton(onClick = onEdit, modifier = Modifier.size(48.dp)) {
-                Icon(Icons.Filled.Edit, contentDescription = stringResource(R.string.profiles_edit), modifier = Modifier.size(20.dp))
+            IconButton(onClick = onShare, modifier = Modifier.size(36.dp)) {
+                Icon(Icons.Filled.Share, contentDescription = stringResource(R.string.profiles_share), modifier = Modifier.size(18.dp))
             }
-            IconButton(onClick = onSettings, modifier = Modifier.size(48.dp)) {
-                Icon(Icons.Filled.Settings, contentDescription = stringResource(R.string.profiles_settings), modifier = Modifier.size(20.dp))
+            IconButton(onClick = onEdit, modifier = Modifier.size(36.dp)) {
+                Icon(Icons.Filled.Edit, contentDescription = stringResource(R.string.profiles_edit), modifier = Modifier.size(18.dp))
             }
-            IconButton(onClick = onDelete, modifier = Modifier.size(48.dp)) {
-                Icon(Icons.Filled.Delete, contentDescription = stringResource(R.string.profiles_delete), modifier = Modifier.size(20.dp))
+            IconButton(onClick = onSettings, modifier = Modifier.size(36.dp)) {
+                Icon(Icons.Filled.Settings, contentDescription = stringResource(R.string.profiles_settings), modifier = Modifier.size(18.dp))
+            }
+            IconButton(onClick = onDelete, modifier = Modifier.size(36.dp)) {
+                Icon(Icons.Filled.Delete, contentDescription = stringResource(R.string.profiles_delete), modifier = Modifier.size(18.dp))
             }
         }
     }
@@ -354,6 +378,9 @@ private fun ProfileEditorDialog(
     var validationMessage by rememberSaveable { mutableStateOf<String?>(null) }
     var showKey by rememberSaveable { mutableStateOf(false) }
     var showResolversEditor by rememberSaveable { mutableStateOf(false) }
+    var showImportLinkDialog by rememberSaveable { mutableStateOf(false) }
+    var activeDraft by remember { mutableStateOf(importedDraft) }
+    val editorContext = LocalContext.current
     val largeResolversText = resolvers.length > 6000
     val nameRequiredMsg = stringResource(R.string.profiles_name_required_msg)
     val domainRequiredMsg = stringResource(R.string.profiles_domain_required_msg)
@@ -392,6 +419,7 @@ private fun ProfileEditorDialog(
     }
 
     LaunchedEffect(importedDraft, importedResolvers) {
+        activeDraft = importedDraft
         val importedProfile = importedDraft?.profile
         if (importedProfile != null) {
             if (name.isBlank()) {
@@ -411,6 +439,32 @@ private fun ProfileEditorDialog(
         if (importedDraft != null || importedResolvers != null) {
             validationMessage = null
         }
+    }
+
+    if (showImportLinkDialog) {
+        ImportLinkDialog(
+            onDismiss = { showImportLinkDialog = false },
+            onImport = { link ->
+                val draft = runCatching { ProfileUrlCodec.decode(link) }.getOrNull()
+                if (draft != null) {
+                    val entity = draft.toProfileEntity()
+                    val newDraft = ImportedProfileDraft(entity, draft.domains)
+                    activeDraft = newDraft
+                    if (name.isBlank()) {
+                        name = draft.name
+                    }
+                    domainList.clear()
+                    domainList.addAll(draft.domains)
+                    encryptionKey = draft.encryptionKey
+                    if (resolvers.isBlank()) {
+                        resolvers = entity.resolvers
+                    }
+                    validationMessage = null
+                    showImportLinkDialog = false
+                    Toast.makeText(editorContext, editorContext.getString(R.string.profiles_link_imported_msg), Toast.LENGTH_SHORT).show()
+                }
+            }
+        )
     }
 
     AlertDialog(
@@ -457,6 +511,21 @@ private fun ProfileEditorDialog(
                                 Spacer(modifier = Modifier.height(4.dp))
                                 Text(
                                     stringResource(R.string.action_import_toml),
+                                    textAlign = androidx.compose.ui.text.style.TextAlign.Center,
+                                    style = MaterialTheme.typography.labelMedium
+                                )
+                            }
+                        }
+                        OutlinedButton(
+                            onClick = { showImportLinkDialog = true },
+                            modifier = Modifier.weight(1f),
+                            contentPadding = PaddingValues(vertical = 12.dp, horizontal = 4.dp)
+                        ) {
+                            Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                                Icon(Icons.Filled.Link, contentDescription = null)
+                                Spacer(modifier = Modifier.height(4.dp))
+                                Text(
+                                    stringResource(R.string.profiles_import_link_short),
                                     textAlign = androidx.compose.ui.text.style.TextAlign.Center,
                                     style = MaterialTheme.typography.labelMedium
                                 )
@@ -650,7 +719,7 @@ private fun ProfileEditorDialog(
                     if (validationMessage != null) {
                         return@FilledTonalButton
                     }
-                    val baseProfile = profile ?: importedDraft?.profile ?: ProfileEntity(name = "", domains = "")
+                    val baseProfile = profile ?: activeDraft?.profile ?: ProfileEntity(name = "", domains = "")
                     val domainJson = gson.toJson(finalDomainList)
                     val updatedProfile = baseProfile.copy(
                         name = name.trim(),
@@ -668,6 +737,149 @@ private fun ProfileEditorDialog(
                 }
             ) {
                 Text(stringResource(R.string.action_save))
+            }
+        },
+        dismissButton = {
+            TextButton(onClick = onDismiss) {
+                Text(stringResource(R.string.action_cancel))
+            }
+        }
+    )
+}
+
+@Composable
+private fun ShareProfileDialog(
+    profile: ProfileEntity,
+    onDismiss: () -> Unit
+) {
+    val context = LocalContext.current
+    val shareUrl = remember(profile) { runCatching { ProfileUrlCodec.encode(profile) }.getOrNull() }
+
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text(stringResource(R.string.profiles_share_dialog_title)) },
+        text = {
+            Column(verticalArrangement = Arrangement.spacedBy(MdvSpace.S3)) {
+                Text(profile.name, style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.SemiBold)
+                if (shareUrl != null) {
+                    CompositionLocalProvider(LocalLayoutDirection provides LayoutDirection.Ltr) {
+                        OutlinedTextField(
+                            value = shareUrl,
+                            onValueChange = {},
+                            readOnly = true,
+                            modifier = Modifier.fillMaxWidth().height(100.dp),
+                            maxLines = 4,
+                            textStyle = LocalTextStyle.current.copy(textDirection = TextDirection.Ltr, textAlign = TextAlign.Start)
+                        )
+                    }
+                } else {
+                    Text(
+                        text = stringResource(R.string.profiles_invalid_link_msg),
+                        color = MaterialTheme.colorScheme.error,
+                        style = MaterialTheme.typography.bodySmall
+                    )
+                }
+            }
+        },
+        confirmButton = {
+            if (shareUrl != null) {
+                Row(horizontalArrangement = Arrangement.spacedBy(MdvSpace.S2)) {
+                    TextButton(onClick = {
+                        val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
+                        clipboard.setPrimaryClip(ClipData.newPlainText("MasterDns Profile", shareUrl))
+                        Toast.makeText(context, context.getString(R.string.profiles_share_copied), Toast.LENGTH_SHORT).show()
+                    }) {
+                        Text(stringResource(R.string.btn_copy))
+                    }
+                    Button(onClick = {
+                        val intent = Intent(Intent.ACTION_SEND).apply {
+                            type = "text/plain"
+                            putExtra(Intent.EXTRA_SUBJECT, profile.name)
+                            putExtra(Intent.EXTRA_TEXT, shareUrl)
+                        }
+                        context.startActivity(Intent.createChooser(intent, context.getString(R.string.profiles_share)))
+                    }) {
+                        Text(stringResource(R.string.profiles_share))
+                    }
+                }
+            }
+        },
+        dismissButton = {
+            TextButton(onClick = onDismiss) {
+                Text(stringResource(R.string.action_cancel))
+            }
+        }
+    )
+}
+
+@Composable
+private fun ImportLinkDialog(
+    onDismiss: () -> Unit,
+    onImport: (String) -> Unit
+) {
+    var urlText by rememberSaveable { mutableStateOf("") }
+    var errorMessage by rememberSaveable { mutableStateOf<String?>(null) }
+    val context = LocalContext.current
+
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text(stringResource(R.string.profiles_import_link_dialog_title)) },
+        text = {
+            Column(verticalArrangement = Arrangement.spacedBy(MdvSpace.S3)) {
+                CompositionLocalProvider(LocalLayoutDirection provides LayoutDirection.Ltr) {
+                    OutlinedTextField(
+                        value = urlText,
+                        onValueChange = {
+                            urlText = it
+                            errorMessage = null
+                        },
+                        label = { Text(stringResource(R.string.profiles_import_link_hint)) },
+                        isError = errorMessage != null,
+                        modifier = Modifier.fillMaxWidth().height(100.dp),
+                        maxLines = 4,
+                        textStyle = LocalTextStyle.current.copy(textDirection = TextDirection.Ltr, textAlign = TextAlign.Start)
+                    )
+                }
+                if (errorMessage != null) {
+                    Text(
+                        text = errorMessage!!,
+                        color = MaterialTheme.colorScheme.error,
+                        style = MaterialTheme.typography.bodySmall
+                    )
+                }
+                OutlinedButton(
+                    onClick = {
+                        val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
+                        val clip = clipboard.primaryClip?.takeIf { it.itemCount > 0 }?.getItemAt(0)?.text?.toString()?.trim().orEmpty()
+                        if (clip.isNotBlank()) {
+                            urlText = clip
+                            errorMessage = null
+                        }
+                    },
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Icon(Icons.Filled.ContentPaste, contentDescription = null, modifier = Modifier.size(18.dp))
+                    Spacer(modifier = Modifier.width(MdvSpace.S2))
+                    Text(stringResource(R.string.profiles_import_clipboard))
+                }
+            }
+        },
+        confirmButton = {
+            Button(
+                onClick = {
+                    if (urlText.isBlank()) {
+                        errorMessage = context.getString(R.string.profiles_invalid_link_msg)
+                        return@Button
+                    }
+                    val draft = runCatching { ProfileUrlCodec.decode(urlText) }.getOrNull()
+                    if (draft == null) {
+                        errorMessage = context.getString(R.string.profiles_invalid_link_msg)
+                    } else {
+                        onImport(urlText)
+                    }
+                }
+            ) {
+                Text(stringResource(R.string.profiles_import_link_short))
             }
         },
         dismissButton = {
