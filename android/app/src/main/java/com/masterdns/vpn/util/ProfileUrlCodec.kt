@@ -113,4 +113,20 @@ object ProfileUrlCodec {
             encryptionMethod = method
         )
     }
+
+    fun decodeMultiple(raw: String): List<ProfileDraftData> {
+        val results = mutableListOf<ProfileDraftData>()
+        raw.lineSequence().forEachIndexed { index, rawLine ->
+            val line = rawLine.trim()
+            if (line.isNotBlank()) {
+                try {
+                    results.add(decode(line))
+                } catch (e: Exception) {
+                    throw IllegalArgumentException("Line ${index + 1}: ${e.message ?: "Invalid profile link"}", e)
+                }
+            }
+        }
+        require(results.isNotEmpty()) { "Enter at least one profile link" }
+        return results
+    }
 }
