@@ -26,6 +26,15 @@ class ProfilesViewModel @Inject constructor(
         }
     }
 
+    fun addProfiles(profiles: List<ProfileEntity>) {
+        if (profiles.isEmpty()) return
+        viewModelScope.launch {
+            profiles.forEach { profile ->
+                profileRepository.insertProfileAndSelectIfFirst(profile)
+            }
+        }
+    }
+
     fun updateProfile(profile: ProfileEntity) {
         viewModelScope.launch {
             profileRepository.updateProfile(profile)
