@@ -311,4 +311,17 @@
     <string name="profiles_import_link_dialog_title">从链接导入配置文件</string>
     <string name="profiles_import_link_hint">在此粘贴 masterdns:// 链接</string>
     <string name="btn_copy">复制</string>
+    <string name="btn_import">导入</string>
+    <string name="profiles_add_clipboard">从剪贴板导入</string>
+    <string name="profiles_add_qr">扫描二维码</string>
+    <string name="profiles_add_toml">从 TOML 导入</string>
+    <string name="profiles_add_manual">手动添加</string>
+    <string name="profiles_import_dialog_title">导入配置文件</string>
+    <string name="profiles_import_dialog_hint">每行粘贴一个 masterdns:// 链接</string>
+    <string name="profiles_imported_count_msg">已导入 %d 个配置文件</string>
+    <string name="profiles_clipboard_empty_msg">剪贴板中未找到配置文件链接</string>
+    <string name="profiles_qr_scan_cancelled">二维码扫描已取消</string>
+    <string name="profiles_qr_scan_no_code">未找到有效的配置文件二维码</string>
+    <string name="profiles_share_qr_cd">配置文件二维码</string>
+    <string name="profiles_link_imported_named_msg">已导入配置文件：%s</string>
 </resources>
