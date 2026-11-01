@@ -304,12 +304,8 @@
     <string name="profiles_share">اشتراک‌گذاری</string>
     <string name="profiles_share_dialog_title">اشتراک‌گذاری لینک پروفایل</string>
     <string name="profiles_share_copied">لینک پروفایل در حافظه کپی شد</string>
-    <string name="profiles_import_link_short">ورود لینک</string>
-    <string name="profiles_import_clipboard">ورود از حافظه موقت</string>
     <string name="profiles_invalid_link_msg">لینک پروفایل نامعتبر است</string>
     <string name="profiles_link_imported_msg">پروفایل از طریق لینک با موفقیت وارد شد</string>
-    <string name="profiles_import_link_dialog_title">ورود پروفایل از طریق لینک</string>
-    <string name="profiles_import_link_hint">لینک masterdns:// را اینجا وارد کنید</string>
     <string name="btn_copy">کپی</string>
     <string name="btn_import">وارد کردن</string>
     <string name="profiles_add_clipboard">وارد کردن از کلیپ‌بورد</string>
