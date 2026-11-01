@@ -238,4 +238,33 @@ class ProfileUrlCodecTest {
             ProfileUrlCodec.encode(noKey)
         }
     }
+
+    @Test
+    fun decodeMultiple_single_and_multi_line_succeeds() {
+        val p1 = ProfileEntity(name = "P1", domains = "[\"p1.com\"]", encryptionKey = "k1", encryptionMethod = 1)
+        val p2 = ProfileEntity(name = "P2", domains = "[\"p2.com\"]", encryptionKey = "k2", encryptionMethod = 2)
+        val url1 = ProfileUrlCodec.encode(p1)
+        val url2 = ProfileUrlCodec.encode(p2)
+
+        val multiRaw = "$url1\n\n$url2\n"
+        val drafts = ProfileUrlCodec.decodeMultiple(multiRaw)
+
+        assertThat(drafts).hasSize(2)
+        assertThat(drafts[0].name).isEqualTo("P1")
+        assertThat(drafts[0].domains).containsExactly("p1.com")
+        assertThat(drafts[1].name).isEqualTo("P2")
+        assertThat(drafts[1].domains).containsExactly("p2.com")
+    }
+
+    @Test
+    fun decodeMultiple_with_invalid_line_preserves_actual_line_number() {
+        val p1 = ProfileEntity(name = "P1", domains = "[\"p1.com\"]", encryptionKey = "k1", encryptionMethod = 1)
+        val url1 = ProfileUrlCodec.encode(p1)
+        val multiRaw = "$url1\n\ninvalid-link"
+
+        val error = assertThrows(IllegalArgumentException::class.java) {
+            ProfileUrlCodec.decodeMultiple(multiRaw)
+        }
+        assertThat(error.message).contains("Line 3")
+    }
 }

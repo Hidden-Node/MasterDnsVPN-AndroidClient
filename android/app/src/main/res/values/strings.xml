@@ -314,11 +314,20 @@
     <string name="profiles_share">Share</string>
     <string name="profiles_share_dialog_title">Share Profile URL</string>
     <string name="profiles_share_copied">Profile URL copied to clipboard</string>
-    <string name="profiles_import_link_short">Import Link</string>
-    <string name="profiles_import_clipboard">Import from Clipboard</string>
     <string name="profiles_invalid_link_msg">Invalid profile link</string>
     <string name="profiles_link_imported_msg">Profile imported from link</string>
-    <string name="profiles_import_link_dialog_title">Import Profile from URL</string>
-    <string name="profiles_import_link_hint">Paste masterdns:// link here</string>
     <string name="btn_copy">Copy</string>
+    <string name="btn_import">Import</string>
+    <string name="profiles_add_clipboard">Import from Clipboard</string>
+    <string name="profiles_add_qr">Import from QR Code</string>
+    <string name="profiles_add_toml">Import from TOML</string>
+    <string name="profiles_add_manual">Manual</string>
+    <string name="profiles_import_dialog_title">Import Profiles</string>
+    <string name="profiles_import_dialog_hint">Paste masterdns:// link(s), one per line</string>
+    <string name="profiles_imported_count_msg">Imported %d profiles</string>
+    <string name="profiles_clipboard_empty_msg">No profile link found in clipboard</string>
+    <string name="profiles_qr_scan_cancelled">QR scan cancelled</string>
+    <string name="profiles_qr_scan_no_code">No valid profile QR code found</string>
+    <string name="profiles_share_qr_cd">Profile QR code</string>
+    <string name="profiles_link_imported_named_msg">Imported profile: %s</string>
 </resources>

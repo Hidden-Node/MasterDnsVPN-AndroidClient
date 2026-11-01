@@ -29,6 +29,8 @@ object MdvColor {
     val Error = Color(0xFFFFB4AB)
     val ErrorContainer = Color(0xFF93000A)
     val OnError = Color(0xFF690005)
+
+    val QrBackground = Color(0xFFFFFFFF)
 }
 
 object MdvSpace {
