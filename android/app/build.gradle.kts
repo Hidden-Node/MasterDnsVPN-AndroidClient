@@ -234,6 +234,9 @@ dependencies {
     // Gson for JSON serialization
     implementation("com.google.code.gson:gson:2.11.0")
 
+    // ZXing for QR code generation and decoding
+    implementation("com.google.zxing:core:3.5.3")
+
     // Debug
     debugImplementation("androidx.compose.ui:ui-tooling")
     debugImplementation("androidx.compose.ui:ui-test-manifest")
