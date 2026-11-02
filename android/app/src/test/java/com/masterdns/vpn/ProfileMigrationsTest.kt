@@ -34,9 +34,9 @@ class ProfileMigrationsTest {
     }
 
     @Test
-    fun `registers exactly migration 1 to 2`() {
+    fun `registers migrations 1 to 2 and 2 to 3`() {
         val ranges = ProfileMigrations.ALL.map { it.startVersion to it.endVersion }
-        assertThat(ranges).containsExactly(1 to 2)
+        assertThat(ranges).containsExactly(1 to 2, 2 to 3)
     }
 
     @Test

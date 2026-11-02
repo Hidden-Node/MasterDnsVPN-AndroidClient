@@ -3,6 +3,7 @@ package com.masterdns.vpn.di
 import android.content.Context
 import com.masterdns.vpn.data.local.AppDatabase
 import com.masterdns.vpn.data.local.ProfileDao
+import com.masterdns.vpn.data.local.SubscriptionDao
 import dagger.Module
 import dagger.Provides
 import dagger.hilt.InstallIn
@@ -24,4 +25,8 @@ object AppModule {
     fun provideProfileDao(database: AppDatabase): ProfileDao {
         return database.profileDao()
     }
+
+    @Provides
+    fun provideSubscriptionDao(database: AppDatabase): SubscriptionDao =
+        database.subscriptionDao()
 }

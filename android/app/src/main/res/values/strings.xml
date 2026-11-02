@@ -330,4 +330,18 @@
     <string name="profiles_qr_scan_no_code">No valid profile QR code found</string>
     <string name="profiles_share_qr_cd">Profile QR code</string>
     <string name="profiles_link_imported_named_msg">Imported profile: %s</string>
+    <string name="profiles_add_subscription">Import from Subscription</string>
+    <string name="profiles_subscriptions_manage">Manage Subscriptions</string>
+    <string name="profiles_subscriptions_sync_all">Refresh Subscriptions</string>
+    <string name="profiles_subscription_add_title">Add Subscription</string>
+    <string name="profiles_subscription_name_label">Subscription Name</string>
+    <string name="profiles_subscription_name_hint">e.g. My Subscription (Optional)</string>
+    <string name="profiles_subscription_url_label">Subscription URL</string>
+    <string name="profiles_subscription_url_hint">https://example.com/sub/...</string>
+    <string name="profiles_subscription_imported_msg">Subscription imported: %d profiles added</string>
+    <string name="profiles_subscription_refreshed_msg">Subscriptions refreshed: %d profiles updated</string>
+    <string name="profiles_subscription_filter_all">All</string>
+    <string name="profiles_subscription_last_updated">Updated: %s</string>
+    <string name="profiles_subscription_delete_confirm">Delete subscription and all its profiles?</string>
+    <string name="profiles_subscription_invalid_url">URL must start with http:// or https://</string>
 </resources>

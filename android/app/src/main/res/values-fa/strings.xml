@@ -320,4 +320,18 @@
     <string name="profiles_qr_scan_no_code">QR code معتبری یافت نشد</string>
     <string name="profiles_share_qr_cd">QR code پروفایل</string>
     <string name="profiles_link_imported_named_msg">پروفایل وارد شد: %s</string>
+    <string name="profiles_add_subscription">افزودن لینک سابسکریپشن</string>
+    <string name="profiles_subscriptions_manage">مدیریت سابسکریپشن‌ها</string>
+    <string name="profiles_subscriptions_sync_all">به‌روزرسانی سابسکریپشن‌ها</string>
+    <string name="profiles_subscription_add_title">افزودن سابسکریپشن</string>
+    <string name="profiles_subscription_name_label">نام سابسکریپشن</string>
+    <string name="profiles_subscription_name_hint">مثلاً اشتراک اختصاصی (اختیاری)</string>
+    <string name="profiles_subscription_url_label">آدرس اینترنتی سابسکریپشن</string>
+    <string name="profiles_subscription_url_hint">https://example.com/sub/...</string>
+    <string name="profiles_subscription_imported_msg">سابسکریپشن اضافه شد: %d پروفایل دریافت گردید</string>
+    <string name="profiles_subscription_refreshed_msg">سابسکریپشن‌ها به‌روز شدند: %d پروفایل دریافت گردید</string>
+    <string name="profiles_subscription_filter_all">همه</string>
+    <string name="profiles_subscription_last_updated">به‌روزرسانی: %s</string>
+    <string name="profiles_subscription_delete_confirm">این سابسکریپشن و تمام پروفایل‌های آن حذف شوند؟</string>
+    <string name="profiles_subscription_invalid_url">آدرس اینترنتی باید با http:// یا https:// شروع شود</string>
 </resources>

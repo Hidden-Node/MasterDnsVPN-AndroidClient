@@ -21,5 +21,6 @@ data class ProfileEntity(
     val logLevel: String = "INFO",
     val isSelected: Boolean = false,
     val advancedJson: String = "{}",  // JSON blob for all other advanced settings
-    val createdAt: Long = System.currentTimeMillis()
+    val createdAt: Long = System.currentTimeMillis(),
+    val subscriptionId: Long? = null
 )

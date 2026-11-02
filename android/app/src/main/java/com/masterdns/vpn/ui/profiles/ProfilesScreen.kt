@@ -13,6 +13,7 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
@@ -47,7 +48,11 @@ import androidx.hilt.navigation.compose.hiltViewModel
 import com.google.gson.Gson
 import com.masterdns.vpn.R
 import com.masterdns.vpn.data.local.ProfileEntity
+import com.masterdns.vpn.data.local.SubscriptionEntity
+import com.masterdns.vpn.ui.components.mdv.cards.MdvCardLow
 import com.masterdns.vpn.ui.components.mdv.controls.MdvBackTopAppBar
+import com.masterdns.vpn.ui.components.mdv.controls.MdvFilterChip
+import com.masterdns.vpn.ui.components.mdv.controls.MdvPrimaryActionButton
 import com.masterdns.vpn.ui.theme.ConnectedGreen
 import com.masterdns.vpn.ui.theme.MdvColor
 import com.masterdns.vpn.ui.theme.MdvRadius
@@ -77,6 +82,19 @@ fun ProfilesScreen(
     onOpenSettings: (Long) -> Unit
 ) {
     val profiles by viewModel.profiles.collectAsState()
+    val subscriptions by viewModel.subscriptions.collectAsState()
+    val isRefreshingSubscriptions by viewModel.isRefreshingSubscriptions.collectAsState()
+    var showAddSubscriptionDialog by rememberSaveable { mutableStateOf(false) }
+    var addSubscriptionSession by rememberSaveable { mutableStateOf(0) }
+    var showManageSubscriptionsDialog by rememberSaveable { mutableStateOf(false) }
+    var selectedSubscriptionId by rememberSaveable { mutableStateOf<Long?>(null) }
+
+    LaunchedEffect(subscriptions) {
+        if (selectedSubscriptionId != null && subscriptions.none { it.id == selectedSubscriptionId }) {
+            selectedSubscriptionId = null
+        }
+    }
+
     var showEditor by rememberSaveable { mutableStateOf(false) }
     var editingId by rememberSaveable { mutableStateOf<Long?>(null) }
     val editingProfile: ProfileEntity? = editingId?.let { id -> profiles.find { it.id == id } }
@@ -173,6 +191,27 @@ fun ProfilesScreen(
                 title = stringResource(R.string.title_profiles),
                 onBack = onBack,
                 actions = {
+                    if (subscriptions.isNotEmpty()) {
+                        IconButton(onClick = { showManageSubscriptionsDialog = true }) {
+                            Icon(Icons.Filled.FolderSpecial, contentDescription = stringResource(R.string.profiles_subscriptions_manage))
+                        }
+                        IconButton(
+                            onClick = {
+                                viewModel.refreshAllSubscriptions { count, errors ->
+                                    scope.launch {
+                                        if (errors.isEmpty()) {
+                                            snackbarHostState.showSnackbar(context.getString(R.string.profiles_subscription_refreshed_msg, count))
+                                        } else {
+                                            snackbarHostState.showSnackbar(errors.first())
+                                        }
+                                    }
+                                }
+                            },
+                            enabled = !isRefreshingSubscriptions
+                        ) {
+                            Icon(Icons.Filled.Sync, contentDescription = stringResource(R.string.profiles_subscriptions_sync_all))
+                        }
+                    }
                     Box {
                         IconButton(onClick = { showAddMenu = true }) {
                             Icon(Icons.Filled.Add, contentDescription = stringResource(R.string.profiles_add))
@@ -181,6 +220,15 @@ fun ProfilesScreen(
                             expanded = showAddMenu,
                             onDismissRequest = { showAddMenu = false }
                         ) {
+                            DropdownMenuItem(
+                                text = { Text(stringResource(R.string.profiles_add_subscription)) },
+                                leadingIcon = { Icon(Icons.Filled.CloudDownload, contentDescription = null) },
+                                onClick = {
+                                    showAddMenu = false
+                                    addSubscriptionSession++
+                                    showAddSubscriptionDialog = true
+                                }
+                            )
                             DropdownMenuItem(
                                 text = { Text(stringResource(R.string.profiles_add_clipboard)) },
                                 leadingIcon = { Icon(Icons.Filled.ContentPaste, contentDescription = null) },
@@ -305,56 +353,132 @@ fun ProfilesScreen(
             )
         }
 
-        if (profiles.isEmpty()) {
-            Box(
-                modifier = Modifier.fillMaxSize().padding(padding),
-                contentAlignment = Alignment.Center
-            ) {
-                Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                    Icon(
-                        Icons.Filled.PersonAdd,
-                        contentDescription = null,
-                        modifier = Modifier.size(64.dp),
-                        tint = MdvColor.OnSurfaceVariant.copy(alpha = 0.7f)
-                    )
-                    Spacer(modifier = Modifier.height(16.dp))
-                    Text(
-                        stringResource(R.string.profiles_empty_title),
-                        style = MaterialTheme.typography.titleMedium,
-                        color = MdvColor.OnSurfaceVariant
-                    )
-                    Spacer(modifier = Modifier.height(8.dp))
-                    FilledTonalButton(onClick = {
-                        editingId = null
-                        importedDraft = null
-                        importedResolvers = null
-                        showEditor = true
-                    }) {
-                        Text(stringResource(R.string.profiles_create))
+        val displayedProfiles = remember(profiles, selectedSubscriptionId) {
+            if (selectedSubscriptionId == null) profiles
+            else profiles.filter { it.subscriptionId == selectedSubscriptionId }
+        }
+
+        Column(modifier = Modifier.fillMaxSize().padding(padding)) {
+            if (subscriptions.isNotEmpty()) {
+                LazyRow(
+                    modifier = Modifier.fillMaxWidth().padding(horizontal = MdvSpace.S4, vertical = MdvSpace.S2),
+                    horizontalArrangement = Arrangement.spacedBy(MdvSpace.S2)
+                ) {
+                    item {
+                        MdvFilterChip(
+                            selected = selectedSubscriptionId == null,
+                            label = stringResource(R.string.profiles_subscription_filter_all),
+                            onClick = { selectedSubscriptionId = null }
+                        )
+                    }
+                    items(subscriptions, key = { it.id }) { sub ->
+                        MdvFilterChip(
+                            selected = selectedSubscriptionId == sub.id,
+                            label = "${sub.name} (${sub.profileCount})",
+                            onClick = { selectedSubscriptionId = if (selectedSubscriptionId == sub.id) null else sub.id }
+                        )
                     }
                 }
             }
-        } else {
-            LazyColumn(
-                modifier = Modifier.fillMaxSize().padding(padding),
-                contentPadding = PaddingValues(MdvSpace.S4),
-                verticalArrangement = Arrangement.spacedBy(MdvSpace.S2)
-            ) {
-                items(profiles, key = { it.id }, contentType = { "profile_card" }) { profile ->
-                    ProfileCard(
-                        profile = profile,
-                        onSelect = { viewModel.selectProfile(profile.id) },
-                        onSettings = { onOpenSettings(profile.id) },
-                        onEdit = {
-                            editingId = profile.id
+
+            if (profiles.isEmpty()) {
+                Box(
+                    modifier = Modifier.fillMaxWidth().weight(1f),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                        Icon(
+                            Icons.Filled.PersonAdd,
+                            contentDescription = null,
+                            modifier = Modifier.size(64.dp),
+                            tint = MdvColor.OnSurfaceVariant.copy(alpha = 0.7f)
+                        )
+                        Spacer(modifier = Modifier.height(16.dp))
+                        Text(
+                            stringResource(R.string.profiles_empty_title),
+                            style = MaterialTheme.typography.titleMedium,
+                            color = MdvColor.OnSurfaceVariant
+                        )
+                        Spacer(modifier = Modifier.height(8.dp))
+                        FilledTonalButton(onClick = {
+                            editingId = null
+                            importedDraft = null
+                            importedResolvers = null
                             showEditor = true
-                        },
-                        onDelete = { pendingDeleteId = profile.id },
-                        onShare = { sharingProfile = profile }
-                    )
+                        }) {
+                            Text(stringResource(R.string.profiles_create))
+                        }
+                    }
+                }
+            } else {
+                LazyColumn(
+                    modifier = Modifier.fillMaxWidth().weight(1f),
+                    contentPadding = PaddingValues(MdvSpace.S4),
+                    verticalArrangement = Arrangement.spacedBy(MdvSpace.S2)
+                ) {
+                    items(displayedProfiles, key = { it.id }, contentType = { "profile_card" }) { profile ->
+                        ProfileCard(
+                            profile = profile,
+                            onSelect = { viewModel.selectProfile(profile.id) },
+                            onSettings = { onOpenSettings(profile.id) },
+                            onEdit = {
+                                editingId = profile.id
+                                showEditor = true
+                            },
+                            onDelete = { pendingDeleteId = profile.id },
+                            onShare = { sharingProfile = profile }
+                        )
+                    }
                 }
             }
         }
+    }
+
+    if (showAddSubscriptionDialog) {
+        key(addSubscriptionSession) {
+            AddSubscriptionDialog(
+                onDismiss = { showAddSubscriptionDialog = false },
+                onAdd = { name, url ->
+                    viewModel.addSubscription(
+                        name = name,
+                        url = url,
+                        onSuccess = { count ->
+                            showAddSubscriptionDialog = false
+                            scope.launch {
+                                snackbarHostState.showSnackbar(
+                                    context.getString(R.string.profiles_subscription_imported_msg, count)
+                                )
+                            }
+                        },
+                        onError = { err ->
+                            scope.launch { snackbarHostState.showSnackbar(err) }
+                        }
+                    )
+                },
+                isLoading = isRefreshingSubscriptions
+            )
+        }
+    }
+
+    if (showManageSubscriptionsDialog) {
+        ManageSubscriptionsDialog(
+            subscriptions = subscriptions,
+            onDismiss = { showManageSubscriptionsDialog = false },
+            onRefresh = { subId ->
+                viewModel.refreshSubscription(subId) { count, err ->
+                    scope.launch {
+                        val msg = err ?: context.getString(
+                            R.string.profiles_subscription_refreshed_msg, count ?: 0
+                        )
+                        snackbarHostState.showSnackbar(msg)
+                    }
+                }
+            },
+            onDelete = { subId ->
+                viewModel.deleteSubscription(subId)
+            },
+            isRefreshing = isRefreshingSubscriptions
+        )
     }
 
     sharingProfile?.let { profile ->
@@ -1037,6 +1161,175 @@ private fun ImportProfilesDialog(
             }
         }
     )
+}
+
+@Composable
+private fun AddSubscriptionDialog(
+    onDismiss: () -> Unit,
+    onAdd: (name: String, url: String) -> Unit,
+    isLoading: Boolean
+) {
+    var name by rememberSaveable { mutableStateOf("") }
+    var url by rememberSaveable { mutableStateOf("") }
+    var errorText by rememberSaveable { mutableStateOf<String?>(null) }
+
+    AlertDialog(
+        onDismissRequest = { if (!isLoading) onDismiss() },
+        title = { Text(stringResource(R.string.profiles_subscription_add_title)) },
+        text = {
+            Column(verticalArrangement = Arrangement.spacedBy(MdvSpace.S2)) {
+                OutlinedTextField(
+                    value = name,
+                    onValueChange = { name = it },
+                    label = { Text(stringResource(R.string.profiles_subscription_name_label)) },
+                    placeholder = { Text(stringResource(R.string.profiles_subscription_name_hint)) },
+                    singleLine = true,
+                    enabled = !isLoading,
+                    modifier = Modifier.fillMaxWidth()
+                )
+                OutlinedTextField(
+                    value = url,
+                    onValueChange = {
+                        url = it
+                        errorText = null
+                    },
+                    label = { Text(stringResource(R.string.profiles_subscription_url_label)) },
+                    placeholder = { Text(stringResource(R.string.profiles_subscription_url_hint)) },
+                    singleLine = true,
+                    isError = errorText != null,
+                    enabled = !isLoading,
+                    textStyle = LocalTextStyle.current.copy(textDirection = TextDirection.Ltr),
+                    modifier = Modifier.fillMaxWidth()
+                )
+                if (errorText != null) {
+                    Text(
+                        text = errorText!!,
+                        color = MaterialTheme.colorScheme.error,
+                        style = MaterialTheme.typography.bodySmall
+                    )
+                }
+                if (isLoading) {
+                    LinearProgressIndicator(modifier = Modifier.fillMaxWidth().padding(top = MdvSpace.S2))
+                }
+            }
+        },
+        confirmButton = {
+            val invalidUrlError = stringResource(R.string.profiles_subscription_invalid_url)
+            MdvPrimaryActionButton(
+                text = stringResource(R.string.btn_import),
+                enabled = url.isNotBlank() && !isLoading,
+                onClick = {
+                    val trimmedUrl = url.trim()
+                    if (!trimmedUrl.startsWith("http://", ignoreCase = true) && !trimmedUrl.startsWith("https://", ignoreCase = true)) {
+                        errorText = invalidUrlError
+                    } else {
+                        onAdd(name.trim(), trimmedUrl)
+                    }
+                }
+            )
+        },
+        dismissButton = {
+            TextButton(onClick = onDismiss, enabled = !isLoading) {
+                Text(stringResource(R.string.action_cancel))
+            }
+        }
+    )
+}
+
+@Composable
+private fun ManageSubscriptionsDialog(
+    subscriptions: List<SubscriptionEntity>,
+    onDismiss: () -> Unit,
+    onRefresh: (subId: Long) -> Unit,
+    onDelete: (subId: Long) -> Unit,
+    isRefreshing: Boolean
+) {
+    var pendingDeleteSub by remember { mutableStateOf<SubscriptionEntity?>(null) }
+
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text(stringResource(R.string.profiles_subscriptions_manage)) },
+        text = {
+            Column(verticalArrangement = Arrangement.spacedBy(MdvSpace.S2)) {
+                if (isRefreshing) {
+                    LinearProgressIndicator(modifier = Modifier.fillMaxWidth())
+                }
+                if (subscriptions.isEmpty()) {
+                    Text(stringResource(R.string.profiles_empty_title))
+                } else {
+                    LazyColumn(
+                        modifier = Modifier.fillMaxWidth().heightIn(max = 400.dp),
+                        verticalArrangement = Arrangement.spacedBy(MdvSpace.S2)
+                    ) {
+                        items(subscriptions, key = { it.id }) { sub ->
+                            MdvCardLow(modifier = Modifier.fillMaxWidth()) {
+                                Row(
+                                    modifier = Modifier.fillMaxWidth().padding(MdvSpace.S3),
+                                    horizontalArrangement = Arrangement.SpaceBetween,
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    Column(modifier = Modifier.weight(1f)) {
+                                        Text(sub.name, style = MaterialTheme.typography.titleSmall)
+                                        Text(
+                                            sub.url,
+                                            style = MaterialTheme.typography.bodySmall,
+                                            color = MdvColor.OnSurfaceVariant,
+                                            maxLines = 1,
+                                            overflow = TextOverflow.Ellipsis
+                                        )
+                                        val dateStr = remember(sub.lastUpdated) {
+                                            if (sub.lastUpdated > 0) java.text.SimpleDateFormat("yyyy-MM-dd HH:mm", java.util.Locale.getDefault()).format(java.util.Date(sub.lastUpdated))
+                                            else "-"
+                                        }
+                                        Text(
+                                            stringResource(R.string.profiles_subscription_last_updated, dateStr),
+                                            style = MaterialTheme.typography.labelSmall,
+                                            color = MdvColor.OnSurfaceVariant
+                                        )
+                                    }
+                                    Row {
+                                        IconButton(onClick = { onRefresh(sub.id) }, enabled = !isRefreshing) {
+                                            Icon(Icons.Filled.Sync, contentDescription = null)
+                                        }
+                                        IconButton(onClick = { pendingDeleteSub = sub }, enabled = !isRefreshing) {
+                                            Icon(Icons.Filled.Delete, contentDescription = null, tint = MaterialTheme.colorScheme.error)
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        confirmButton = {
+            TextButton(onClick = onDismiss) {
+                Text(stringResource(R.string.action_close))
+            }
+        }
+    )
+
+    pendingDeleteSub?.let { sub ->
+        AlertDialog(
+            onDismissRequest = { pendingDeleteSub = null },
+            title = { Text(sub.name) },
+            text = { Text(stringResource(R.string.profiles_subscription_delete_confirm)) },
+            confirmButton = {
+                MdvPrimaryActionButton(
+                    text = stringResource(R.string.profiles_delete),
+                    onClick = {
+                        onDelete(sub.id)
+                        pendingDeleteSub = null
+                    }
+                )
+            },
+            dismissButton = {
+                TextButton(onClick = { pendingDeleteSub = null }) {
+                    Text(stringResource(R.string.action_cancel))
+                }
+            }
+        )
+    }
 }
 
 @Composable

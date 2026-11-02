@@ -77,4 +77,45 @@ interface ProfileDao {
             }
         }
     }
+
+    @Query("SELECT * FROM profiles WHERE subscriptionId = :subId ORDER BY createdAt DESC")
+    fun getProfilesBySubscriptionId(subId: Long): Flow<List<ProfileEntity>>
+
+    @Query("DELETE FROM profiles WHERE subscriptionId = :subId")
+    suspend fun deleteProfilesBySubscriptionId(subId: Long)
+
+    /**
+     * Deletes all profiles belonging to [subId]. If the currently selected profile
+     * was in this subscription, atomically reselects the newest remaining profile.
+     */
+    @Transaction
+    suspend fun deleteProfilesBySubscriptionIdAndReselect(subId: Long) {
+        val selected = getSelectedProfile()
+        val selectedInSub = selected != null && selected.subscriptionId == subId
+        deleteProfilesBySubscriptionId(subId)
+        if (selectedInSub) {
+            getNewestProfile()?.let { setSelectedProfile(it.id) }
+        }
+    }
+
+    /**
+     * Replaces all profiles for [subscriptionId] with [newProfiles] inside a single
+     * transaction, preserving active selection if one of the subscription profiles
+     * was selected.
+     */
+    @Transaction
+    suspend fun replaceProfilesForSubscription(
+        subscriptionId: Long,
+        newProfiles: List<ProfileEntity>
+    ) {
+        val selected = getSelectedProfile()
+        val selectedWasInSub = selected?.subscriptionId == subscriptionId
+        deleteProfilesBySubscriptionId(subscriptionId)
+        newProfiles.forEach { profile ->
+            insertProfile(profile.copy(subscriptionId = subscriptionId, isSelected = false))
+        }
+        if (selectedWasInSub || getSelectedProfile() == null) {
+            getNewestProfile()?.let { setSelectedProfile(it.id) }
+        }
+    }
 }

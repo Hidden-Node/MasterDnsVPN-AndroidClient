@@ -1,0 +1,136 @@
+package com.masterdns.vpn.util
+
+import kotlin.io.encoding.Base64
+import kotlin.io.encoding.ExperimentalEncodingApi
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
+import java.io.BufferedReader
+import java.io.IOException
+import java.io.InputStream
+import java.io.InputStreamReader
+import java.net.HttpURLConnection
+import java.net.URL
+import java.util.zip.GZIPInputStream
+
+data class SubscriptionFetchResult(
+    val suggestedName: String,
+    val drafts: List<ProfileDraftData>,
+    val rawCount: Int
+)
+
+@OptIn(ExperimentalEncodingApi::class)
+object SubscriptionFetcher {
+
+    private const val CONNECT_TIMEOUT_MS = 15_000
+    private const val READ_TIMEOUT_MS = 15_000
+    private const val MAX_REDIRECTS = 10
+    private const val USER_AGENT = "MasterDns/1.0"
+
+    private val base64UrlSafeDecoder = Base64.UrlSafe.withPadding(Base64.PaddingOption.ABSENT_OPTIONAL)
+    private val base64DefaultDecoder = Base64.Default.withPadding(Base64.PaddingOption.ABSENT_OPTIONAL)
+
+    suspend fun fetch(subscriptionUrl: String): Result<SubscriptionFetchResult> = withContext(Dispatchers.IO) {
+        runCatching {
+            val trimmedUrl = subscriptionUrl.trim()
+            if (!trimmedUrl.startsWith("http://", ignoreCase = true) &&
+                !trimmedUrl.startsWith("https://", ignoreCase = true)
+            ) {
+                throw IllegalArgumentException("Invalid subscription URL scheme: must start with http:// or https://")
+            }
+
+            var currentUrl = trimmedUrl
+            var redirects = 0
+            var activeConn: HttpURLConnection? = null
+
+            while (redirects <= MAX_REDIRECTS) {
+                val urlObj = URL(currentUrl)
+                val conn = (urlObj.openConnection() as HttpURLConnection).apply {
+                    connectTimeout = CONNECT_TIMEOUT_MS
+                    readTimeout = READ_TIMEOUT_MS
+                    instanceFollowRedirects = false
+                    setRequestProperty("User-Agent", USER_AGENT)
+                    setRequestProperty("Accept", "text/plain, application/octet-stream, */*")
+                }
+
+                val status = conn.responseCode
+                if (status in 300..399) {
+                    val location = conn.getHeaderField("Location")
+                    conn.disconnect()
+                    if (redirects == MAX_REDIRECTS) {
+                        throw IOException("Too many redirects: exceeded limit of $MAX_REDIRECTS")
+                    }
+                    if (location.isNullOrBlank()) {
+                        throw IllegalArgumentException("HTTP redirect $status without Location header")
+                    }
+                    currentUrl = if (location.startsWith("http://", ignoreCase = true) || location.startsWith("https://", ignoreCase = true)) {
+                        location
+                    } else {
+                        URL(urlObj, location).toString()
+                    }
+                    redirects++
+                } else if (status in 200..299) {
+                    activeConn = conn
+                    break
+                } else {
+                    val errorBody = runCatching { conn.errorStream?.bufferedReader()?.readText() }.getOrNull().orEmpty()
+                    conn.disconnect()
+                    throw IllegalArgumentException("Server returned HTTP $status: $errorBody")
+                }
+            }
+
+            val conn = activeConn ?: throw IOException("Failed to establish connection")
+            val rawBody = try {
+                val rawStream: InputStream = conn.inputStream
+                val stream: InputStream = if ("gzip".equals(conn.contentEncoding, ignoreCase = true)) {
+                    GZIPInputStream(rawStream)
+                } else {
+                    rawStream
+                }
+                BufferedReader(InputStreamReader(stream, Charsets.UTF_8)).use { it.readText() }
+            } finally {
+                conn.disconnect()
+            }
+
+            val hostName = runCatching { URL(trimmedUrl).host?.takeIf { it.isNotBlank() } }.getOrNull() ?: "Subscription"
+            parsePayload(rawBody, hostName)
+        }
+    }
+
+    fun parsePayload(rawBody: String, suggestedName: String = "Subscription"): SubscriptionFetchResult {
+        val cleanBody = rawBody.removePrefix("\uFEFF").trim()
+        if (cleanBody.isBlank()) {
+            throw IllegalArgumentException("Subscription response is empty")
+        }
+
+        val decodedBody = decodeIfBase64(cleanBody)
+        val drafts = ProfileUrlCodec.decodeMultiple(decodedBody)
+        if (drafts.isEmpty()) {
+            throw IllegalArgumentException("No valid profile links found in subscription response")
+        }
+
+        return SubscriptionFetchResult(
+            suggestedName = suggestedName,
+            drafts = drafts,
+            rawCount = drafts.size
+        )
+    }
+
+    private fun decodeIfBase64(input: String): String {
+        if (input.contains("masterdns://", ignoreCase = true) || input.contains("stormdns://", ignoreCase = true) || input.contains("cottendns://", ignoreCase = true)) {
+            return input
+        }
+        val cleanInput = input.replace("\r", "").replace("\n", "").trim()
+        val decoded = runCatching {
+            base64UrlSafeDecoder.decode(cleanInput)
+        }.recoverCatching {
+            base64DefaultDecoder.decode(cleanInput)
+        }.getOrNull()
+
+        return if (decoded != null) {
+            val text = String(decoded, Charsets.UTF_8)
+            if (text.contains("masterdns://", ignoreCase = true) || text.contains("stormdns://", ignoreCase = true) || text.contains("cottendns://", ignoreCase = true)) text else input
+        } else {
+            input
+        }
+    }
+}

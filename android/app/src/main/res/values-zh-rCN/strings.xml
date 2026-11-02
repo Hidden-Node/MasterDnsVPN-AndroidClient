@@ -320,4 +320,18 @@
     <string name="profiles_qr_scan_no_code">未找到有效的配置文件二维码</string>
     <string name="profiles_share_qr_cd">配置文件二维码</string>
     <string name="profiles_link_imported_named_msg">已导入配置文件：%s</string>
+    <string name="profiles_add_subscription">从订阅导入</string>
+    <string name="profiles_subscriptions_manage">管理订阅</string>
+    <string name="profiles_subscriptions_sync_all">更新订阅</string>
+    <string name="profiles_subscription_add_title">添加订阅</string>
+    <string name="profiles_subscription_name_label">订阅名称</string>
+    <string name="profiles_subscription_name_hint">例如：我的订阅（可选）</string>
+    <string name="profiles_subscription_url_label">订阅网址</string>
+    <string name="profiles_subscription_url_hint">https://example.com/sub/...</string>
+    <string name="profiles_subscription_imported_msg">已添加订阅：新增 %d 个配置文件</string>
+    <string name="profiles_subscription_refreshed_msg">订阅已更新：%d 个配置文件已更新</string>
+    <string name="profiles_subscription_filter_all">全部</string>
+    <string name="profiles_subscription_last_updated">更新时间：%s</string>
+    <string name="profiles_subscription_delete_confirm">确定要删除此订阅及其所有配置文件吗？</string>
+    <string name="profiles_subscription_invalid_url">网址必须以 http:// 或 https:// 开头</string>
 </resources>

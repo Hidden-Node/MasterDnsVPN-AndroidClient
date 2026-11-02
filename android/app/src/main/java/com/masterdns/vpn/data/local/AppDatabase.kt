@@ -5,10 +5,11 @@ import androidx.room.Database
 import androidx.room.Room
 import androidx.room.RoomDatabase
 
-/** Room DB v2. Additive changes: bump version + AutoMigration. Destructive changes: manual Migration in ProfileMigrations wrapped in SafetyExportMigration. */
-@Database(entities = [ProfileEntity::class], version = 2, exportSchema = true)
+/** Room DB v3. Additive changes: bump version + AutoMigration. Destructive changes: manual Migration in ProfileMigrations wrapped in SafetyExportMigration. */
+@Database(entities = [ProfileEntity::class, SubscriptionEntity::class], version = 3, exportSchema = true)
 abstract class AppDatabase : RoomDatabase() {
     abstract fun profileDao(): ProfileDao
+    abstract fun subscriptionDao(): SubscriptionDao
 
     companion object {
         @Volatile
@@ -26,7 +27,7 @@ abstract class AppDatabase : RoomDatabase() {
                 AppDatabase::class.java,
                 "masterdns_vpn.db"
             )
-            builder.addMigrations(*ProfileMigrations.ALL)
+            builder.addMigrations(*ProfileMigrations.all(context))
             // Downgrading the app (e.g. rolling back an update) would
             // otherwise crash on every launch; profiles are cheap to
             // recreate, a permanently crashing app is not.
