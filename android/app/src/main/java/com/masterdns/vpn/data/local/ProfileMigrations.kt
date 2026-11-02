@@ -134,5 +134,31 @@ object ProfileMigrations {
         override fun migrate(db: SupportSQLiteDatabase) { /* no-op */ }
     }
 
-    val ALL: Array<Migration> = arrayOf(MIGRATION_1_2)
+    val MIGRATION_2_3_CORE = object : Migration(2, 3) {
+        override fun migrate(db: SupportSQLiteDatabase) {
+            db.execSQL("ALTER TABLE profiles ADD COLUMN subscriptionId INTEGER")
+            db.execSQL(
+                """
+                CREATE TABLE IF NOT EXISTS subscriptions (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,
+                    name TEXT NOT NULL,
+                    url TEXT NOT NULL,
+                    lastUpdated INTEGER NOT NULL,
+                    profileCount INTEGER NOT NULL
+                )
+                """.trimIndent()
+            )
+        }
+    }
+
+    fun migration2To3(context: Context): Migration =
+        SafetyExportMigration(context, 2, 3, MIGRATION_2_3_CORE)
+
+    fun all(context: Context): Array<Migration> = arrayOf(
+        MIGRATION_1_2,
+        migration2To3(context)
+    )
+
+    // Static array without context wrapping for tests and inspectability
+    val ALL: Array<Migration> = arrayOf(MIGRATION_1_2, MIGRATION_2_3_CORE)
 }

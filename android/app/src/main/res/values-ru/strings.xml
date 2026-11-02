@@ -320,4 +320,18 @@
     <string name="profiles_qr_scan_no_code">QR-код профиля не найден</string>
     <string name="profiles_share_qr_cd">QR-код профиля</string>
     <string name="profiles_link_imported_named_msg">Профиль импортирован: %s</string>
+    <string name="profiles_add_subscription">Импорт из подписки</string>
+    <string name="profiles_subscriptions_manage">Управление подписками</string>
+    <string name="profiles_subscriptions_sync_all">Обновить подписки</string>
+    <string name="profiles_subscription_add_title">Добавить подписку</string>
+    <string name="profiles_subscription_name_label">Название подписки</string>
+    <string name="profiles_subscription_name_hint">например, Моя подписка (необязательно)</string>
+    <string name="profiles_subscription_url_label">URL подписки</string>
+    <string name="profiles_subscription_url_hint">https://example.com/sub/...</string>
+    <string name="profiles_subscription_imported_msg">Подписка добавлена: %d профилей импортировано</string>
+    <string name="profiles_subscription_refreshed_msg">Подписки обновлены: %d профилей обновлено</string>
+    <string name="profiles_subscription_filter_all">Все</string>
+    <string name="profiles_subscription_last_updated">Обновлено: %s</string>
+    <string name="profiles_subscription_delete_confirm">Удалить подписку и все её профили?</string>
+    <string name="profiles_subscription_invalid_url">URL должен начинаться с http:// или https://</string>
 </resources>
