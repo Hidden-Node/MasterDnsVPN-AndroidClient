@@ -52,6 +52,19 @@ class SubscriptionFetcherTest {
     }
 
     @Test
+    fun parsePayload_base64EncodedProfilesWithWhitespaceAndSpaces_success() {
+        val plain = "$sampleProfileUrl1\n$sampleProfileUrl2"
+        val base64 = Base64.Default.encode(plain.toByteArray(Charsets.UTF_8))
+        val base64WithSpaces = "  " + base64.chunked(16).joinToString("  \n  ") + " \r\n "
+
+        val result = SubscriptionFetcher.parsePayload(base64WithSpaces, "SpacedSub")
+
+        assertThat(result.drafts).hasSize(2)
+        assertThat(result.drafts[0].domains).containsExactly("s1.example.com")
+        assertThat(result.drafts[1].domains).containsExactly("s2.example.com")
+    }
+
+    @Test
     fun parsePayload_urlSafeBase64EncodedProfiles_success() {
         val plain = "$sampleProfileUrl1\n$sampleProfileUrl2"
         val base64 = Base64.UrlSafe.encode(plain.toByteArray(Charsets.UTF_8))
