@@ -73,7 +73,7 @@ object ProfileUrlCodec {
 
     @OptIn(ExperimentalEncodingApi::class)
     fun decode(url: String): ProfileDraftData {
-        val link = url.trim()
+        val link = url.removePrefix("\uFEFF").trim()
         val schemeEnd = link.indexOf("://")
         require(schemeEnd > 0) { "Invalid profile link: missing scheme" }
 
@@ -91,13 +91,16 @@ object ProfileUrlCodec {
             throw IllegalArgumentException("Profile payload is not valid base64")
         }
 
-        val root = JsonParser.parseString(String(jsonBytes, Charsets.UTF_8)).asJsonObject
+        val root = runCatching { JsonParser.parseString(String(jsonBytes, Charsets.UTF_8)) }
+            .getOrNull()?.takeIf { it.isJsonObject }?.asJsonObject
+            ?: throw IllegalArgumentException("Invalid profile JSON payload")
+
         val schema = root.get("schema")?.takeIf { it.isJsonPrimitive }?.asString.orEmpty()
         require(schema in SUPPORTED_SCHEMAS) { "Unsupported profile schema: $schema" }
 
-        val profileObj = root.getAsJsonObject("profile")
+        val profileObj = root.get("profile")?.takeIf { it.isJsonObject }?.asJsonObject
             ?: throw IllegalArgumentException("Missing profile object in link")
-        val serverObj = profileObj.getAsJsonObject("server")
+        val serverObj = profileObj.get("server")?.takeIf { it.isJsonObject }?.asJsonObject
             ?: throw IllegalArgumentException("Missing server object in link")
 
         val domains = mutableListOf<String>()
@@ -139,8 +142,8 @@ object ProfileUrlCodec {
     fun decodeMultiple(raw: String): List<ProfileDraftData> {
         val results = mutableListOf<ProfileDraftData>()
         raw.lineSequence().forEachIndexed { index, rawLine ->
-            val line = rawLine.trim()
-            if (line.isNotBlank()) {
+            val line = rawLine.removePrefix("\uFEFF").trim()
+            if (line.isNotBlank() && !line.startsWith("#") && !line.startsWith("//") && !line.startsWith(";")) {
                 try {
                     results.add(decode(line))
                 } catch (e: Exception) {

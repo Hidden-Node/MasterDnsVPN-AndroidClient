@@ -122,7 +122,7 @@ interface ProfileDao {
             val candidate = if (previousSelectedName != null) {
                 inserted.firstOrNull { it.name == previousSelectedName }
             } else null
-            (candidate ?: getNewestProfile())?.let { setSelectedProfile(it.id) }
+            (candidate ?: inserted.firstOrNull() ?: getNewestProfile())?.let { setSelectedProfile(it.id) }
         }
     }
 }

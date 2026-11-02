@@ -89,4 +89,13 @@ class SubscriptionFetcherTest {
             SubscriptionFetcher.parsePayload("some random non-link text", "InvalidSub")
         }
     }
+
+    @Test
+    fun parsePayload_with_comments_and_bom_succeeds() {
+        val plain = "\uFEFF# Header comment\n// Secondary comment\n$sampleProfileUrl1\nsome-junk-line\n$sampleProfileUrl2"
+        val result = SubscriptionFetcher.parsePayload(plain, "ResilientSub")
+        assertThat(result.drafts).hasSize(2)
+        assertThat(result.drafts[0].name).isEqualTo("SubServer1")
+        assertThat(result.drafts[1].name).isEqualTo("SubServer2")
+    }
 }

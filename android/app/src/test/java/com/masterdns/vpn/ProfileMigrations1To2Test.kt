@@ -16,7 +16,7 @@ import org.robolectric.annotation.Config
 
 @RunWith(RobolectricTestRunner::class)
 @Config(sdk = [33])
-class ProfileMigrations2To3Test {
+class ProfileMigrations1To2Test {
 
     private val context: Context get() = ApplicationProvider.getApplicationContext()
 
@@ -31,11 +31,11 @@ class ProfileMigrations2To3Test {
     }
 
     @Test
-    fun migration2To3_addsColumnAndTable_andPreservesData() {
+    fun migration1To2_addsColumnAndTable_andPreservesData() {
         val helper = FrameworkSQLiteOpenHelperFactory().create(
             SupportSQLiteOpenHelper.Configuration.builder(context)
                 .name(null)
-                .callback(object : SupportSQLiteOpenHelper.Callback(2) {
+                .callback(object : SupportSQLiteOpenHelper.Callback(1) {
                     override fun onCreate(db: SupportSQLiteDatabase) {
                         db.execSQL("""
                             CREATE TABLE IF NOT EXISTS profiles (
@@ -73,10 +73,10 @@ class ProfileMigrations2To3Test {
                 VALUES ('PreMigration', '["test.com"]', 1, 'key', 'SOCKS5', 18000, '8.8.8.8', 3, 3, 4, 0, 0, 'INFO', 1, '{}', 1000)
             """.trimIndent())
 
-            ProfileMigrations.migration2To3(context).migrate(db)
+            ProfileMigrations.migration1To2(context).migrate(db)
 
             // Verify safety export snapshot created
-            val backups = context.noBackupFilesDir.listFiles { f -> f.name.startsWith("profiles_backup_v2_to_v3_") }
+            val backups = context.noBackupFilesDir.listFiles { f -> f.name.startsWith("profiles_backup_v1_to_v2_") }
             assertThat(backups?.size ?: 0).isAtLeast(1)
 
             // Verify subscriptions table created

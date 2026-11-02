@@ -34,21 +34,15 @@ class ProfileMigrationsTest {
     }
 
     @Test
-    fun `registers migrations 1 to 2 and 2 to 3`() {
+    fun `registers migration 1 to 2`() {
         val ranges = ProfileMigrations.ALL.map { it.startVersion to it.endVersion }
-        assertThat(ranges).containsExactly(1 to 2, 2 to 3)
+        assertThat(ranges).containsExactly(1 to 2)
     }
 
     @Test
-    fun `top-level Migration1To2 delegates to the hub`() {
-        assertThat(ProfileMigrations.MIGRATION_1_2.startVersion).isEqualTo(1)
-        assertThat(ProfileMigrations.MIGRATION_1_2.endVersion).isEqualTo(2)
-    }
-
-    @Test
-    fun `MIGRATION_1_2 has correct versions`() {
-        assertThat(ProfileMigrations.MIGRATION_1_2.startVersion).isEqualTo(1)
-        assertThat(ProfileMigrations.MIGRATION_1_2.endVersion).isEqualTo(2)
+    fun `MIGRATION_1_2_CORE has correct versions`() {
+        assertThat(ProfileMigrations.MIGRATION_1_2_CORE.startVersion).isEqualTo(1)
+        assertThat(ProfileMigrations.MIGRATION_1_2_CORE.endVersion).isEqualTo(2)
     }
 
     @Test

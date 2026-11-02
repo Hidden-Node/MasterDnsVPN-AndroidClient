@@ -117,8 +117,15 @@ object SubscriptionFetcher {
             throw IllegalArgumentException("Subscription response is empty")
         }
 
-        val decodedBody = decodeIfBase64(cleanBody)
-        val drafts = ProfileUrlCodec.decodeMultiple(decodedBody)
+        val decodedBody = decodeIfBase64(cleanBody).removePrefix("\uFEFF")
+        val drafts = mutableListOf<ProfileDraftData>()
+        decodedBody.lineSequence().forEach { rawLine ->
+            val line = rawLine.removePrefix("\uFEFF").trim()
+            if (line.isNotBlank() && !line.startsWith("#") && !line.startsWith("//") && !line.startsWith(";")) {
+                runCatching { ProfileUrlCodec.decode(line) }.getOrNull()?.let { drafts.add(it) }
+            }
+        }
+
         if (drafts.isEmpty()) {
             throw IllegalArgumentException("No valid profile links found in subscription response")
         }

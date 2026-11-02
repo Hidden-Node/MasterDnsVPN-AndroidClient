@@ -55,10 +55,12 @@ class SubscriptionRepository @Inject constructor(
         val sub = subscriptionDao.getSubscriptionById(subId)
             ?: return Result.failure(IllegalArgumentException("Subscription not found"))
         val fetchResult = SubscriptionFetcher.fetch(sub.url).getOrElse { return Result.failure(it) }
+        val currentSub = subscriptionDao.getSubscriptionById(subId)
+            ?: return Result.failure(IllegalStateException("Subscription was deleted while refreshing"))
         val profileEntities = fetchResult.drafts.map { it.toProfileEntity().copy(subscriptionId = subId) }
         profileDao.replaceProfilesForSubscription(subId, profileEntities)
         subscriptionDao.updateSubscription(
-            sub.copy(
+            currentSub.copy(
                 lastUpdated = System.currentTimeMillis(),
                 profileCount = fetchResult.drafts.size
             )

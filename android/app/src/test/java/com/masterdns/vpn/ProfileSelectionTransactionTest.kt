@@ -103,7 +103,7 @@ class ProfileSelectionTransactionTest {
     }
 
     @Test
-    fun replaceProfilesForSubscription_fallsBackToNewestIfSelectedNodeRemoved() = runTest {
+    fun replaceProfilesForSubscription_fallsBackToFirstInsertedIfSelectedNodeRemoved() = runTest {
         val p1 = ProfileEntity(name = "Node A", domains = "[\"a.com\"]", subscriptionId = 1L)
         val p2 = ProfileEntity(name = "Node B", domains = "[\"b.com\"]", subscriptionId = 1L)
         dao.insertProfile(p1)
@@ -115,8 +115,8 @@ class ProfileSelectionTransactionTest {
         val refreshedP3 = ProfileEntity(name = "Node C", domains = "[\"c.com\"]", createdAt = 200)
         dao.replaceProfilesForSubscription(1L, listOf(refreshedP1, refreshedP3))
 
-        // Selection falls back to newest remaining
+        // Selection falls back to first inserted profile in same subscription (Node A) rather than jumping out
         val currentSelected = dao.getSelectedProfile()
-        assertEquals("Node C", currentSelected!!.name)
+        assertEquals("Node A", currentSelected!!.name)
     }
 }

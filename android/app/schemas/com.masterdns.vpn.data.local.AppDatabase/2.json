@@ -2,11 +2,11 @@
   "formatVersion": 1,
   "database": {
     "version": 2,
-    "identityHash": "80cd0d6c5a64253388f45158c9f59fff",
+    "identityHash": "56ea988c987e77c5047a6bf390d968c5",
     "entities": [
       {
         "tableName": "profiles",
-        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`id` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, `name` TEXT NOT NULL, `domains` TEXT NOT NULL, `encryptionMethod` INTEGER NOT NULL, `encryptionKey` TEXT NOT NULL, `protocolType` TEXT NOT NULL, `listenPort` INTEGER NOT NULL, `resolvers` TEXT NOT NULL, `resolverBalancingStrategy` INTEGER NOT NULL, `packetDuplicationCount` INTEGER NOT NULL, `setupPacketDuplicationCount` INTEGER NOT NULL, `uploadCompression` INTEGER NOT NULL, `downloadCompression` INTEGER NOT NULL, `logLevel` TEXT NOT NULL, `isSelected` INTEGER NOT NULL, `advancedJson` TEXT NOT NULL, `createdAt` INTEGER NOT NULL)",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`id` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, `name` TEXT NOT NULL, `domains` TEXT NOT NULL, `encryptionMethod` INTEGER NOT NULL, `encryptionKey` TEXT NOT NULL, `protocolType` TEXT NOT NULL, `listenPort` INTEGER NOT NULL, `resolvers` TEXT NOT NULL, `resolverBalancingStrategy` INTEGER NOT NULL, `packetDuplicationCount` INTEGER NOT NULL, `setupPacketDuplicationCount` INTEGER NOT NULL, `uploadCompression` INTEGER NOT NULL, `downloadCompression` INTEGER NOT NULL, `logLevel` TEXT NOT NULL, `isSelected` INTEGER NOT NULL, `advancedJson` TEXT NOT NULL, `createdAt` INTEGER NOT NULL, `subscriptionId` INTEGER)",
         "fields": [
           {
             "fieldPath": "id",
@@ -109,6 +109,56 @@
             "columnName": "createdAt",
             "affinity": "INTEGER",
             "notNull": true
+          },
+          {
+            "fieldPath": "subscriptionId",
+            "columnName": "subscriptionId",
+            "affinity": "INTEGER",
+            "notNull": false
+          }
+        ],
+        "primaryKey": {
+          "autoGenerate": true,
+          "columnNames": [
+            "id"
+          ]
+        },
+        "indices": [],
+        "foreignKeys": []
+      },
+      {
+        "tableName": "subscriptions",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`id` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, `name` TEXT NOT NULL, `url` TEXT NOT NULL, `lastUpdated` INTEGER NOT NULL, `profileCount` INTEGER NOT NULL)",
+        "fields": [
+          {
+            "fieldPath": "id",
+            "columnName": "id",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "name",
+            "columnName": "name",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "url",
+            "columnName": "url",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "lastUpdated",
+            "columnName": "lastUpdated",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "profileCount",
+            "columnName": "profileCount",
+            "affinity": "INTEGER",
+            "notNull": true
           }
         ],
         "primaryKey": {
@@ -124,7 +174,7 @@
     "views": [],
     "setupQueries": [
       "CREATE TABLE IF NOT EXISTS room_master_table (id INTEGER PRIMARY KEY,identity_hash TEXT)",
-      "INSERT OR REPLACE INTO room_master_table (id,identity_hash) VALUES(42, '80cd0d6c5a64253388f45158c9f59fff')"
+      "INSERT OR REPLACE INTO room_master_table (id,identity_hash) VALUES(42, '56ea988c987e77c5047a6bf390d968c5')"
     ]
   }
 }
