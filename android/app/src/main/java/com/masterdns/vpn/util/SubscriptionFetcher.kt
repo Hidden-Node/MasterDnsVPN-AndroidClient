@@ -119,10 +119,16 @@ object SubscriptionFetcher {
 
         val decodedBody = decodeIfBase64(cleanBody).removePrefix("\uFEFF")
         val drafts = mutableListOf<ProfileDraftData>()
+        var totalCandidates = 0
         decodedBody.lineSequence().forEach { rawLine ->
             val line = rawLine.removePrefix("\uFEFF").trim()
             if (line.isNotBlank() && !line.startsWith("#") && !line.startsWith("//") && !line.startsWith(";")) {
-                runCatching { ProfileUrlCodec.decode(line) }.getOrNull()?.let { drafts.add(it) }
+                totalCandidates++
+                runCatching { ProfileUrlCodec.decode(line) }
+                    .onSuccess { drafts.add(it) }
+                    .onFailure { err ->
+                        VpnManager.appendLog("Subscription fetcher skipped invalid profile link: ${err.message}")
+                    }
             }
         }
 
@@ -133,7 +139,7 @@ object SubscriptionFetcher {
         return SubscriptionFetchResult(
             suggestedName = suggestedName,
             drafts = drafts,
-            rawCount = drafts.size
+            rawCount = totalCandidates
         )
     }
 

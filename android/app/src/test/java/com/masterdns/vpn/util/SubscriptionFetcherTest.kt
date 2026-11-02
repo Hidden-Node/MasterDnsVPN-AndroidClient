@@ -97,5 +97,6 @@ class SubscriptionFetcherTest {
         assertThat(result.drafts).hasSize(2)
         assertThat(result.drafts[0].name).isEqualTo("SubServer1")
         assertThat(result.drafts[1].name).isEqualTo("SubServer2")
+        assertThat(result.rawCount).isEqualTo(3)
     }
 }
