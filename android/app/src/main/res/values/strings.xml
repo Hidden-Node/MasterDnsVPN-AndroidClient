@@ -112,6 +112,7 @@
     <string name="home_status_enabled">Enabled</string>
     <string name="home_status_credentials">↳ Credentials</string>
     <string name="profiles_empty_title">No profiles yet</string>
+    <string name="profiles_subscription_empty_title">No profiles found in this subscription</string>
     <string name="profiles_create">Create Profile</string>
     <string name="profiles_add">Add Profile</string>
     <string name="profiles_selected">Selected</string>

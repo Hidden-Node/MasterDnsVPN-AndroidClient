@@ -62,11 +62,15 @@ object SubscriptionFetcher {
                     if (location.isNullOrBlank()) {
                         throw IllegalArgumentException("HTTP redirect $status without Location header")
                     }
-                    currentUrl = if (location.startsWith("http://", ignoreCase = true) || location.startsWith("https://", ignoreCase = true)) {
+                    val resolved = if (location.startsWith("http://", ignoreCase = true) || location.startsWith("https://", ignoreCase = true)) {
                         location
                     } else {
                         URL(urlObj, location).toString()
                     }
+                    if (!resolved.startsWith("http://", ignoreCase = true) && !resolved.startsWith("https://", ignoreCase = true)) {
+                        throw IllegalArgumentException("HTTP redirect to unsupported scheme: $resolved")
+                    }
+                    currentUrl = resolved
                     redirects++
                 } else if (status in 200..299) {
                     activeConn = conn

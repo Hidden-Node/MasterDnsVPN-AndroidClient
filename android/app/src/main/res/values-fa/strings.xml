@@ -102,6 +102,7 @@
     <string name="home_status_enabled">فعال</string>
     <string name="home_status_credentials">↳ اطلاعات ورود</string>
     <string name="profiles_empty_title">هنوز پروفایلی وجود ندارد</string>
+    <string name="profiles_subscription_empty_title">هیچ پروفایلی در این سابسکریپشن یافت نشد</string>
     <string name="profiles_create">ایجاد پروفایل</string>
     <string name="profiles_add">افزودن پروفایل</string>
     <string name="profiles_selected">انتخاب شده</string>

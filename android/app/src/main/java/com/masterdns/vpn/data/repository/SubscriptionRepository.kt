@@ -18,18 +18,37 @@ class SubscriptionRepository @Inject constructor(
     suspend fun getSubscriptionById(id: Long): SubscriptionEntity? = subscriptionDao.getSubscriptionById(id)
 
     suspend fun addSubscriptionAndFetch(name: String, url: String): Result<SubscriptionEntity> {
-        val fetchResult = SubscriptionFetcher.fetch(url).getOrElse { return Result.failure(it) }
+        val trimmedUrl = url.trim()
+        val fetchResult = SubscriptionFetcher.fetch(trimmedUrl).getOrElse { return Result.failure(it) }
         val subName = name.ifBlank { fetchResult.suggestedName }
-        val entity = SubscriptionEntity(
+        val existing = subscriptionDao.getSubscriptionByUrl(trimmedUrl)
+        val subId = if (existing != null) {
+            val updated = existing.copy(
+                name = if (name.isNotBlank()) name.trim() else existing.name,
+                lastUpdated = System.currentTimeMillis(),
+                profileCount = fetchResult.drafts.size
+            )
+            subscriptionDao.updateSubscription(updated)
+            existing.id
+        } else {
+            val entity = SubscriptionEntity(
+                name = subName,
+                url = trimmedUrl,
+                lastUpdated = System.currentTimeMillis(),
+                profileCount = fetchResult.drafts.size
+            )
+            subscriptionDao.insertSubscription(entity)
+        }
+        val profileEntities = fetchResult.drafts.map { it.toProfileEntity().copy(subscriptionId = subId) }
+        profileDao.replaceProfilesForSubscription(subId, profileEntities)
+        val finalEntity = subscriptionDao.getSubscriptionById(subId) ?: SubscriptionEntity(
+            id = subId,
             name = subName,
-            url = url.trim(),
+            url = trimmedUrl,
             lastUpdated = System.currentTimeMillis(),
             profileCount = fetchResult.drafts.size
         )
-        val subId = subscriptionDao.insertSubscription(entity)
-        val profileEntities = fetchResult.drafts.map { it.toProfileEntity().copy(subscriptionId = subId) }
-        profileDao.replaceProfilesForSubscription(subId, profileEntities)
-        return Result.success(entity.copy(id = subId))
+        return Result.success(finalEntity)
     }
 
     suspend fun refreshSubscription(subId: Long): Result<Int> {

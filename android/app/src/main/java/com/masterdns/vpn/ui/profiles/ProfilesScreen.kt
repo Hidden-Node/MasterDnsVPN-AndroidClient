@@ -383,7 +383,7 @@ fun ProfilesScreen(
                 }
             }
 
-            if (profiles.isEmpty()) {
+            if (displayedProfiles.isEmpty()) {
                 Box(
                     modifier = Modifier.fillMaxWidth().weight(1f),
                     contentAlignment = Alignment.Center
@@ -397,18 +397,21 @@ fun ProfilesScreen(
                         )
                         Spacer(modifier = Modifier.height(16.dp))
                         Text(
-                            stringResource(R.string.profiles_empty_title),
+                            if (selectedSubscriptionId != null) stringResource(R.string.profiles_subscription_empty_title)
+                            else stringResource(R.string.profiles_empty_title),
                             style = MaterialTheme.typography.titleMedium,
                             color = MdvColor.OnSurfaceVariant
                         )
                         Spacer(modifier = Modifier.height(8.dp))
-                        FilledTonalButton(onClick = {
-                            editingId = null
-                            importedDraft = null
-                            importedResolvers = null
-                            showEditor = true
-                        }) {
-                            Text(stringResource(R.string.profiles_create))
+                        if (selectedSubscriptionId == null) {
+                            FilledTonalButton(onClick = {
+                                editingId = null
+                                importedDraft = null
+                                importedResolvers = null
+                                showEditor = true
+                            }) {
+                                Text(stringResource(R.string.profiles_create))
+                            }
                         }
                     }
                 }
@@ -1180,8 +1183,11 @@ private fun AddSubscriptionDialog(
 ) {
     var name by rememberSaveable { mutableStateOf("") }
     var url by rememberSaveable { mutableStateOf("") }
-    var errorText by rememberSaveable { mutableStateOf<String?>(null) }
-    val displayedError = errorText ?: externalError
+    var localError by rememberSaveable { mutableStateOf<String?>(null) }
+
+    LaunchedEffect(externalError) {
+        localError = externalError
+    }
 
     AlertDialog(
         onDismissRequest = { if (!isLoading) onDismiss() },
@@ -1201,19 +1207,19 @@ private fun AddSubscriptionDialog(
                     value = url,
                     onValueChange = {
                         url = it
-                        errorText = null
+                        localError = null
                     },
                     label = { Text(stringResource(R.string.profiles_subscription_url_label)) },
                     placeholder = { Text(stringResource(R.string.profiles_subscription_url_hint)) },
                     singleLine = true,
-                    isError = displayedError != null,
+                    isError = localError != null,
                     enabled = !isLoading,
                     textStyle = LocalTextStyle.current.copy(textDirection = TextDirection.Ltr),
                     modifier = Modifier.fillMaxWidth()
                 )
-                if (displayedError != null) {
+                if (localError != null) {
                     Text(
-                        text = displayedError,
+                        text = localError!!,
                         color = MaterialTheme.colorScheme.error,
                         style = MaterialTheme.typography.bodySmall
                     )
@@ -1231,7 +1237,7 @@ private fun AddSubscriptionDialog(
                 onClick = {
                     val trimmedUrl = url.trim()
                     if (!trimmedUrl.startsWith("http://", ignoreCase = true) && !trimmedUrl.startsWith("https://", ignoreCase = true)) {
-                        errorText = invalidUrlError
+                        localError = invalidUrlError
                     } else {
                         onAdd(name.trim(), trimmedUrl)
                     }

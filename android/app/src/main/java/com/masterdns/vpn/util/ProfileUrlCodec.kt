@@ -92,7 +92,7 @@ object ProfileUrlCodec {
         }
 
         val root = JsonParser.parseString(String(jsonBytes, Charsets.UTF_8)).asJsonObject
-        val schema = root.get("schema")?.asString.orEmpty()
+        val schema = root.get("schema")?.takeIf { it.isJsonPrimitive }?.asString.orEmpty()
         require(schema in SUPPORTED_SCHEMAS) { "Unsupported profile schema: $schema" }
 
         val profileObj = root.getAsJsonObject("profile")
@@ -111,7 +111,7 @@ object ProfileUrlCodec {
             }
         }
         if (domains.isEmpty()) {
-            val rawDomain = serverObj.get("domain")?.asString?.trim().orEmpty()
+            val rawDomain = serverObj.get("domain")?.takeIf { it.isJsonPrimitive }?.asString?.trim().orEmpty()
             if (rawDomain.isNotBlank()) {
                 val parsed = rawDomain.split(',', ';', ' ', '\n')
                     .map { it.trim().trimEnd('.') }
@@ -122,11 +122,11 @@ object ProfileUrlCodec {
         require(domains.isNotEmpty()) { "Profile link missing server domain" }
 
         val primaryDomain = domains.first()
-        val key = serverObj.get("encryption_key")?.asString?.trim().orEmpty()
+        val key = serverObj.get("encryption_key")?.takeIf { it.isJsonPrimitive }?.asString?.trim().orEmpty()
         require(key.isNotBlank()) { "Profile link missing encryption key" }
 
-        val method = serverObj.get("encryption_method")?.asInt?.coerceIn(0, 5) ?: 1
-        val name = profileObj.get("name")?.asString?.trim()?.ifBlank { primaryDomain } ?: primaryDomain
+        val method = serverObj.get("encryption_method")?.takeIf { it.isJsonPrimitive }?.runCatching { asInt }?.getOrNull()?.coerceIn(0, 5) ?: 1
+        val name = profileObj.get("name")?.takeIf { it.isJsonPrimitive }?.asString?.trim()?.ifBlank { primaryDomain } ?: primaryDomain
 
         return ProfileDraftData(
             name = name,

@@ -102,6 +102,7 @@
     <string name="home_status_enabled">已启用</string>
     <string name="home_status_credentials">↳ 凭据</string>
     <string name="profiles_empty_title">暂无配置文件</string>
+    <string name="profiles_subscription_empty_title">此订阅中未找到配置文件</string>
     <string name="profiles_create">创建配置文件</string>
     <string name="profiles_add">添加配置文件</string>
     <string name="profiles_selected">已选</string>
