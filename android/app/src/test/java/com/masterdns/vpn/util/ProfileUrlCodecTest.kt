@@ -3,6 +3,7 @@ package com.masterdns.vpn.util
 import com.google.common.truth.Truth.assertThat
 import com.google.gson.Gson
 import com.google.gson.JsonObject
+import com.google.gson.JsonParser
 import com.masterdns.vpn.data.local.ProfileEntity
 import org.junit.Assert.assertThrows
 import org.junit.Test
@@ -266,5 +267,96 @@ class ProfileUrlCodecTest {
             ProfileUrlCodec.decodeMultiple(multiRaw)
         }
         assertThat(error.message).contains("Line 3")
+    }
+
+    @Test
+    fun encode_and_decode_multi_domain_round_trip() {
+        val original = ProfileEntity(
+            name = "Cluster Server",
+            domains = "[\"node1.example.com\", \"node2.example.com\", \"node3.example.com\"]",
+            encryptionKey = "cluster-secret",
+            encryptionMethod = 2
+        )
+
+        val encodedUrl = ProfileUrlCodec.encode(original)
+        assertThat(encodedUrl).startsWith("masterdns://")
+
+        val decoded = ProfileUrlCodec.decode(encodedUrl)
+        assertThat(decoded.name).isEqualTo("Cluster Server")
+        assertThat(decoded.domains).containsExactly(
+            "node1.example.com",
+            "node2.example.com",
+            "node3.example.com"
+        ).inOrder()
+        assertThat(decoded.encryptionKey).isEqualTo("cluster-secret")
+        assertThat(decoded.encryptionMethod).isEqualTo(2)
+
+        val entity = decoded.toProfileEntity()
+        assertThat(entity.name).isEqualTo("Cluster Server")
+        assertThat(entity.domains).isEqualTo("[\"node1.example.com\",\"node2.example.com\",\"node3.example.com\"]")
+    }
+
+    @Test
+    fun decode_legacy_single_domain_payload_without_domains_array() {
+        val json = JsonObject().apply {
+            addProperty("schema", "masterdns.profile")
+            addProperty("version", 1)
+            add("profile", JsonObject().apply {
+                addProperty("name", "Legacy Node")
+                add("server", JsonObject().apply {
+                    addProperty("domain", "legacy.example.com")
+                    addProperty("encryption_key", "legacy-key")
+                    addProperty("encryption_method", 1)
+                })
+            })
+        }
+        val base64 = Base64.UrlSafe.encode(json.toString().toByteArray())
+        val decoded = ProfileUrlCodec.decode("masterdns://$base64")
+
+        assertThat(decoded.name).isEqualTo("Legacy Node")
+        assertThat(decoded.domains).containsExactly("legacy.example.com")
+    }
+
+    @Test
+    fun decode_delimited_domains_string_in_legacy_domain_field() {
+        val json = JsonObject().apply {
+            addProperty("schema", "masterdns.profile")
+            addProperty("version", 1)
+            add("profile", JsonObject().apply {
+                addProperty("name", "Delimited Node")
+                add("server", JsonObject().apply {
+                    addProperty("domain", "d1.com, d2.com; d3.com\nd4.com")
+                    addProperty("encryption_key", "delim-key")
+                    addProperty("encryption_method", 1)
+                })
+            })
+        }
+        val base64 = Base64.UrlSafe.encode(json.toString().toByteArray())
+        val decoded = ProfileUrlCodec.decode("masterdns://$base64")
+
+        assertThat(decoded.domains).containsExactly("d1.com", "d2.com", "d3.com", "d4.com").inOrder()
+    }
+
+    @Test
+    fun encode_writes_both_domain_and_domains_fields() {
+        val original = ProfileEntity(
+            name = "Dual Field Test",
+            domains = "[\"first.com\", \"second.com\"]",
+            encryptionKey = "key123",
+            encryptionMethod = 1
+        )
+        val encodedUrl = ProfileUrlCodec.encode(original)
+        val payload = encodedUrl.removePrefix("masterdns://")
+        val base64Decoder = Base64.UrlSafe.withPadding(Base64.PaddingOption.ABSENT_OPTIONAL)
+        val jsonString = String(base64Decoder.decode(payload), Charsets.UTF_8)
+        val root = JsonParser.parseString(jsonString).asJsonObject
+        val serverObj = root.getAsJsonObject("profile").getAsJsonObject("server")
+
+        assertThat(serverObj.get("domain").asString).isEqualTo("first.com")
+        val domainsArray = serverObj.getAsJsonArray("domains")
+        assertThat(domainsArray).isNotNull()
+        assertThat(domainsArray.size()).isEqualTo(2)
+        assertThat(domainsArray[0].asString).isEqualTo("first.com")
+        assertThat(domainsArray[1].asString).isEqualTo("second.com")
     }
 }
