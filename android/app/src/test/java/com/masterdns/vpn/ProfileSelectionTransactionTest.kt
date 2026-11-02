@@ -80,4 +80,43 @@ class ProfileSelectionTransactionTest {
         assertTrue(dao.getAllProfiles().first().isEmpty())
         assertNull(dao.getSelectedProfile())
     }
+
+    @Test
+    fun replaceProfilesForSubscription_preservesActiveProfileByName() = runTest {
+        val p1 = ProfileEntity(name = "Node A", domains = "[\"a.com\"]", subscriptionId = 1L)
+        val p2 = ProfileEntity(name = "Node B", domains = "[\"b.com\"]", subscriptionId = 1L)
+        val id1 = dao.insertProfile(p1)
+        val id2 = dao.insertProfile(p2)
+        dao.setSelectedProfile(id2)
+        assertEquals("Node B", dao.getSelectedProfile()!!.name)
+
+        // Refresh subscription with new profiles
+        val refreshedP1 = ProfileEntity(name = "Node A", domains = "[\"a.com\"]")
+        val refreshedP2 = ProfileEntity(name = "Node B", domains = "[\"b.com\"]")
+        val refreshedP3 = ProfileEntity(name = "Node C", domains = "[\"c.com\"]")
+        dao.replaceProfilesForSubscription(1L, listOf(refreshedP1, refreshedP2, refreshedP3))
+
+        // Selection should remain on Node B rather than jumping to Node C
+        val currentSelected = dao.getSelectedProfile()
+        assertEquals("Node B", currentSelected!!.name)
+        assertEquals(1L, currentSelected.subscriptionId)
+    }
+
+    @Test
+    fun replaceProfilesForSubscription_fallsBackToNewestIfSelectedNodeRemoved() = runTest {
+        val p1 = ProfileEntity(name = "Node A", domains = "[\"a.com\"]", subscriptionId = 1L)
+        val p2 = ProfileEntity(name = "Node B", domains = "[\"b.com\"]", subscriptionId = 1L)
+        dao.insertProfile(p1)
+        val id2 = dao.insertProfile(p2)
+        dao.setSelectedProfile(id2)
+
+        // Refresh with Node B removed
+        val refreshedP1 = ProfileEntity(name = "Node A", domains = "[\"a.com\"]", createdAt = 100)
+        val refreshedP3 = ProfileEntity(name = "Node C", domains = "[\"c.com\"]", createdAt = 200)
+        dao.replaceProfilesForSubscription(1L, listOf(refreshedP1, refreshedP3))
+
+        // Selection falls back to newest remaining
+        val currentSelected = dao.getSelectedProfile()
+        assertEquals("Node C", currentSelected!!.name)
+    }
 }

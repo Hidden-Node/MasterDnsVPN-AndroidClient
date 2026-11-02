@@ -86,6 +86,7 @@ fun ProfilesScreen(
     val isRefreshingSubscriptions by viewModel.isRefreshingSubscriptions.collectAsState()
     var showAddSubscriptionDialog by rememberSaveable { mutableStateOf(false) }
     var addSubscriptionSession by rememberSaveable { mutableStateOf(0) }
+    var addSubscriptionError by rememberSaveable { mutableStateOf<String?>(null) }
     var showManageSubscriptionsDialog by rememberSaveable { mutableStateOf(false) }
     var selectedSubscriptionId by rememberSaveable { mutableStateOf<Long?>(null) }
 
@@ -225,6 +226,7 @@ fun ProfilesScreen(
                                 leadingIcon = { Icon(Icons.Filled.CloudDownload, contentDescription = null) },
                                 onClick = {
                                     showAddMenu = false
+                                    addSubscriptionError = null
                                     addSubscriptionSession++
                                     showAddSubscriptionDialog = true
                                 }
@@ -437,13 +439,18 @@ fun ProfilesScreen(
     if (showAddSubscriptionDialog) {
         key(addSubscriptionSession) {
             AddSubscriptionDialog(
-                onDismiss = { showAddSubscriptionDialog = false },
+                onDismiss = {
+                    showAddSubscriptionDialog = false
+                    addSubscriptionError = null
+                },
                 onAdd = { name, url ->
+                    addSubscriptionError = null
                     viewModel.addSubscription(
                         name = name,
                         url = url,
                         onSuccess = { count ->
                             showAddSubscriptionDialog = false
+                            addSubscriptionError = null
                             scope.launch {
                                 snackbarHostState.showSnackbar(
                                     context.getString(R.string.profiles_subscription_imported_msg, count)
@@ -451,11 +458,12 @@ fun ProfilesScreen(
                             }
                         },
                         onError = { err ->
-                            scope.launch { snackbarHostState.showSnackbar(err) }
+                            addSubscriptionError = err
                         }
                     )
                 },
-                isLoading = isRefreshingSubscriptions
+                isLoading = isRefreshingSubscriptions,
+                externalError = addSubscriptionError
             )
         }
     }
@@ -1167,11 +1175,13 @@ private fun ImportProfilesDialog(
 private fun AddSubscriptionDialog(
     onDismiss: () -> Unit,
     onAdd: (name: String, url: String) -> Unit,
-    isLoading: Boolean
+    isLoading: Boolean,
+    externalError: String? = null
 ) {
     var name by rememberSaveable { mutableStateOf("") }
     var url by rememberSaveable { mutableStateOf("") }
     var errorText by rememberSaveable { mutableStateOf<String?>(null) }
+    val displayedError = errorText ?: externalError
 
     AlertDialog(
         onDismissRequest = { if (!isLoading) onDismiss() },
@@ -1196,14 +1206,14 @@ private fun AddSubscriptionDialog(
                     label = { Text(stringResource(R.string.profiles_subscription_url_label)) },
                     placeholder = { Text(stringResource(R.string.profiles_subscription_url_hint)) },
                     singleLine = true,
-                    isError = errorText != null,
+                    isError = displayedError != null,
                     enabled = !isLoading,
                     textStyle = LocalTextStyle.current.copy(textDirection = TextDirection.Ltr),
                     modifier = Modifier.fillMaxWidth()
                 )
-                if (errorText != null) {
+                if (displayedError != null) {
                     Text(
-                        text = errorText!!,
+                        text = displayedError,
                         color = MaterialTheme.colorScheme.error,
                         style = MaterialTheme.typography.bodySmall
                     )
@@ -1289,10 +1299,17 @@ private fun ManageSubscriptionsDialog(
                                     }
                                     Row {
                                         IconButton(onClick = { onRefresh(sub.id) }, enabled = !isRefreshing) {
-                                            Icon(Icons.Filled.Sync, contentDescription = null)
+                                            Icon(
+                                                Icons.Filled.Sync,
+                                                contentDescription = stringResource(R.string.profiles_subscriptions_sync_all)
+                                            )
                                         }
                                         IconButton(onClick = { pendingDeleteSub = sub }, enabled = !isRefreshing) {
-                                            Icon(Icons.Filled.Delete, contentDescription = null, tint = MaterialTheme.colorScheme.error)
+                                            Icon(
+                                                Icons.Filled.Delete,
+                                                contentDescription = stringResource(R.string.profiles_delete),
+                                                tint = MaterialTheme.colorScheme.error
+                                            )
                                         }
                                     }
                                 }

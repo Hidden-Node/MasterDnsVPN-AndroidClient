@@ -4,10 +4,9 @@ import kotlin.io.encoding.Base64
 import kotlin.io.encoding.ExperimentalEncodingApi
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
-import java.io.BufferedReader
+import java.io.ByteArrayOutputStream
 import java.io.IOException
 import java.io.InputStream
-import java.io.InputStreamReader
 import java.net.HttpURLConnection
 import java.net.URL
 import java.util.zip.GZIPInputStream
@@ -25,6 +24,7 @@ object SubscriptionFetcher {
     private const val READ_TIMEOUT_MS = 15_000
     private const val MAX_REDIRECTS = 10
     private const val USER_AGENT = "MasterDns/1.0"
+    private const val MAX_BODY_BYTES = 4 * 1024 * 1024 // 4 MB
 
     private val base64UrlSafeDecoder = Base64.UrlSafe.withPadding(Base64.PaddingOption.ABSENT_OPTIONAL)
     private val base64DefaultDecoder = Base64.Default.withPadding(Base64.PaddingOption.ABSENT_OPTIONAL)
@@ -86,14 +86,25 @@ object SubscriptionFetcher {
                 } else {
                     rawStream
                 }
-                BufferedReader(InputStreamReader(stream, Charsets.UTF_8)).use { it.readText() }
+                val output = ByteArrayOutputStream()
+                val buffer = ByteArray(8192)
+                var totalBytes = 0
+                var bytesRead: Int
+                while (stream.read(buffer).also { bytesRead = it } != -1) {
+                    totalBytes += bytesRead
+                    if (totalBytes > MAX_BODY_BYTES) {
+                        throw IOException("Subscription response exceeds maximum allowed size of 4 MB")
+                    }
+                    output.write(buffer, 0, bytesRead)
+                }
+                output.toString(Charsets.UTF_8.name())
             } finally {
                 conn.disconnect()
             }
 
             val hostName = runCatching { URL(trimmedUrl).host?.takeIf { it.isNotBlank() } }.getOrNull() ?: "Subscription"
             parsePayload(rawBody, hostName)
-        }
+        }.onFailure { if (it is kotlinx.coroutines.CancellationException) throw it }
     }
 
     fun parsePayload(rawBody: String, suggestedName: String = "Subscription"): SubscriptionFetchResult {
@@ -119,7 +130,7 @@ object SubscriptionFetcher {
         if (input.contains("masterdns://", ignoreCase = true) || input.contains("stormdns://", ignoreCase = true) || input.contains("cottendns://", ignoreCase = true)) {
             return input
         }
-        val cleanInput = input.replace("\r", "").replace("\n", "").trim()
+        val cleanInput = input.filterNot { it.isWhitespace() }
         val decoded = runCatching {
             base64UrlSafeDecoder.decode(cleanInput)
         }.recoverCatching {

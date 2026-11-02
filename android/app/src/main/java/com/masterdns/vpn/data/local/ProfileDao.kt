@@ -100,8 +100,9 @@ interface ProfileDao {
 
     /**
      * Replaces all profiles for [subscriptionId] with [newProfiles] inside a single
-     * transaction, preserving active selection if one of the subscription profiles
-     * was selected.
+     * transaction. If one of the subscription profiles was selected, preserves selection
+     * on the profile with the same name if it still exists in [newProfiles], otherwise
+     * falls back to the newest remaining profile.
      */
     @Transaction
     suspend fun replaceProfilesForSubscription(
@@ -110,12 +111,18 @@ interface ProfileDao {
     ) {
         val selected = getSelectedProfile()
         val selectedWasInSub = selected?.subscriptionId == subscriptionId
+        val previousSelectedName = if (selectedWasInSub) selected?.name else null
         deleteProfilesBySubscriptionId(subscriptionId)
+        val inserted = mutableListOf<ProfileEntity>()
         newProfiles.forEach { profile ->
-            insertProfile(profile.copy(subscriptionId = subscriptionId, isSelected = false))
+            val id = insertProfile(profile.copy(subscriptionId = subscriptionId, isSelected = false))
+            inserted.add(profile.copy(id = id, subscriptionId = subscriptionId))
         }
         if (selectedWasInSub || getSelectedProfile() == null) {
-            getNewestProfile()?.let { setSelectedProfile(it.id) }
+            val candidate = if (previousSelectedName != null) {
+                inserted.firstOrNull { it.name == previousSelectedName }
+            } else null
+            (candidate ?: getNewestProfile())?.let { setSelectedProfile(it.id) }
         }
     }
 }
