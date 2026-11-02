@@ -102,6 +102,7 @@
     <string name="home_status_enabled">Включено</string>
     <string name="home_status_credentials">↳ Учетные данные</string>
     <string name="profiles_empty_title">Профилей пока нет</string>
+    <string name="profiles_subscription_empty_title">В этой подписке нет профилей</string>
     <string name="profiles_create">Создать профиль</string>
     <string name="profiles_add">Добавить профиль</string>
     <string name="profiles_selected">Выбран</string>

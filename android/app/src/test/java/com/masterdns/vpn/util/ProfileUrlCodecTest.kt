@@ -359,4 +359,25 @@ class ProfileUrlCodecTest {
         assertThat(domainsArray[0].asString).isEqualTo("first.com")
         assertThat(domainsArray[1].asString).isEqualTo("second.com")
     }
+
+    @Test
+    fun decode_payload_with_explicit_json_nulls_throws_clean_illegal_argument() {
+        val json = JsonObject().apply {
+            addProperty("schema", "masterdns.profile")
+            addProperty("version", 1)
+            add("profile", JsonObject().apply {
+                add("name", com.google.gson.JsonNull.INSTANCE)
+                add("server", JsonObject().apply {
+                    add("domain", com.google.gson.JsonNull.INSTANCE)
+                    add("encryption_key", com.google.gson.JsonNull.INSTANCE)
+                    add("encryption_method", com.google.gson.JsonNull.INSTANCE)
+                })
+            })
+        }
+        val base64 = Base64.UrlSafe.encode(json.toString().toByteArray())
+        val error = assertThrows(IllegalArgumentException::class.java) {
+            ProfileUrlCodec.decode("masterdns://$base64")
+        }
+        assertThat(error.message).contains("missing server domain")
+    }
 }
