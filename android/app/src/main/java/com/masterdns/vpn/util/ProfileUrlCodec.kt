@@ -1,6 +1,7 @@
 package com.masterdns.vpn.util
 
 import com.google.gson.Gson
+import com.google.gson.JsonArray
 import com.google.gson.JsonObject
 import com.google.gson.JsonParser
 import com.masterdns.vpn.data.local.ProfileEntity
@@ -40,14 +41,16 @@ object ProfileUrlCodec {
 
     @OptIn(ExperimentalEncodingApi::class)
     fun encode(profile: ProfileEntity): String {
-        // ponytail: single primary domain encoded; multi-domain bundles need schema v2
-        val domainsList = parseDomainsJson(profile.domains)
-        val primaryDomain = domainsList.firstOrNull()?.trim()?.trimEnd('.').orEmpty()
-        require(primaryDomain.isNotBlank()) { "Profile domain is required to share" }
+        val rawDomains = parseDomainsJson(profile.domains)
+        val validDomains = rawDomains.map { it.trim().trimEnd('.') }.filter { it.isNotBlank() }.distinct()
+        require(validDomains.isNotEmpty()) { "Profile domain is required to share" }
         require(profile.encryptionKey.isNotBlank()) { "Profile encryption key is required to share" }
+
+        val primaryDomain = validDomains.first()
 
         val serverObj = JsonObject().apply {
             addProperty("domain", primaryDomain)
+            add("domains", JsonArray().apply { validDomains.forEach { add(it) } })
             addProperty("encryption_key", profile.encryptionKey.trim())
             addProperty("encryption_method", profile.encryptionMethod.coerceIn(0, 5))
         }
@@ -97,18 +100,37 @@ object ProfileUrlCodec {
         val serverObj = profileObj.getAsJsonObject("server")
             ?: throw IllegalArgumentException("Missing server object in link")
 
-        val domain = serverObj.get("domain")?.asString?.trim()?.trimEnd('.').orEmpty()
-        require(domain.isNotBlank()) { "Profile link missing server domain" }
+        val domains = mutableListOf<String>()
+        val domainsArray = serverObj.get("domains")?.takeIf { it.isJsonArray }?.asJsonArray
+        if (domainsArray != null && !domainsArray.isEmpty) {
+            domainsArray.forEach { elem ->
+                val d = runCatching { elem.asString }.getOrNull()?.trim()?.trimEnd('.').orEmpty()
+                if (d.isNotBlank() && !domains.contains(d)) {
+                    domains.add(d)
+                }
+            }
+        }
+        if (domains.isEmpty()) {
+            val rawDomain = serverObj.get("domain")?.asString?.trim().orEmpty()
+            if (rawDomain.isNotBlank()) {
+                val parsed = rawDomain.split(',', ';', ' ', '\n')
+                    .map { it.trim().trimEnd('.') }
+                    .filter { it.isNotBlank() }
+                domains.addAll(parsed.ifEmpty { listOf(rawDomain.trimEnd('.')) })
+            }
+        }
+        require(domains.isNotEmpty()) { "Profile link missing server domain" }
 
+        val primaryDomain = domains.first()
         val key = serverObj.get("encryption_key")?.asString?.trim().orEmpty()
         require(key.isNotBlank()) { "Profile link missing encryption key" }
 
         val method = serverObj.get("encryption_method")?.asInt?.coerceIn(0, 5) ?: 1
-        val name = profileObj.get("name")?.asString?.trim()?.ifBlank { domain } ?: domain
+        val name = profileObj.get("name")?.asString?.trim()?.ifBlank { primaryDomain } ?: primaryDomain
 
         return ProfileDraftData(
             name = name,
-            domains = listOf(domain),
+            domains = domains.distinct(),
             encryptionKey = key,
             encryptionMethod = method
         )
