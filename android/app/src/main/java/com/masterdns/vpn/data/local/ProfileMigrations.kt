@@ -19,14 +19,11 @@ import java.io.File
  * snapshot of the current rows is written before the schema change:
  *
  * ```
- * val MIGRATION_2_3 = SafetyExportMigration(context, 2, 3,
- *     object : Migration(2, 3) {
+ * val MIGRATION_1_2 = SafetyExportMigration(context, 1, 2,
+ *     object : Migration(1, 2) {
  *         override fun migrate(db: SupportSQLiteDatabase) { ... }
  *     })
  * ```
- *
- * The migrations registered in [ALL] change no schema columns (the v1->v2
- * bump is a no-op), so they are deliberately not wrapped.
  */
 object ProfileMigrations {
 
@@ -128,13 +125,7 @@ object ProfileMigrations {
             add("profiles", gson.toJsonTree(rows))
         }
 
-    // v1 -> v2: storage-layer bump (SQLCipher removal, plan 025). No columns
-    // changed; existing v1 installs keep their migration path.
-    val MIGRATION_1_2 = object : Migration(1, 2) {
-        override fun migrate(db: SupportSQLiteDatabase) { /* no-op */ }
-    }
-
-    val MIGRATION_2_3_CORE = object : Migration(2, 3) {
+    val MIGRATION_1_2_CORE = object : Migration(1, 2) {
         override fun migrate(db: SupportSQLiteDatabase) {
             db.execSQL("ALTER TABLE profiles ADD COLUMN subscriptionId INTEGER")
             db.execSQL(
@@ -151,14 +142,13 @@ object ProfileMigrations {
         }
     }
 
-    fun migration2To3(context: Context): Migration =
-        SafetyExportMigration(context, 2, 3, MIGRATION_2_3_CORE)
+    fun migration1To2(context: Context): Migration =
+        SafetyExportMigration(context, 1, 2, MIGRATION_1_2_CORE)
 
     fun all(context: Context): Array<Migration> = arrayOf(
-        MIGRATION_1_2,
-        migration2To3(context)
+        migration1To2(context)
     )
 
     // Static array without context wrapping for tests and inspectability
-    val ALL: Array<Migration> = arrayOf(MIGRATION_1_2, MIGRATION_2_3_CORE)
+    val ALL: Array<Migration> = arrayOf(MIGRATION_1_2_CORE)
 }

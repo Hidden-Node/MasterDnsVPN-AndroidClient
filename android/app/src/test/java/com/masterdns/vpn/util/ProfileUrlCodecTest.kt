@@ -380,4 +380,22 @@ class ProfileUrlCodecTest {
         }
         assertThat(error.message).contains("missing server domain")
     }
+
+    @Test
+    fun decodeMultiple_ignores_comments_and_blank_lines() {
+        val p1 = ProfileEntity(name = "P1", domains = "[\"p1.com\"]", encryptionKey = "k1", encryptionMethod = 1)
+        val url1 = ProfileUrlCodec.encode(p1)
+        val multiRaw = "# Comment 1\n// Comment 2\n; Comment 3\n$url1\n"
+        val drafts = ProfileUrlCodec.decodeMultiple(multiRaw)
+        assertThat(drafts).hasSize(1)
+        assertThat(drafts[0].name).isEqualTo("P1")
+    }
+
+    @Test
+    fun decode_invalid_root_json_throws_illegal_argument() {
+        val base64 = Base64.UrlSafe.encode("\"just a string\"".toByteArray())
+        assertThrows(IllegalArgumentException::class.java) {
+            ProfileUrlCodec.decode("masterdns://$base64")
+        }
+    }
 }

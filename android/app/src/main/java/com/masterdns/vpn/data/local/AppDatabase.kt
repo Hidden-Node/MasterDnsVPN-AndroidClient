@@ -5,8 +5,8 @@ import androidx.room.Database
 import androidx.room.Room
 import androidx.room.RoomDatabase
 
-/** Room DB v3. Additive changes: bump version + AutoMigration. Destructive changes: manual Migration in ProfileMigrations wrapped in SafetyExportMigration. */
-@Database(entities = [ProfileEntity::class, SubscriptionEntity::class], version = 3, exportSchema = true)
+/** Room DB v2. Additive changes: bump version + AutoMigration. Destructive changes: manual Migration in ProfileMigrations wrapped in SafetyExportMigration. */
+@Database(entities = [ProfileEntity::class, SubscriptionEntity::class], version = 2, exportSchema = true)
 abstract class AppDatabase : RoomDatabase() {
     abstract fun profileDao(): ProfileDao
     abstract fun subscriptionDao(): SubscriptionDao
