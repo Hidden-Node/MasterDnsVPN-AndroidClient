@@ -93,7 +93,8 @@ object QrCodeUtil {
             context.contentResolver.openInputStream(uri)?.use { stream ->
                 BitmapFactory.decodeStream(stream, null, options)
             }
-            val sampleSize = maxOf(1, options.outHeight / 600)
+            val maxDimension = maxOf(options.outWidth, options.outHeight)
+            val sampleSize = maxOf(1, maxDimension / 600)
             val decodeOptions = BitmapFactory.Options().apply { inSampleSize = sampleSize }
             val bitmap = context.contentResolver.openInputStream(uri)?.use { stream ->
                 BitmapFactory.decodeStream(stream, null, decodeOptions)

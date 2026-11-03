@@ -1510,17 +1510,17 @@ private fun SubscriptionQrDialog(
             }
         },
         confirmButton = {
-            Row(horizontalArrangement = Arrangement.spacedBy(MdvSpace.S2)) {
-                TextButton(onClick = {
-                    val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
-                    clipboard.setPrimaryClip(ClipData.newPlainText(subscription.name, subscription.url))
-                    Toast.makeText(context, context.getString(R.string.profiles_share_copied), Toast.LENGTH_SHORT).show()
-                }) {
-                    Text(stringResource(R.string.btn_copy))
-                }
-                TextButton(onClick = onDismiss) {
-                    Text(stringResource(R.string.action_close))
-                }
+            TextButton(onClick = {
+                val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
+                clipboard.setPrimaryClip(ClipData.newPlainText(subscription.name, subscription.url))
+                Toast.makeText(context, context.getString(R.string.profiles_share_copied), Toast.LENGTH_SHORT).show()
+            }) {
+                Text(stringResource(R.string.btn_copy))
+            }
+        },
+        dismissButton = {
+            TextButton(onClick = onDismiss) {
+                Text(stringResource(R.string.action_close))
             }
         }
     )

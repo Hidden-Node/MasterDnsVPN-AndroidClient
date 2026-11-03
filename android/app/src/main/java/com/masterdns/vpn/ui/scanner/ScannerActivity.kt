@@ -9,6 +9,7 @@ import android.widget.Toast
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.compose.setContent
+import androidx.activity.enableEdgeToEdge
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.camera.core.CameraControl
 import androidx.camera.core.CameraInfo
@@ -49,6 +50,7 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -77,6 +79,9 @@ import com.masterdns.vpn.ui.theme.MdvSpace
 import com.masterdns.vpn.util.QrCodeUtil
 import java.util.concurrent.Executors
 import java.util.concurrent.atomic.AtomicBoolean
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 
 class ScannerActivity : ComponentActivity() {
 
@@ -86,6 +91,7 @@ class ScannerActivity : ComponentActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        enableEdgeToEdge()
         setContent {
             MasterDnsVPNTheme {
                 ScannerScreen(
@@ -128,17 +134,22 @@ private fun ScannerScreen(
     var cameraControl by remember { mutableStateOf<CameraControl?>(null) }
     var hasTorch by remember { mutableStateOf(false) }
     var torchEnabled by remember { mutableStateOf(false) }
+    val scope = rememberCoroutineScope()
 
     val galleryLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.GetContent()
     ) { uri ->
         if (uri != null) {
-            val decoded = QrCodeUtil.decodeFromUri(context, uri)
-            if (!decoded.isNullOrBlank()) {
-                onScanResult(decoded)
-                return@rememberLauncherForActivityResult
+            scope.launch(Dispatchers.IO) {
+                val decoded = QrCodeUtil.decodeFromUri(context, uri)
+                withContext(Dispatchers.Main) {
+                    if (!decoded.isNullOrBlank()) {
+                        onScanResult(decoded)
+                    } else {
+                        Toast.makeText(context, context.getString(R.string.scanner_decoding_failed), Toast.LENGTH_SHORT).show()
+                    }
+                }
             }
-            Toast.makeText(context, context.getString(R.string.scanner_decoding_failed), Toast.LENGTH_SHORT).show()
         }
     }
 
@@ -168,10 +179,10 @@ private fun ScannerScreen(
                     }
                 },
                 colors = TopAppBarDefaults.topAppBarColors(
-                    containerColor = Color.Black.copy(alpha = 0.7f),
-                    titleContentColor = Color.White,
-                    navigationIconContentColor = Color.White,
-                    actionIconContentColor = Color.White
+                    containerColor = MdvColor.OverlayScrim,
+                    titleContentColor = MdvColor.OnCameraBackdrop,
+                    navigationIconContentColor = MdvColor.OnCameraBackdrop,
+                    actionIconContentColor = MdvColor.OnCameraBackdrop
                 )
             )
         }
@@ -180,7 +191,7 @@ private fun ScannerScreen(
             modifier = Modifier
                 .fillMaxSize()
                 .padding(innerPadding)
-                .background(Color.Black)
+                .background(MdvColor.CameraBackdrop)
         ) {
             if (hasCameraPermission) {
                 CameraPreviewView(
@@ -201,7 +212,7 @@ private fun ScannerScreen(
                 ) {
                     Text(
                         text = stringResource(R.string.scanner_camera_permission_required),
-                        color = Color.White,
+                        color = MdvColor.OnCameraBackdrop,
                         style = MaterialTheme.typography.bodyLarge
                     )
                     Spacer(modifier = Modifier.height(MdvSpace.S3))
@@ -218,7 +229,7 @@ private fun ScannerScreen(
 private fun ScannerOverlay() {
     val scanBoxSize = 260.dp
     val cornerLength = 28.dp
-    val cornerWidth = 4.dp
+    val cornerWidth = MdvSpace.S1
     val cornerColor = MdvColor.PrimaryContainer
 
     Box(modifier = Modifier.fillMaxSize()) {
@@ -233,7 +244,7 @@ private fun ScannerOverlay() {
             val left = (canvasWidth - boxSizePx) / 2f
             val top = (canvasHeight - boxSizePx) / 2f
 
-            drawRect(color = Color(0x99000000))
+            drawRect(color = MdvColor.OverlayScrim)
             drawRect(
                 color = Color.Transparent,
                 topLeft = Offset(left, top),
@@ -272,7 +283,7 @@ private fun ScannerOverlay() {
 
         Text(
             text = stringResource(R.string.scanner_hint),
-            color = Color.White,
+            color = MdvColor.OnCameraBackdrop,
             style = MaterialTheme.typography.bodyMedium,
             modifier = Modifier
                 .align(Alignment.Center)
