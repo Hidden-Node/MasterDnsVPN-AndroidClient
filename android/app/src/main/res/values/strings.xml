@@ -348,4 +348,14 @@
     <string name="profiles_import_is_subscription_error">This is a subscription URL. Please import it as a subscription.</string>
     <string name="profiles_import_switch_to_subscription_btn">Add as Subscription</string>
     <string name="profiles_clear_input_cd">Clear input</string>
+    <string name="scanner_title">Scan QR Code</string>
+    <string name="scanner_hint">Align QR code within the frame</string>
+    <string name="scanner_torch_on">Turn flash on</string>
+    <string name="scanner_torch_off">Turn flash off</string>
+    <string name="scanner_select_image">Choose from gallery</string>
+    <string name="scanner_decoding_failed">No valid QR code found in selected image</string>
+    <string name="scanner_camera_permission_required">Camera permission is required to scan QR codes</string>
+    <string name="scanner_grant_permission">Grant Permission</string>
+    <string name="profiles_subscription_scan_qr">Scan subscription QR code</string>
+    <string name="profiles_subscription_share_qr">Subscription QR Code</string>
 </resources>

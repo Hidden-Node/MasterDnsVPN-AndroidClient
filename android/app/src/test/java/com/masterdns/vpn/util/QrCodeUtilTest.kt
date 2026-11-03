@@ -49,4 +49,24 @@ class QrCodeUtilTest {
             QrCodeUtil.encodeAsBitmap("test", sizePx = 0)
         }
     }
+
+    @Test
+    fun decode_inverted_qr_code_succeeds() {
+        val payload = "https://example.com/subscription/inverted"
+        val original = QrCodeUtil.encodeAsBitmap(payload, sizePx = 256)
+
+        // Invert bitmap pixels to simulate white-on-dark display or screenshot
+        val inverted = Bitmap.createBitmap(original.width, original.height, Bitmap.Config.ARGB_8888)
+        for (y in 0 until original.height) {
+            for (x in 0 until original.width) {
+                val pixel = original.getPixel(x, y)
+                val invertedPixel = pixel xor 0x00FFFFFF
+                inverted.setPixel(x, y, invertedPixel)
+            }
+        }
+
+        val decodedResult = QrCodeUtil.decodeFromBitmap(inverted)
+        assertThat(decodedResult.isSuccess).isTrue()
+        assertThat(decodedResult.getOrThrow()).isEqualTo(payload)
+    }
 }

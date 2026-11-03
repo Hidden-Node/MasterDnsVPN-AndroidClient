@@ -1,5 +1,6 @@
 package com.masterdns.vpn.ui.profiles
 
+import android.app.Activity
 import android.content.ClipData
 import android.content.ClipboardManager
 import android.content.Context
@@ -53,6 +54,7 @@ import com.masterdns.vpn.ui.components.mdv.cards.MdvCardLow
 import com.masterdns.vpn.ui.components.mdv.controls.MdvBackTopAppBar
 import com.masterdns.vpn.ui.components.mdv.controls.MdvFilterChip
 import com.masterdns.vpn.ui.components.mdv.controls.MdvPrimaryActionButton
+import com.masterdns.vpn.ui.scanner.ScannerActivity
 import com.masterdns.vpn.ui.theme.ConnectedGreen
 import com.masterdns.vpn.ui.theme.MdvColor
 import com.masterdns.vpn.ui.theme.MdvRadius
@@ -112,15 +114,23 @@ fun ProfilesScreen(
     val snackbarHostState = remember { SnackbarHostState() }
     val scope = rememberCoroutineScope()
     val qrScanLauncher = rememberLauncherForActivityResult(
-        contract = ActivityResultContracts.TakePicturePreview()
-    ) { bitmap ->
-        if (bitmap == null) {
+        contract = ActivityResultContracts.StartActivityForResult()
+    ) { result ->
+        if (result.resultCode != Activity.RESULT_OK) {
             scope.launch { snackbarHostState.showSnackbar(context.getString(R.string.profiles_qr_scan_cancelled)) }
             return@rememberLauncherForActivityResult
         }
-        val decodedText = QrCodeUtil.decodeFromBitmap(bitmap).getOrNull()
-        if (decodedText.isNullOrBlank()) {
+        val decodedText = result.data?.getStringExtra(ScannerActivity.EXTRA_SCAN_RESULT)?.trim().orEmpty()
+        if (decodedText.isBlank()) {
             scope.launch { snackbarHostState.showSnackbar(context.getString(R.string.profiles_qr_scan_no_code)) }
+            return@rememberLauncherForActivityResult
+        }
+        val subUrl = ProfileUrlCodec.findSubscriptionUrl(decodedText)
+        if (subUrl != null) {
+            prefilledSubscriptionUrl = subUrl
+            addSubscriptionError = null
+            addSubscriptionSession++
+            showAddSubscriptionDialog = true
             return@rememberLauncherForActivityResult
         }
         val drafts = runCatching { ProfileUrlCodec.decodeMultiple(decodedText) }.getOrNull()
@@ -249,7 +259,7 @@ fun ProfilesScreen(
                                 leadingIcon = { Icon(Icons.Filled.QrCodeScanner, contentDescription = null) },
                                 onClick = {
                                     showAddMenu = false
-                                    qrScanLauncher.launch(null)
+                                    qrScanLauncher.launch(Intent(context, ScannerActivity::class.java))
                                 }
                             )
                             DropdownMenuItem(
@@ -997,7 +1007,7 @@ private fun ShareProfileDialog(
                 Text(profile.name, style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.SemiBold)
                 if (shareUrl != null) {
                     val qrBitmap = remember(shareUrl) {
-                        runCatching { QrCodeUtil.encodeAsBitmap(shareUrl, sizePx = 512) }.getOrNull()
+                        runCatching { QrCodeUtil.encodeAsBitmap(shareUrl, sizePx = 800) }.getOrNull()
                     }
                     if (qrBitmap != null) {
                         Box(
@@ -1079,11 +1089,11 @@ private fun ImportProfilesDialog(
     val context = LocalContext.current
 
     val dialogQrScanner = rememberLauncherForActivityResult(
-        contract = ActivityResultContracts.TakePicturePreview()
-    ) { bitmap ->
-        if (bitmap == null) return@rememberLauncherForActivityResult
-        val decodedText = QrCodeUtil.decodeFromBitmap(bitmap).getOrNull()
-        if (decodedText.isNullOrBlank()) {
+        contract = ActivityResultContracts.StartActivityForResult()
+    ) { result ->
+        if (result.resultCode != Activity.RESULT_OK) return@rememberLauncherForActivityResult
+        val decodedText = result.data?.getStringExtra(ScannerActivity.EXTRA_SCAN_RESULT)?.trim().orEmpty()
+        if (decodedText.isBlank()) {
             errorMessage = context.getString(R.string.profiles_qr_scan_no_code)
         } else {
             rawText = if (rawText.isBlank()) decodedText else "$rawText\n$decodedText"
@@ -1186,7 +1196,7 @@ private fun ImportProfilesDialog(
                         )
                     }
                     OutlinedButton(
-                        onClick = { dialogQrScanner.launch(null) },
+                        onClick = { dialogQrScanner.launch(Intent(context, ScannerActivity::class.java)) },
                         modifier = Modifier.weight(1f)
                     ) {
                         Icon(Icons.Filled.QrCodeScanner, contentDescription = null, modifier = Modifier.size(16.dp))
@@ -1242,9 +1252,23 @@ private fun AddSubscriptionDialog(
     isLoading: Boolean,
     externalError: String? = null
 ) {
+    val context = LocalContext.current
     var name by rememberSaveable { mutableStateOf("") }
     var url by rememberSaveable(initialUrl) { mutableStateOf(initialUrl) }
     var localError by rememberSaveable { mutableStateOf<String?>(null) }
+
+    val subQrLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.StartActivityForResult()
+    ) { result ->
+        if (result.resultCode == Activity.RESULT_OK) {
+            val scanned = result.data?.getStringExtra(ScannerActivity.EXTRA_SCAN_RESULT)?.trim().orEmpty()
+            if (scanned.isNotBlank()) {
+                val detected = ProfileUrlCodec.findSubscriptionUrl(scanned) ?: scanned
+                url = detected
+                localError = null
+            }
+        }
+    }
 
     LaunchedEffect(externalError) {
         localError = externalError
@@ -1272,6 +1296,17 @@ private fun AddSubscriptionDialog(
                     },
                     label = { Text(stringResource(R.string.profiles_subscription_url_label)) },
                     placeholder = { Text(stringResource(R.string.profiles_subscription_url_hint)) },
+                    trailingIcon = {
+                        IconButton(
+                            onClick = { subQrLauncher.launch(Intent(context, ScannerActivity::class.java)) },
+                            enabled = !isLoading
+                        ) {
+                            Icon(
+                                Icons.Filled.QrCodeScanner,
+                                contentDescription = stringResource(R.string.profiles_subscription_scan_qr)
+                            )
+                        }
+                    },
                     singleLine = true,
                     isError = localError != null,
                     enabled = !isLoading,
@@ -1322,6 +1357,7 @@ private fun ManageSubscriptionsDialog(
     isRefreshing: Boolean
 ) {
     var pendingDeleteSub by remember { mutableStateOf<SubscriptionEntity?>(null) }
+    var sharingSub by remember { mutableStateOf<SubscriptionEntity?>(null) }
 
     AlertDialog(
         onDismissRequest = onDismiss,
@@ -1365,6 +1401,12 @@ private fun ManageSubscriptionsDialog(
                                         )
                                     }
                                     Row {
+                                        IconButton(onClick = { sharingSub = sub }, enabled = !isRefreshing) {
+                                            Icon(
+                                                Icons.Filled.QrCode2,
+                                                contentDescription = stringResource(R.string.profiles_subscription_share_qr)
+                                            )
+                                        }
                                         IconButton(onClick = { onRefresh(sub.id) }, enabled = !isRefreshing) {
                                             Icon(
                                                 Icons.Filled.Sync,
@@ -1414,6 +1456,74 @@ private fun ManageSubscriptionsDialog(
             }
         )
     }
+
+    if (sharingSub != null) {
+        SubscriptionQrDialog(
+            subscription = sharingSub!!,
+            onDismiss = { sharingSub = null }
+        )
+    }
+}
+
+@Composable
+private fun SubscriptionQrDialog(
+    subscription: SubscriptionEntity,
+    onDismiss: () -> Unit
+) {
+    val context = LocalContext.current
+    val qrBitmap = remember(subscription.url) {
+        runCatching { QrCodeUtil.encodeAsBitmap(subscription.url, sizePx = 800) }.getOrNull()
+    }
+
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text(subscription.name) },
+        text = {
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .verticalScroll(rememberScrollState()),
+                verticalArrangement = Arrangement.spacedBy(MdvSpace.S3),
+                horizontalAlignment = Alignment.CenterHorizontally
+            ) {
+                if (qrBitmap != null) {
+                    Image(
+                        bitmap = qrBitmap.asImageBitmap(),
+                        contentDescription = stringResource(R.string.profiles_subscription_share_qr),
+                        modifier = Modifier
+                            .size(220.dp)
+                            .clip(RoundedCornerShape(MdvRadius.Lg))
+                            .background(MdvColor.QrBackground)
+                            .padding(MdvSpace.S2)
+                    )
+                }
+                CompositionLocalProvider(LocalLayoutDirection provides LayoutDirection.Ltr) {
+                    OutlinedTextField(
+                        value = subscription.url,
+                        onValueChange = {},
+                        readOnly = true,
+                        modifier = Modifier.fillMaxWidth().height(100.dp),
+                        maxLines = 4,
+                        textStyle = LocalTextStyle.current.copy(textDirection = TextDirection.Ltr, textAlign = TextAlign.Start)
+                    )
+                }
+            }
+        },
+        confirmButton = {
+            Row(horizontalArrangement = Arrangement.spacedBy(MdvSpace.S2)) {
+                TextButton(onClick = {
+                    val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
+                    clipboard.setPrimaryClip(ClipData.newPlainText(subscription.name, subscription.url))
+                    Toast.makeText(context, context.getString(R.string.profiles_share_copied), Toast.LENGTH_SHORT).show()
+                }) {
+                    Text(stringResource(R.string.btn_copy))
+                }
+                TextButton(onClick = onDismiss) {
+                    Text(stringResource(R.string.action_close))
+                }
+            }
+        }
+    )
 }
 
 @Composable
