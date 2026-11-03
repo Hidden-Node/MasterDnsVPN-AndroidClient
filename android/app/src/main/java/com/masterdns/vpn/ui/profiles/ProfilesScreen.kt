@@ -87,6 +87,7 @@ fun ProfilesScreen(
     var showAddSubscriptionDialog by rememberSaveable { mutableStateOf(false) }
     var addSubscriptionSession by rememberSaveable { mutableStateOf(0) }
     var addSubscriptionError by rememberSaveable { mutableStateOf<String?>(null) }
+    var prefilledSubscriptionUrl by rememberSaveable { mutableStateOf("") }
     var showManageSubscriptionsDialog by rememberSaveable { mutableStateOf(false) }
     var selectedSubscriptionId by rememberSaveable { mutableStateOf<Long?>(null) }
 
@@ -304,6 +305,14 @@ fun ProfilesScreen(
                             }
                             snackbarHostState.showSnackbar(msg)
                         }
+                    },
+                    onSwitchToSubscription = { url ->
+                        showImportProfilesDialog = false
+                        initialImportText = ""
+                        prefilledSubscriptionUrl = url
+                        addSubscriptionError = null
+                        addSubscriptionSession++
+                        showAddSubscriptionDialog = true
                     }
                 )
             }
@@ -442,9 +451,11 @@ fun ProfilesScreen(
     if (showAddSubscriptionDialog) {
         key(addSubscriptionSession) {
             AddSubscriptionDialog(
+                initialUrl = prefilledSubscriptionUrl,
                 onDismiss = {
                     showAddSubscriptionDialog = false
                     addSubscriptionError = null
+                    prefilledSubscriptionUrl = ""
                 },
                 onAdd = { name, url ->
                     addSubscriptionError = null
@@ -454,6 +465,7 @@ fun ProfilesScreen(
                         onSuccess = { count ->
                             showAddSubscriptionDialog = false
                             addSubscriptionError = null
+                            prefilledSubscriptionUrl = ""
                             scope.launch {
                                 snackbarHostState.showSnackbar(
                                     context.getString(R.string.profiles_subscription_imported_msg, count)
@@ -1057,10 +1069,13 @@ private fun ShareProfileDialog(
 private fun ImportProfilesDialog(
     initialText: String = "",
     onDismiss: () -> Unit,
-    onImport: (List<ProfileEntity>) -> Unit
+    onImport: (List<ProfileEntity>) -> Unit,
+    onSwitchToSubscription: (String) -> Unit = {}
 ) {
     var rawText by rememberSaveable(initialText) { mutableStateOf(initialText) }
     var errorMessage by rememberSaveable { mutableStateOf<String?>(null) }
+    var detectedSubscriptionUrl by rememberSaveable { mutableStateOf<String?>(null) }
+    val isRtl = LocalLayoutDirection.current == LayoutDirection.Rtl
     val context = LocalContext.current
 
     val dialogQrScanner = rememberLauncherForActivityResult(
@@ -1073,6 +1088,7 @@ private fun ImportProfilesDialog(
         } else {
             rawText = if (rawText.isBlank()) decodedText else "$rawText\n$decodedText"
             errorMessage = null
+            detectedSubscriptionUrl = null
         }
     }
 
@@ -1086,26 +1102,61 @@ private fun ImportProfilesDialog(
                     .verticalScroll(rememberScrollState()),
                 verticalArrangement = Arrangement.spacedBy(MdvSpace.S3)
             ) {
-                CompositionLocalProvider(LocalLayoutDirection provides LayoutDirection.Ltr) {
-                    OutlinedTextField(
-                        value = rawText,
-                        onValueChange = {
-                            rawText = it
-                            errorMessage = null
-                        },
-                        placeholder = { Text(stringResource(R.string.profiles_import_dialog_hint)) },
-                        isError = errorMessage != null,
-                        modifier = Modifier.fillMaxWidth().height(140.dp),
-                        maxLines = 8,
-                        textStyle = LocalTextStyle.current.copy(textDirection = TextDirection.Ltr, textAlign = TextAlign.Start)
+                OutlinedTextField(
+                    value = rawText,
+                    onValueChange = {
+                        rawText = it
+                        errorMessage = null
+                        detectedSubscriptionUrl = null
+                    },
+                    placeholder = {
+                        Text(
+                            text = stringResource(R.string.profiles_import_dialog_hint),
+                            modifier = Modifier.fillMaxWidth(),
+                            style = LocalTextStyle.current.copy(
+                                textDirection = TextDirection.ContentOrRtl,
+                                textAlign = if (isRtl) TextAlign.Right else TextAlign.Left
+                            )
+                        )
+                    },
+                    trailingIcon = {
+                        if (rawText.isNotEmpty()) {
+                            IconButton(onClick = {
+                                rawText = ""
+                                errorMessage = null
+                                detectedSubscriptionUrl = null
+                            }) {
+                                Icon(
+                                    Icons.Filled.Clear,
+                                    contentDescription = stringResource(R.string.profiles_clear_input_cd)
+                                )
+                            }
+                        }
+                    },
+                    isError = errorMessage != null,
+                    modifier = Modifier.fillMaxWidth().height(140.dp),
+                    maxLines = 8,
+                    textStyle = LocalTextStyle.current.copy(
+                        textDirection = TextDirection.Ltr,
+                        textAlign = TextAlign.Left
                     )
-                }
+                )
                 if (errorMessage != null) {
                     Text(
                         text = errorMessage!!,
                         color = MaterialTheme.colorScheme.error,
                         style = MaterialTheme.typography.bodySmall
                     )
+                    if (detectedSubscriptionUrl != null) {
+                        FilledTonalButton(
+                            onClick = { onSwitchToSubscription(detectedSubscriptionUrl!!) },
+                            modifier = Modifier.fillMaxWidth().padding(top = MdvSpace.S1)
+                        ) {
+                            Icon(Icons.Filled.CloudDownload, contentDescription = null, modifier = Modifier.size(18.dp))
+                            Spacer(modifier = Modifier.width(MdvSpace.S2))
+                            Text(stringResource(R.string.profiles_import_switch_to_subscription_btn))
+                        }
+                    }
                 }
                 Row(
                     modifier = Modifier.fillMaxWidth(),
@@ -1118,6 +1169,7 @@ private fun ImportProfilesDialog(
                             if (clip.isNotBlank()) {
                                 rawText = if (rawText.isBlank()) clip else "$rawText\n$clip"
                                 errorMessage = null
+                                detectedSubscriptionUrl = null
                             } else {
                                 errorMessage = context.getString(R.string.profiles_clipboard_empty_msg)
                             }
@@ -1154,10 +1206,18 @@ private fun ImportProfilesDialog(
                 onClick = {
                     if (rawText.isBlank()) {
                         errorMessage = context.getString(R.string.profiles_invalid_link_msg)
+                        detectedSubscriptionUrl = null
+                        return@Button
+                    }
+                    val subUrl = ProfileUrlCodec.findSubscriptionUrl(rawText)
+                    if (subUrl != null) {
+                        errorMessage = context.getString(R.string.profiles_import_is_subscription_error)
+                        detectedSubscriptionUrl = subUrl
                         return@Button
                     }
                     val drafts = runCatching { ProfileUrlCodec.decodeMultiple(rawText) }.getOrElse { error ->
                         errorMessage = error.message ?: context.getString(R.string.profiles_invalid_link_msg)
+                        detectedSubscriptionUrl = null
                         return@Button
                     }
                     onImport(drafts.map { it.toProfileEntity() })
@@ -1176,13 +1236,14 @@ private fun ImportProfilesDialog(
 
 @Composable
 private fun AddSubscriptionDialog(
+    initialUrl: String = "",
     onDismiss: () -> Unit,
     onAdd: (name: String, url: String) -> Unit,
     isLoading: Boolean,
     externalError: String? = null
 ) {
     var name by rememberSaveable { mutableStateOf("") }
-    var url by rememberSaveable { mutableStateOf("") }
+    var url by rememberSaveable(initialUrl) { mutableStateOf(initialUrl) }
     var localError by rememberSaveable { mutableStateOf<String?>(null) }
 
     LaunchedEffect(externalError) {

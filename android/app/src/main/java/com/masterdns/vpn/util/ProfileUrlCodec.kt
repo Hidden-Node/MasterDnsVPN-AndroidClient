@@ -154,4 +154,11 @@ object ProfileUrlCodec {
         require(results.isNotEmpty()) { "Enter at least one profile link" }
         return results
     }
+
+    fun findSubscriptionUrl(raw: String): String? {
+        return raw.lineSequence()
+            .map { it.removePrefix("\uFEFF").trim() }
+            .filter { it.isNotBlank() && !it.startsWith("#") && !it.startsWith("//") && !it.startsWith(";") }
+            .firstOrNull { it.startsWith("http://", ignoreCase = true) || it.startsWith("https://", ignoreCase = true) }
+    }
 }

@@ -335,4 +335,7 @@
     <string name="profiles_subscription_last_updated">更新时间：%s</string>
     <string name="profiles_subscription_delete_confirm">确定要删除此订阅及其所有配置文件吗？</string>
     <string name="profiles_subscription_invalid_url">网址必须以 http:// 或 https:// 开头</string>
+    <string name="profiles_import_is_subscription_error">此网址为订阅链接，请从订阅导入。</string>
+    <string name="profiles_import_switch_to_subscription_btn">作为订阅添加</string>
+    <string name="profiles_clear_input_cd">清除输入</string>
 </resources>

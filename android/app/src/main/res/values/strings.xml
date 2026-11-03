@@ -345,4 +345,7 @@
     <string name="profiles_subscription_last_updated">Updated: %s</string>
     <string name="profiles_subscription_delete_confirm">Delete subscription and all its profiles?</string>
     <string name="profiles_subscription_invalid_url">URL must start with http:// or https://</string>
+    <string name="profiles_import_is_subscription_error">This is a subscription URL. Please import it as a subscription.</string>
+    <string name="profiles_import_switch_to_subscription_btn">Add as Subscription</string>
+    <string name="profiles_clear_input_cd">Clear input</string>
 </resources>
