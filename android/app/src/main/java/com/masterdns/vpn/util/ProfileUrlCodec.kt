@@ -12,14 +12,15 @@ data class ProfileDraftData(
     val name: String,
     val domains: List<String>,
     val encryptionKey: String,
-    val encryptionMethod: Int
+    val encryptionMethod: Int,
+    val resolvers: String? = null
 ) {
     fun toProfileEntity(defaultResolvers: String = "8.8.8.8"): ProfileEntity = ProfileEntity(
         name = name,
         domains = Gson().toJson(domains),
         encryptionKey = encryptionKey,
         encryptionMethod = encryptionMethod,
-        resolvers = defaultResolvers
+        resolvers = resolvers?.ifBlank { null } ?: defaultResolvers
     )
 }
 
@@ -30,7 +31,8 @@ object ProfileUrlCodec {
     const val SCHEME_COTTENDNS = "cottendns"
     const val SCHEMA_MASTERDNS = "masterdns.profile"
     const val SCHEMA_STORMDNS = "stormdns.profile"
-    private val SUPPORTED_SCHEMAS = setOf(SCHEMA_MASTERDNS, SCHEMA_STORMDNS)
+    const val SCHEMA_COTTENDNS = "cottendns.profile"
+    private val SUPPORTED_SCHEMAS = setOf(SCHEMA_MASTERDNS, SCHEMA_STORMDNS, SCHEMA_COTTENDNS)
     private val SUPPORTED_SCHEMES = setOf(SCHEME_MASTERDNS, SCHEME_STORMDNS, SCHEME_COTTENDNS)
     const val VERSION = 1
 
@@ -95,13 +97,39 @@ object ProfileUrlCodec {
             .getOrNull()?.takeIf { it.isJsonObject }?.asJsonObject
             ?: throw IllegalArgumentException("Invalid profile JSON payload")
 
-        val schema = root.get("schema")?.takeIf { it.isJsonPrimitive }?.asString.orEmpty()
-        require(schema in SUPPORTED_SCHEMAS) { "Unsupported profile schema: $schema" }
+        val schema = root.get("schema")?.takeIf { it.isJsonPrimitive }?.asString.orEmpty().trim()
+        val prefix = if (schema.endsWith(".profile", ignoreCase = true)) {
+            schema.dropLast(".profile".length)
+        } else null
+        val isValidSchema = schema in SUPPORTED_SCHEMAS ||
+            (!prefix.isNullOrBlank() && !prefix.startsWith(".") && !prefix.endsWith(".") && !prefix.contains("..") && prefix.all { it.isLetterOrDigit() || it == '.' || it == '_' || it == '-' })
+        require(isValidSchema) { "Unsupported profile schema: $schema" }
 
         val profileObj = root.get("profile")?.takeIf { it.isJsonObject }?.asJsonObject
             ?: throw IllegalArgumentException("Missing profile object in link")
         val serverObj = profileObj.get("server")?.takeIf { it.isJsonObject }?.asJsonObject
             ?: throw IllegalArgumentException("Missing server object in link")
+
+        val resolversElem = (profileObj.get("resolvers") ?: serverObj.get("resolvers"))
+            ?.takeIf { !it.isJsonNull }
+
+        val rawResolversList: List<String> = when {
+            resolversElem?.isJsonArray == true -> {
+                resolversElem.asJsonArray.mapNotNull { elem ->
+                    runCatching { elem.asString.trim() }.getOrNull()
+                }
+            }
+            resolversElem?.isJsonPrimitive == true -> {
+                resolversElem.asString.split(',', ';', '\n', ' ')
+                    .map { it.trim() }
+            }
+            else -> emptyList()
+        }
+
+        val customResolvers = if (rawResolversList.isNotEmpty()) {
+            ResolverAnalyzer.analyzeAndNormalize(rawResolversList.joinToString("\n"))
+                ?.normalizedText?.trim()?.ifBlank { null }
+        } else null
 
         val domains = mutableListOf<String>()
         val domainsArray = serverObj.get("domains")?.takeIf { it.isJsonArray }?.asJsonArray
@@ -135,7 +163,8 @@ object ProfileUrlCodec {
             name = name,
             domains = domains.distinct(),
             encryptionKey = key,
-            encryptionMethod = method
+            encryptionMethod = method,
+            resolvers = customResolvers
         )
     }
 
