@@ -9,6 +9,9 @@
         tools:targetApi="34" />
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
     <uses-permission android:name="android.permission.WAKE_LOCK" />
+    <uses-permission android:name="android.permission.CAMERA" />
+    <uses-feature android:name="android.hardware.camera" android:required="false" />
+    <uses-feature android:name="android.hardware.camera.autofocus" android:required="false" />
 
     <queries>
         <intent>
@@ -71,6 +74,12 @@
                 <data android:scheme="masterdns" />
             </intent-filter>
         </activity>
+
+        <activity
+            android:name=".ui.scanner.ScannerActivity"
+            android:exported="false"
+            android:screenOrientation="portrait"
+            android:theme="@style/Theme.MasterDnsVPN" />
 
         <service
             android:name=".service.MasterDnsVpnService"

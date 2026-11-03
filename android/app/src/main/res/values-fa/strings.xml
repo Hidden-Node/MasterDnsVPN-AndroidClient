@@ -338,4 +338,14 @@
     <string name="profiles_import_is_subscription_error">این آدرس یک لینک سابسکریپشن است. لطفاً آن را از بخش سابسکریپشن وارد کنید.</string>
     <string name="profiles_import_switch_to_subscription_btn">افزودن به عنوان سابسکریپشن</string>
     <string name="profiles_clear_input_cd">پاک کردن متن</string>
+    <string name="scanner_title">اسکن QR Code</string>
+    <string name="scanner_hint">QR Code را درون کادر تنظیم کنید</string>
+    <string name="scanner_torch_on">روشن کردن فلش</string>
+    <string name="scanner_torch_off">خاموش کردن فلش</string>
+    <string name="scanner_select_image">انتخاب از گالری</string>
+    <string name="scanner_decoding_failed">هیچ QR Code معتبری در تصویر انتخاب‌شده یافت نشد</string>
+    <string name="scanner_camera_permission_required">برای اسکن QR Code به دسترسی دوربین نیاز است</string>
+    <string name="scanner_grant_permission">اعطای دسترسی</string>
+    <string name="profiles_subscription_scan_qr">اسکن QR code اشتراک</string>
+    <string name="profiles_subscription_share_qr">QR code اشتراک</string>
 </resources>

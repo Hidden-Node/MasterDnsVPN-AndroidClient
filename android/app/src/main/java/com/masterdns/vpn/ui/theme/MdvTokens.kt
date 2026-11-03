@@ -31,6 +31,9 @@ object MdvColor {
     val OnError = Color(0xFF690005)
 
     val QrBackground = Color(0xFFFFFFFF)
+    val OverlayScrim = Color(0x99000000)
+    val CameraBackdrop = Color(0xFF000000)
+    val OnCameraBackdrop = Color(0xFFFFFFFF)
 }
 
 object MdvSpace {

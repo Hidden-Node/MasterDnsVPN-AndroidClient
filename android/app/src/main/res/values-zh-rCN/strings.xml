@@ -338,4 +338,14 @@
     <string name="profiles_import_is_subscription_error">此网址为订阅链接，请从订阅导入。</string>
     <string name="profiles_import_switch_to_subscription_btn">作为订阅添加</string>
     <string name="profiles_clear_input_cd">清除输入</string>
+    <string name="scanner_title">扫描二维码</string>
+    <string name="scanner_hint">将二维码对准框内</string>
+    <string name="scanner_torch_on">开启闪光灯</string>
+    <string name="scanner_torch_off">关闭闪光灯</string>
+    <string name="scanner_select_image">从相册选择</string>
+    <string name="scanner_decoding_failed">所选图片中未找到有效的二维码</string>
+    <string name="scanner_camera_permission_required">扫描二维码需要相机权限</string>
+    <string name="scanner_grant_permission">授予权限</string>
+    <string name="profiles_subscription_scan_qr">扫描订阅二维码</string>
+    <string name="profiles_subscription_share_qr">订阅二维码</string>
 </resources>

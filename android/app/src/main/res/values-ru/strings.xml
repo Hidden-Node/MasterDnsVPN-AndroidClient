@@ -338,4 +338,14 @@
     <string name="profiles_import_is_subscription_error">Этот URL является ссылкой на подписку. Пожалуйста, импортируйте её как подписку.</string>
     <string name="profiles_import_switch_to_subscription_btn">Добавить как подписку</string>
     <string name="profiles_clear_input_cd">Очистить ввод</string>
+    <string name="scanner_title">Сканировать QR-код</string>
+    <string name="scanner_hint">Поместите QR-код в рамку</string>
+    <string name="scanner_torch_on">Включить вспышку</string>
+    <string name="scanner_torch_off">Выключить вспышку</string>
+    <string name="scanner_select_image">Выбрать из галереи</string>
+    <string name="scanner_decoding_failed">В выбранном изображении не найден QR-код</string>
+    <string name="scanner_camera_permission_required">Для сканирования QR-кода требуется разрешение на использование камеры</string>
+    <string name="scanner_grant_permission">Предоставить разрешение</string>
+    <string name="profiles_subscription_scan_qr">Сканировать QR-код подписки</string>
+    <string name="profiles_subscription_share_qr">QR-код подписки</string>
 </resources>
