@@ -335,4 +335,7 @@
     <string name="profiles_subscription_last_updated">Обновлено: %s</string>
     <string name="profiles_subscription_delete_confirm">Удалить подписку и все её профили?</string>
     <string name="profiles_subscription_invalid_url">URL должен начинаться с http:// или https://</string>
+    <string name="profiles_import_is_subscription_error">Этот URL является ссылкой на подписку. Пожалуйста, импортируйте её как подписку.</string>
+    <string name="profiles_import_switch_to_subscription_btn">Добавить как подписку</string>
+    <string name="profiles_clear_input_cd">Очистить ввод</string>
 </resources>

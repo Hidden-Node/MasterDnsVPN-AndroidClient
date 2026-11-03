@@ -314,7 +314,7 @@
     <string name="profiles_add_toml">وارد کردن از فایل TOML</string>
     <string name="profiles_add_manual">ایجاد دستی</string>
     <string name="profiles_import_dialog_title">وارد کردن پروفایل‌ها</string>
-    <string name="profiles_import_dialog_hint">لینک‌های masterdns:// را خط به خط وارد کنید</string>
+    <string name="profiles_import_dialog_hint">لینک‌های \u2066masterdns://\u2069 را خط به خط وارد کنید</string>
     <string name="profiles_imported_count_msg">%d پروفایل وارد شدند</string>
     <string name="profiles_clipboard_empty_msg">هیچ لینک پروفایلی در کلیپ‌بورد یافت نشد</string>
     <string name="profiles_qr_scan_cancelled">اسکن QR code لغو شد</string>
@@ -335,4 +335,7 @@
     <string name="profiles_subscription_last_updated">به‌روزرسانی: %s</string>
     <string name="profiles_subscription_delete_confirm">این سابسکریپشن و تمام پروفایل‌های آن حذف شوند؟</string>
     <string name="profiles_subscription_invalid_url">آدرس اینترنتی باید با http:// یا https:// شروع شود</string>
+    <string name="profiles_import_is_subscription_error">این آدرس یک لینک سابسکریپشن است. لطفاً آن را از بخش سابسکریپشن وارد کنید.</string>
+    <string name="profiles_import_switch_to_subscription_btn">افزودن به عنوان سابسکریپشن</string>
+    <string name="profiles_clear_input_cd">پاک کردن متن</string>
 </resources>

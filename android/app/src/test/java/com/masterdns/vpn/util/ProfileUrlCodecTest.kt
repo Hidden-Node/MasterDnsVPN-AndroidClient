@@ -398,4 +398,29 @@ class ProfileUrlCodecTest {
             ProfileUrlCodec.decode("masterdns://$base64")
         }
     }
+
+    @Test
+    fun findSubscriptionUrl_detectsHttpAndHttpsLines() {
+        assertThat(ProfileUrlCodec.findSubscriptionUrl("http://example.com/sub.txt")).isEqualTo("http://example.com/sub.txt")
+        assertThat(ProfileUrlCodec.findSubscriptionUrl("  https://server.net/sub \n")).isEqualTo("https://server.net/sub")
+    }
+
+    @Test
+    fun findSubscriptionUrl_ignoresCommentsAndBom() {
+        val input = "\uFEFF# Comment\n// Comment 2\n; Comment 3\nhttp://sub.example.com/nodes"
+        assertThat(ProfileUrlCodec.findSubscriptionUrl(input)).isEqualTo("http://sub.example.com/nodes")
+    }
+
+    @Test
+    fun findSubscriptionUrl_returnsNullForProfileLinks() {
+        val profileUrl = "masterdns://eyJzY2hlbWEiOiJtYXN0ZXJkbnMucHJvZmlsZSJ9"
+        assertThat(ProfileUrlCodec.findSubscriptionUrl(profileUrl)).isNull()
+    }
+
+    @Test
+    fun findSubscriptionUrl_returnsNullForBlankOrInvalidInput() {
+        assertThat(ProfileUrlCodec.findSubscriptionUrl("")).isNull()
+        assertThat(ProfileUrlCodec.findSubscriptionUrl("   \n# Just comments")).isNull()
+        assertThat(ProfileUrlCodec.findSubscriptionUrl("ftp://invalid.scheme/sub")).isNull()
+    }
 }
