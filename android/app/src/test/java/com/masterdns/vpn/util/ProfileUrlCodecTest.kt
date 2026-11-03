@@ -2,6 +2,7 @@ package com.masterdns.vpn.util
 
 import com.google.common.truth.Truth.assertThat
 import com.google.gson.Gson
+import com.google.gson.JsonArray
 import com.google.gson.JsonObject
 import com.google.gson.JsonParser
 import com.masterdns.vpn.data.local.ProfileEntity
@@ -77,7 +78,7 @@ class ProfileUrlCodecTest {
 
     @Test
     fun decode_supported_alternative_schemas() {
-        for (schema in listOf("masterdns.profile", "stormdns.profile")) {
+        for (schema in listOf("masterdns.profile", "stormdns.profile", "cottendns.profile", "custom.profile", "legacy-node.profile", "vendor.PROFILE")) {
             val json = JsonObject().apply {
                 addProperty("schema", schema)
                 addProperty("version", 1)
@@ -97,6 +98,119 @@ class ProfileUrlCodecTest {
             assertThat(decoded.encryptionKey).isEqualTo("schema-key")
             assertThat(decoded.encryptionMethod).isEqualTo(3)
         }
+    }
+
+    @Test
+    fun decode_rejects_schemas_without_profile_suffix() {
+        for (invalidSchema in listOf("unsupported.schema", ".profile", "..profile", ".test.profile", "test..profile", "profile", "masterdns", "", "config.json")) {
+            val badSchemaJson = JsonObject().apply {
+                addProperty("schema", invalidSchema)
+                addProperty("version", 1)
+                add("profile", JsonObject().apply {
+                    addProperty("name", "Test")
+                    add("server", JsonObject().apply {
+                        addProperty("domain", "example.com")
+                        addProperty("encryption_key", "key")
+                    })
+                })
+            }
+            val badSchema = Base64.UrlSafe.encode(badSchemaJson.toString().toByteArray())
+            assertThrows(IllegalArgumentException::class.java) {
+                ProfileUrlCodec.decode("masterdns://$badSchema")
+            }
+        }
+    }
+
+    @Test
+    fun decode_extracts_custom_resolvers_when_present() {
+        val json = JsonObject().apply {
+            addProperty("schema", "cottendns.profile")
+            addProperty("version", 1)
+            add("profile", JsonObject().apply {
+                addProperty("name", "Resolver Test")
+                add("resolvers", JsonArray().apply {
+                    add("1.1.1.1")
+                    add("8.8.8.8")
+                })
+                add("server", JsonObject().apply {
+                    addProperty("domain", "resolver.example.com")
+                    addProperty("encryption_key", "key123")
+                    addProperty("encryption_method", 5)
+                })
+            })
+        }
+        val base64 = Base64.UrlSafe.encode(json.toString().toByteArray())
+        val decoded = ProfileUrlCodec.decode("cottendns://$base64")
+        assertThat(decoded.resolvers).isEqualTo("1.1.1.1\n8.8.8.8")
+
+        val entity = decoded.toProfileEntity("9.9.9.9")
+        assertThat(entity.resolvers).isEqualTo("1.1.1.1\n8.8.8.8")
+    }
+
+    @Test
+    fun decode_falls_back_to_default_resolvers_when_omitted() {
+        val json = JsonObject().apply {
+            addProperty("schema", "masterdns.profile")
+            addProperty("version", 1)
+            add("profile", JsonObject().apply {
+                addProperty("name", "Default Resolver Test")
+                add("server", JsonObject().apply {
+                    addProperty("domain", "default.example.com")
+                    addProperty("encryption_key", "key123")
+                    addProperty("encryption_method", 5)
+                })
+            })
+        }
+        val base64 = Base64.UrlSafe.encode(json.toString().toByteArray())
+        val decoded = ProfileUrlCodec.decode("masterdns://$base64")
+        assertThat(decoded.resolvers).isNull()
+
+        val entity = decoded.toProfileEntity("8.8.8.8")
+        assertThat(entity.resolvers).isEqualTo("8.8.8.8")
+    }
+
+    @Test
+    fun decode_extracts_custom_resolvers_from_delimited_string() {
+        val json = JsonObject().apply {
+            addProperty("schema", "cottendns.profile")
+            addProperty("version", 1)
+            add("profile", JsonObject().apply {
+                addProperty("name", "String Resolver Test")
+                addProperty("resolvers", "1.1.1.1, 8.8.8.8")
+                add("server", JsonObject().apply {
+                    addProperty("domain", "res.example.com")
+                    addProperty("encryption_key", "key123")
+                    addProperty("encryption_method", 1)
+                })
+            })
+        }
+        val base64 = Base64.UrlSafe.encode(json.toString().toByteArray())
+        val decoded = ProfileUrlCodec.decode("cottendns://$base64")
+        assertThat(decoded.resolvers).isEqualTo("1.1.1.1\n8.8.8.8")
+    }
+
+    @Test
+    fun decode_invalid_custom_resolvers_fall_back_to_default() {
+        val json = JsonObject().apply {
+            addProperty("schema", "cottendns.profile")
+            addProperty("version", 1)
+            add("profile", JsonObject().apply {
+                addProperty("name", "Invalid Resolver Test")
+                add("resolvers", JsonArray().apply {
+                    add("not-an-ip")
+                    add("invalid:port:garbage")
+                })
+                add("server", JsonObject().apply {
+                    addProperty("domain", "invalid-res.example.com")
+                    addProperty("encryption_key", "key123")
+                    addProperty("encryption_method", 1)
+                })
+            })
+        }
+        val base64 = Base64.UrlSafe.encode(json.toString().toByteArray())
+        val decoded = ProfileUrlCodec.decode("cottendns://$base64")
+        assertThat(decoded.resolvers).isNull()
+        assertThat(decoded.toProfileEntity("8.8.8.8").resolvers).isEqualTo("8.8.8.8")
     }
 
     @Test
