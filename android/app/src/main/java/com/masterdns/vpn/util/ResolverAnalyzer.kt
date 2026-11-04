@@ -152,11 +152,6 @@ object ResolverAnalyzer {
         return profile.copy(advancedJson = gson.toJson(advanced))
     }
 
-    fun statsFromProfile(profile: ProfileEntity): ResolverImportStats? {
-        val json = parseAdvancedJson(profile.advancedJson)[STATS_ADVANCED_KEY] ?: return null
-        return runCatching { gson.fromJson(json, ResolverImportStats::class.java) }.getOrNull()
-    }
-
     internal data class ResolverEntry(
         val host: String,
         val port: Int,

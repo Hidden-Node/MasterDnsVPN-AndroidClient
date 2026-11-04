@@ -15,8 +15,6 @@ class SubscriptionRepository @Inject constructor(
 ) {
     fun getAllSubscriptions(): Flow<List<SubscriptionEntity>> = subscriptionDao.getAllSubscriptions()
 
-    suspend fun getSubscriptionById(id: Long): SubscriptionEntity? = subscriptionDao.getSubscriptionById(id)
-
     suspend fun addSubscriptionAndFetch(name: String, url: String): Result<SubscriptionEntity> {
         val trimmedUrl = url.trim()
         val fetchResult = SubscriptionFetcher.fetch(trimmedUrl).getOrElse { return Result.failure(it) }

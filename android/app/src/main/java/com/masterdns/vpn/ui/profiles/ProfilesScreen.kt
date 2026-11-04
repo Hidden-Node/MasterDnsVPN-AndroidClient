@@ -650,7 +650,6 @@ private fun ProfileEditorDialog(
     var showKey by rememberSaveable { mutableStateOf(false) }
     var showResolversEditor by rememberSaveable { mutableStateOf(false) }
     var activeDraft by remember { mutableStateOf(importedDraft) }
-    val editorContext = LocalContext.current
     val largeResolversText = resolvers.length > 6000
     val nameRequiredMsg = stringResource(R.string.profiles_name_required_msg)
     val domainRequiredMsg = stringResource(R.string.profiles_domain_required_msg)

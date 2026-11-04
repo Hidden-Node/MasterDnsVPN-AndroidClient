@@ -1,7 +1,6 @@
 package com.masterdns.vpn.data.local
 
 import androidx.room.Dao
-import androidx.room.Delete
 import androidx.room.Insert
 import androidx.room.OnConflictStrategy
 import androidx.room.Query
@@ -36,9 +35,6 @@ interface SubscriptionDao {
 
     @Update
     suspend fun updateSubscription(subscription: SubscriptionEntity)
-
-    @Delete
-    suspend fun deleteSubscription(subscription: SubscriptionEntity)
 
     @Query("DELETE FROM subscriptions WHERE id = :id")
     suspend fun deleteSubscriptionById(id: Long)
