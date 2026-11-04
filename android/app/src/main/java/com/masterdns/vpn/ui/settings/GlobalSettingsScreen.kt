@@ -66,7 +66,6 @@ import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.MutableState
 import androidx.compose.runtime.collectAsState
@@ -85,7 +84,6 @@ import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.platform.LocalClipboardManager
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.platform.LocalLayoutDirection
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.font.FontWeight
@@ -93,7 +91,6 @@ import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextDirection
-import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Dialog
 import androidx.core.os.LocaleListCompat
@@ -359,36 +356,34 @@ fun GlobalSettingsScreen(vm: GlobalSettingsViewModel = viewModel()) {
                     item {
                         Card(colors = CardDefaults.cardColors(containerColor = MdvColor.SurfaceHigh)) {
                             Column(modifier = Modifier.padding(MdvSpace.S3), verticalArrangement = Arrangement.spacedBy(MdvSpace.S3)) {
-                        CompositionLocalProvider(LocalLayoutDirection provides LayoutDirection.Ltr) {
-                            ExposedDropdownMenuBox(
-                                expanded = modeExpanded,
-                                onExpandedChange = { modeExpanded = !modeExpanded }
-                            ) {
-                                OutlinedTextField(
-                                    value = draft.connectionMode,
-                                    onValueChange = {},
-                                    readOnly = true,
-                                    label = { Text(stringResource(R.string.global_connection_mode)) },
-                                    supportingText = { Text(stringResource(R.string.global_connection_mode_help)) },
-                                    trailingIcon = {
-                                        Icon(
-                                            imageVector = Icons.Filled.ArrowDropDown,
-                                            contentDescription = null
-                                        )
-                                    },
-                                    textStyle = LocalTextStyle.current.copy(textDirection = TextDirection.Ltr, textAlign = TextAlign.Start),
-                                    modifier = Modifier.menuAnchor().fillMaxWidth()
-                                )
-                                DropdownMenu(expanded = modeExpanded, onDismissRequest = { modeExpanded = false }) {
-                                    listOf("VPN", "PROXY").forEach { mode ->
-                                        DropdownMenuItem(
-                                            text = { Text(mode) },
-                                            onClick = {
-                                                draft = draft.copy(connectionMode = mode)
-                                                modeExpanded = false
-                                            }
-                                        )
-                                    }
+                        ExposedDropdownMenuBox(
+                            expanded = modeExpanded,
+                            onExpandedChange = { modeExpanded = !modeExpanded }
+                        ) {
+                            OutlinedTextField(
+                                value = draft.connectionMode,
+                                onValueChange = {},
+                                readOnly = true,
+                                label = { Text(stringResource(R.string.global_connection_mode)) },
+                                supportingText = { Text(stringResource(R.string.global_connection_mode_help)) },
+                                trailingIcon = {
+                                    Icon(
+                                        imageVector = Icons.Filled.ArrowDropDown,
+                                        contentDescription = null
+                                    )
+                                },
+                                textStyle = LocalTextStyle.current.copy(textDirection = TextDirection.Ltr, textAlign = TextAlign.Start),
+                                modifier = Modifier.menuAnchor().fillMaxWidth()
+                            )
+                            DropdownMenu(expanded = modeExpanded, onDismissRequest = { modeExpanded = false }) {
+                                listOf("VPN", "PROXY").forEach { mode ->
+                                    DropdownMenuItem(
+                                        text = { Text(mode) },
+                                        onClick = {
+                                            draft = draft.copy(connectionMode = mode)
+                                            modeExpanded = false
+                                        }
+                                    )
                                 }
                             }
                         }
@@ -526,86 +521,80 @@ fun GlobalSettingsScreen(vm: GlobalSettingsViewModel = viewModel()) {
                                 )
                             }
 
-                            CompositionLocalProvider(LocalLayoutDirection provides LayoutDirection.Ltr) {
-                                Row(
-                                    modifier = Modifier.fillMaxWidth(),
-                                    horizontalArrangement = Arrangement.spacedBy(8.dp)
-                                ) {
-                                    OutlinedTextField(
-                                        value = sharingSocksPortText,
-                                        onValueChange = {
-                                            if (it.any { ch -> !ch.isDigit() } || it.length > 5) {
-                                                return@OutlinedTextField
-                                            }
-                                            sharingSocksPortText = it
-                                            val port = it.toIntOrNull()
-                                            if (port != null && port in 1025..65535) {
-                                                draft = draft.copy(internetSharingSocksPort = port)
-                                            }
-                                        },
-                                        label = { Text(stringResource(R.string.global_socks5_port)) },
-                                        isError = socksPortMissing || socksPortRequiresRoot || socksPortOutOfRange || sharingPortsEqual,
-                                        supportingText = {
-                                            when {
-                                                sharingPortsEqual -> Text(stringResource(R.string.global_sharing_ports_equal), color = MaterialTheme.colorScheme.error)
-                                                socksPortMissing -> Text(stringResource(R.string.global_socks5_port_required))
-                                                socksPortRequiresRoot -> Text(stringResource(R.string.global_port_root_warning))
-                                                socksPortOutOfRange -> Text(stringResource(R.string.global_settings_ports_range_msg), color = MaterialTheme.colorScheme.error)
-                                            }
-                                        },
-                                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
-                                        textStyle = LocalTextStyle.current.copy(textDirection = TextDirection.Ltr, textAlign = TextAlign.Start),
-                                        modifier = Modifier.weight(1f)
-                                    )
-                                    OutlinedTextField(
-                                        value = sharingHttpPortText,
-                                        onValueChange = {
-                                            if (it.any { ch -> !ch.isDigit() } || it.length > 5) {
-                                                return@OutlinedTextField
-                                            }
-                                            sharingHttpPortText = it
-                                            val port = it.toIntOrNull()
-                                            if (port != null && port in 1025..65535) {
-                                                draft = draft.copy(internetSharingHttpPort = port)
-                                            }
-                                        },
-                                        label = { Text(stringResource(R.string.global_http_port)) },
-                                        isError = httpPortMissing || httpPortRequiresRoot || httpPortOutOfRange || sharingPortsEqual,
-                                        supportingText = {
-                                            when {
-                                                sharingPortsEqual -> Text(stringResource(R.string.global_sharing_ports_equal), color = MaterialTheme.colorScheme.error)
-                                                httpPortMissing -> Text(stringResource(R.string.global_http_port_required))
-                                                httpPortRequiresRoot -> Text(stringResource(R.string.global_port_root_warning))
-                                                httpPortOutOfRange -> Text(stringResource(R.string.global_settings_ports_range_msg), color = MaterialTheme.colorScheme.error)
-                                            }
-                                        },
-                                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
-                                        textStyle = LocalTextStyle.current.copy(textDirection = TextDirection.Ltr, textAlign = TextAlign.Start),
-                                        modifier = Modifier.weight(1f)
-                                    )
-                                }
-                            }
-
-                            CompositionLocalProvider(LocalLayoutDirection provides LayoutDirection.Ltr) {
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.spacedBy(8.dp)
+                            ) {
                                 OutlinedTextField(
-                                    value = draft.internetSharingUser,
-                                    onValueChange = { draft = draft.copy(internetSharingUser = it) },
-                                    label = { Text(stringResource(R.string.global_username)) },
-                                    textStyle = LocalTextStyle.current.copy(textDirection = TextDirection.Ltr, textAlign = TextAlign.Start),
-                                    modifier = Modifier.fillMaxWidth()
+                                    value = sharingSocksPortText,
+                                    onValueChange = {
+                                        if (it.any { ch -> !ch.isDigit() } || it.length > 5) {
+                                            return@OutlinedTextField
+                                        }
+                                        sharingSocksPortText = it
+                                        val port = it.toIntOrNull()
+                                        if (port != null && port in 1025..65535) {
+                                            draft = draft.copy(internetSharingSocksPort = port)
+                                        }
+                                    },
+                                    label = { Text(stringResource(R.string.global_socks5_port)) },
+                                    isError = socksPortMissing || socksPortRequiresRoot || socksPortOutOfRange || sharingPortsEqual,
+                                    supportingText = {
+                                        when {
+                                            sharingPortsEqual -> Text(stringResource(R.string.global_sharing_ports_equal), color = MaterialTheme.colorScheme.error)
+                                            socksPortMissing -> Text(stringResource(R.string.global_socks5_port_required))
+                                            socksPortRequiresRoot -> Text(stringResource(R.string.global_port_root_warning))
+                                            socksPortOutOfRange -> Text(stringResource(R.string.global_settings_ports_range_msg), color = MaterialTheme.colorScheme.error)
+                                        }
+                                    },
+                                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                                    textStyle = LocalTextStyle.current.copy(textDirection = TextDirection.Ltr, textAlign = TextAlign.Left),
+                                    modifier = Modifier.weight(1f)
+                                )
+                                OutlinedTextField(
+                                    value = sharingHttpPortText,
+                                    onValueChange = {
+                                        if (it.any { ch -> !ch.isDigit() } || it.length > 5) {
+                                            return@OutlinedTextField
+                                        }
+                                        sharingHttpPortText = it
+                                        val port = it.toIntOrNull()
+                                        if (port != null && port in 1025..65535) {
+                                            draft = draft.copy(internetSharingHttpPort = port)
+                                        }
+                                    },
+                                    label = { Text(stringResource(R.string.global_http_port)) },
+                                    isError = httpPortMissing || httpPortRequiresRoot || httpPortOutOfRange || sharingPortsEqual,
+                                    supportingText = {
+                                        when {
+                                            sharingPortsEqual -> Text(stringResource(R.string.global_sharing_ports_equal), color = MaterialTheme.colorScheme.error)
+                                            httpPortMissing -> Text(stringResource(R.string.global_http_port_required))
+                                            httpPortRequiresRoot -> Text(stringResource(R.string.global_port_root_warning))
+                                            httpPortOutOfRange -> Text(stringResource(R.string.global_settings_ports_range_msg), color = MaterialTheme.colorScheme.error)
+                                        }
+                                    },
+                                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                                    textStyle = LocalTextStyle.current.copy(textDirection = TextDirection.Ltr, textAlign = TextAlign.Left),
+                                    modifier = Modifier.weight(1f)
                                 )
                             }
 
-                            CompositionLocalProvider(LocalLayoutDirection provides LayoutDirection.Ltr) {
-                                OutlinedTextField(
-                                    value = draft.internetSharingPass,
-                                    onValueChange = { draft = draft.copy(internetSharingPass = it) },
-                                    label = { Text(stringResource(R.string.global_password)) },
-                                    visualTransformation = PasswordVisualTransformation(),
-                                    textStyle = LocalTextStyle.current.copy(textDirection = TextDirection.Ltr, textAlign = TextAlign.Start),
-                                    modifier = Modifier.fillMaxWidth()
-                                )
-                            }
+                            OutlinedTextField(
+                                value = draft.internetSharingUser,
+                                onValueChange = { draft = draft.copy(internetSharingUser = it) },
+                                label = { Text(stringResource(R.string.global_username)) },
+                                textStyle = LocalTextStyle.current.copy(textDirection = TextDirection.Ltr, textAlign = TextAlign.Left),
+                                modifier = Modifier.fillMaxWidth()
+                            )
+
+                            OutlinedTextField(
+                                value = draft.internetSharingPass,
+                                onValueChange = { draft = draft.copy(internetSharingPass = it) },
+                                label = { Text(stringResource(R.string.global_password)) },
+                                visualTransformation = PasswordVisualTransformation(),
+                                textStyle = LocalTextStyle.current.copy(textDirection = TextDirection.Ltr, textAlign = TextAlign.Left),
+                                modifier = Modifier.fillMaxWidth()
+                            )
 
                             Text(
                                 stringResource(R.string.global_sharing_help),
