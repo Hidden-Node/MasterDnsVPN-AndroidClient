@@ -134,8 +134,7 @@ private fun LanguageCard() {
 
     var expanded by remember { mutableStateOf(false) }
 
-    Card(
-        colors = CardDefaults.cardColors(containerColor = MdvColor.SurfaceHigh),
+    MdvCardHigh(
         modifier = Modifier.fillMaxWidth()
     ) {
         Column(modifier = Modifier.fillMaxWidth()) {
