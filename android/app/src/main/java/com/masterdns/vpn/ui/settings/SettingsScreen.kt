@@ -2,7 +2,6 @@ package com.masterdns.vpn.ui.settings
 
 import android.content.Context
 import android.content.Intent
-import android.net.Uri
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.Arrangement
@@ -667,14 +666,6 @@ private fun ConfigFieldCard(
                     }
                 }
             }
-        }
-    }
-}
-
-private fun writeTextToUri(context: Context, uri: Uri, content: String) {
-    runCatching {
-        context.contentResolver.openOutputStream(uri, "w")?.bufferedWriter()?.use {
-            it.write(content)
         }
     }
 }

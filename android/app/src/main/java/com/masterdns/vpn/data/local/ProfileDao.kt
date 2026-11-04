@@ -78,9 +78,6 @@ interface ProfileDao {
         }
     }
 
-    @Query("SELECT * FROM profiles WHERE subscriptionId = :subId ORDER BY createdAt DESC")
-    fun getProfilesBySubscriptionId(subId: Long): Flow<List<ProfileEntity>>
-
     @Query("DELETE FROM profiles WHERE subscriptionId = :subId")
     suspend fun deleteProfilesBySubscriptionId(subId: Long)
 
