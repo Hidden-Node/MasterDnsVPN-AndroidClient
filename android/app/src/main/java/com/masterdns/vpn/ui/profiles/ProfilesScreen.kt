@@ -809,31 +809,28 @@ private fun ProfileEditorDialog(
                         modifier = Modifier.fillMaxWidth(),
                         verticalAlignment = Alignment.CenterVertically
                     ) {
-                        CompositionLocalProvider(LocalLayoutDirection provides LayoutDirection.Ltr) {
-                            OutlinedTextField(
-                                value = newDomainInput,
-                                onValueChange = {
-                                    newDomainInput = it
-                                    validationMessage = null
+                        OutlinedTextField(
+                            value = newDomainInput,
+                            onValueChange = {
+                                newDomainInput = it
+                                validationMessage = null
+                            },
+                            label = { Text(stringResource(R.string.profiles_domain_hint)) },
+                            isError = validationMessage == domainRequiredMsg,
+                            placeholder = {
+                                if (isDomainInputFocused) {
+                                    Text(stringResource(R.string.profiles_domain_example))
+                                }
+                            },
+                            singleLine = true,
+                            textStyle = LocalTextStyle.current.copy(textDirection = TextDirection.Ltr, textAlign = TextAlign.Left),
+                            modifier = Modifier
+                                .weight(1f)
+                                .onFocusChanged { focusState ->
+                                    isDomainInputFocused = focusState.isFocused
                                 },
-                                label = { Text(stringResource(R.string.profiles_domain_hint)) },
-                                isError = validationMessage == domainRequiredMsg,
-                                placeholder = {
-                                    if (isDomainInputFocused) {
-                                        Text(stringResource(R.string.profiles_domain_example))
-                                    }
-                                },
-                                singleLine = true,
-                                textStyle = LocalTextStyle.current.copy(textDirection = TextDirection.Ltr, textAlign = TextAlign.Start),
-                                modifier = Modifier
-                                    .weight(1f)
-                                    .onFocusChanged { focusState ->
-                                        isDomainInputFocused = focusState.isFocused
-                                    }
-                                ,
-                                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Uri)
-                            )
-                        }
+                            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Uri)
+                        )
                         Spacer(modifier = Modifier.width(12.dp))
                         FilledIconButton(
                             onClick = {
@@ -851,33 +848,31 @@ private fun ProfileEditorDialog(
                     }
                 }
 
-                CompositionLocalProvider(LocalLayoutDirection provides LayoutDirection.Ltr) {
-                    OutlinedTextField(
-                        value = encryptionKey,
-                        onValueChange = {
-                            encryptionKey = it
-                            validationMessage = null
-                        },
-                        label = { Text(stringResource(R.string.profiles_encryption_key)) },
-                        isError = validationMessage == keyRequiredMsg,
-                        singleLine = true,
-                        textStyle = LocalTextStyle.current.copy(textDirection = TextDirection.Ltr, textAlign = TextAlign.Start),
-                        modifier = Modifier.fillMaxWidth(),
-                        visualTransformation = if (showKey) VisualTransformation.None else PasswordVisualTransformation(),
-                        trailingIcon = {
-                            IconButton(onClick = { showKey = !showKey }) {
-                                Icon(
-                                    if (showKey) Icons.Filled.VisibilityOff else Icons.Filled.Visibility,
-                                    contentDescription = if (showKey) {
-                                        stringResource(R.string.profiles_hide_sensitive)
-                                    } else {
-                                        stringResource(R.string.profiles_show_sensitive)
-                                    }
-                                )
-                            }
+                OutlinedTextField(
+                    value = encryptionKey,
+                    onValueChange = {
+                        encryptionKey = it
+                        validationMessage = null
+                    },
+                    label = { Text(stringResource(R.string.profiles_encryption_key)) },
+                    isError = validationMessage == keyRequiredMsg,
+                    singleLine = true,
+                    textStyle = LocalTextStyle.current.copy(textDirection = TextDirection.Ltr, textAlign = TextAlign.Left),
+                    modifier = Modifier.fillMaxWidth(),
+                    visualTransformation = if (showKey) VisualTransformation.None else PasswordVisualTransformation(),
+                    trailingIcon = {
+                        IconButton(onClick = { showKey = !showKey }) {
+                            Icon(
+                                if (showKey) Icons.Filled.VisibilityOff else Icons.Filled.Visibility,
+                                contentDescription = if (showKey) {
+                                    stringResource(R.string.profiles_hide_sensitive)
+                                } else {
+                                    stringResource(R.string.profiles_show_sensitive)
+                                }
+                            )
                         }
-                    )
-                }
+                    }
+                )
 
                 // Import Resolvers button for Edit mode (placed above the resolvers field)
                 if (profile != null) {
@@ -910,21 +905,19 @@ private fun ProfileEditorDialog(
                         }
                     }
                 } else {
-                    CompositionLocalProvider(LocalLayoutDirection provides LayoutDirection.Ltr) {
-                        OutlinedTextField(
-                            value = resolvers,
-                            onValueChange = {
-                                resolvers = it
-                                validationMessage = null
-                            },
-                            label = { Text(stringResource(R.string.profiles_resolvers_label)) },
-                            isError = validationMessage == resolverRequiredMsg,
-                            textStyle = LocalTextStyle.current.copy(textDirection = TextDirection.Ltr, textAlign = TextAlign.Start),
-                            modifier = Modifier.fillMaxWidth().height(120.dp),
-                            maxLines = 6,
-                            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Uri)
-                        )
-                    }
+                    OutlinedTextField(
+                        value = resolvers,
+                        onValueChange = {
+                            resolvers = it
+                            validationMessage = null
+                        },
+                        label = { Text(stringResource(R.string.profiles_resolvers_label)) },
+                        isError = validationMessage == resolverRequiredMsg,
+                        textStyle = LocalTextStyle.current.copy(textDirection = TextDirection.Ltr, textAlign = TextAlign.Left),
+                        modifier = Modifier.fillMaxWidth().height(120.dp),
+                        maxLines = 6,
+                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Uri)
+                    )
                 }
                 liveStats?.let { stats ->
                     ResolverImportStatsCard(stats)

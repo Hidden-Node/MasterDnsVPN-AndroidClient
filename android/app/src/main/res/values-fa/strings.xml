@@ -115,8 +115,8 @@
     <string name="profiles_dialog_new_title">پروفایل جدید</string>
     <string name="profiles_name">نام پروفایل</string>
     <string name="profiles_import_resolvers_short">وارد کردن ریزالورها</string>
-    <string name="profiles_domain_hint">دامنه (مثلاً v.domain.com)</string>
-    <string name="profiles_domain_example">(مثلاً v.example.com)</string>
+    <string name="profiles_domain_hint">دامنه (مثلاً \u2066v.domain.com\u2069)</string>
+    <string name="profiles_domain_example">(مثلاً \u2066v.example.com\u2069)</string>
     <string name="profiles_add_domain">افزودن دامنه</string>
     <string name="profiles_encryption_key">کلید رمزنگاری</string>
     <string name="profiles_show_sensitive">نمایش مقدار محرمانه</string>
