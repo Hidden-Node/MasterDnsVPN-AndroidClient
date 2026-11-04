@@ -315,6 +315,8 @@
     <string name="profiles_add_manual">手动添加</string>
     <string name="profiles_import_dialog_title">导入配置文件</string>
     <string name="profiles_import_dialog_hint">每行粘贴一个 masterdns:// 链接</string>
+    <string name="profiles_import_dialog_paste">粘贴</string>
+    <string name="profiles_import_dialog_scan_qr">扫码</string>
     <string name="profiles_imported_count_msg">已导入 %d 个配置文件</string>
     <string name="profiles_clipboard_empty_msg">剪贴板中未找到配置文件链接</string>
     <string name="profiles_qr_scan_cancelled">二维码扫描已取消</string>

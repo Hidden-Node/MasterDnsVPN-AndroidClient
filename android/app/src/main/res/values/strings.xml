@@ -325,6 +325,8 @@
     <string name="profiles_add_manual">Manual</string>
     <string name="profiles_import_dialog_title">Import Profiles</string>
     <string name="profiles_import_dialog_hint">Paste masterdns:// link(s), one per line</string>
+    <string name="profiles_import_dialog_paste">Paste</string>
+    <string name="profiles_import_dialog_scan_qr">Scan QR</string>
     <string name="profiles_imported_count_msg">Imported %d profiles</string>
     <string name="profiles_clipboard_empty_msg">No profile link found in clipboard</string>
     <string name="profiles_qr_scan_cancelled">QR scan cancelled</string>

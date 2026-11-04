@@ -315,6 +315,8 @@
     <string name="profiles_add_manual">Вручную</string>
     <string name="profiles_import_dialog_title">Импорт профилей</string>
     <string name="profiles_import_dialog_hint">Вставьте ссылки masterdns://, по одной в строке</string>
+    <string name="profiles_import_dialog_paste">Вставить</string>
+    <string name="profiles_import_dialog_scan_qr">Скан QR</string>
     <string name="profiles_imported_count_msg">Импортировано профилей: %d</string>
     <string name="profiles_clipboard_empty_msg">В буфере обмена не найдена ссылка на профиль</string>
     <string name="profiles_qr_scan_cancelled">Сканирование QR-кода отменено</string>
