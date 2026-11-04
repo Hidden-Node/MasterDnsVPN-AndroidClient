@@ -979,36 +979,48 @@ private fun ProfileEditorDialog(
 }
 
 @Composable
-private fun ShareProfileDialog(
-    profile: ProfileEntity,
+private fun QrShareDialog(
+    title: String,
+    url: String?,
+    subtitle: String? = null,
+    qrContentDescription: String,
+    clipboardLabel: String,
+    onShare: (() -> Unit)? = null,
     onDismiss: () -> Unit
 ) {
     val context = LocalContext.current
-    val shareUrl = remember(profile) { runCatching { ProfileUrlCodec.encode(profile) }.getOrNull() }
+    val qrBitmap = remember(url) {
+        if (url != null) runCatching { QrCodeUtil.encodeAsBitmap(url, sizePx = 800) }.getOrNull() else null
+    }
 
     AlertDialog(
         onDismissRequest = onDismiss,
-        title = { Text(stringResource(R.string.profiles_share_dialog_title)) },
+        title = { Text(title) },
         text = {
             Column(
                 modifier = Modifier
                     .fillMaxWidth()
                     .verticalScroll(rememberScrollState()),
-                verticalArrangement = Arrangement.spacedBy(MdvSpace.S3)
+                verticalArrangement = Arrangement.spacedBy(MdvSpace.S3),
+                horizontalAlignment = Alignment.CenterHorizontally
             ) {
-                Text(profile.name, style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.SemiBold)
-                if (shareUrl != null) {
-                    val qrBitmap = remember(shareUrl) {
-                        runCatching { QrCodeUtil.encodeAsBitmap(shareUrl, sizePx = 800) }.getOrNull()
-                    }
+                if (subtitle != null) {
+                    Text(
+                        text = subtitle,
+                        style = MaterialTheme.typography.titleSmall,
+                        fontWeight = FontWeight.SemiBold,
+                        modifier = Modifier.fillMaxWidth()
+                    )
+                }
+                if (url != null) {
                     if (qrBitmap != null) {
                         Box(
-                            modifier = Modifier.fillMaxWidth().padding(bottom = MdvSpace.S3),
+                            modifier = Modifier.fillMaxWidth().padding(bottom = MdvSpace.S1),
                             contentAlignment = Alignment.Center
                         ) {
                             Image(
                                 bitmap = qrBitmap.asImageBitmap(),
-                                contentDescription = stringResource(R.string.profiles_share_qr_cd),
+                                contentDescription = qrContentDescription,
                                 modifier = Modifier
                                     .size(200.dp)
                                     .clip(RoundedCornerShape(MdvRadius.Lg))
@@ -1019,7 +1031,7 @@ private fun ShareProfileDialog(
                     }
                     CompositionLocalProvider(LocalLayoutDirection provides LayoutDirection.Ltr) {
                         OutlinedTextField(
-                            value = shareUrl,
+                            value = url,
                             onValueChange = {},
                             readOnly = true,
                             modifier = Modifier.fillMaxWidth().height(100.dp),
@@ -1031,39 +1043,62 @@ private fun ShareProfileDialog(
                     Text(
                         text = stringResource(R.string.profiles_invalid_link_msg),
                         color = MaterialTheme.colorScheme.error,
-                        style = MaterialTheme.typography.bodySmall
+                        style = MaterialTheme.typography.bodySmall,
+                        modifier = Modifier.fillMaxWidth()
                     )
                 }
             }
         },
         confirmButton = {
-            if (shareUrl != null) {
+            if (url != null) {
                 Row(horizontalArrangement = Arrangement.spacedBy(MdvSpace.S2)) {
                     TextButton(onClick = {
                         val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
-                        clipboard.setPrimaryClip(ClipData.newPlainText("MasterDns Profile", shareUrl))
+                        clipboard.setPrimaryClip(ClipData.newPlainText(clipboardLabel, url))
                         Toast.makeText(context, context.getString(R.string.profiles_share_copied), Toast.LENGTH_SHORT).show()
                     }) {
                         Text(stringResource(R.string.btn_copy))
                     }
-                    Button(onClick = {
-                        val intent = Intent(Intent.ACTION_SEND).apply {
-                            type = "text/plain"
-                            putExtra(Intent.EXTRA_SUBJECT, profile.name)
-                            putExtra(Intent.EXTRA_TEXT, shareUrl)
+                    if (onShare != null) {
+                        Button(onClick = onShare) {
+                            Text(stringResource(R.string.profiles_share))
                         }
-                        context.startActivity(Intent.createChooser(intent, context.getString(R.string.profiles_share)))
-                    }) {
-                        Text(stringResource(R.string.profiles_share))
                     }
                 }
             }
         },
         dismissButton = {
             TextButton(onClick = onDismiss) {
-                Text(stringResource(R.string.action_cancel))
+                Text(stringResource(if (onShare != null) R.string.action_cancel else R.string.action_close))
             }
         }
+    )
+}
+
+@Composable
+private fun ShareProfileDialog(
+    profile: ProfileEntity,
+    onDismiss: () -> Unit
+) {
+    val context = LocalContext.current
+    val shareUrl = remember(profile) { runCatching { ProfileUrlCodec.encode(profile) }.getOrNull() }
+    QrShareDialog(
+        title = stringResource(R.string.profiles_share_dialog_title),
+        url = shareUrl,
+        subtitle = profile.name,
+        qrContentDescription = stringResource(R.string.profiles_share_qr_cd),
+        clipboardLabel = profile.name,
+        onShare = if (shareUrl != null) {
+            {
+                val intent = Intent(Intent.ACTION_SEND).apply {
+                    type = "text/plain"
+                    putExtra(Intent.EXTRA_SUBJECT, profile.name)
+                    putExtra(Intent.EXTRA_TEXT, shareUrl)
+                }
+                context.startActivity(Intent.createChooser(intent, context.getString(R.string.profiles_share)))
+            }
+        } else null,
+        onDismiss = onDismiss
     )
 }
 
@@ -1464,59 +1499,12 @@ private fun SubscriptionQrDialog(
     subscription: SubscriptionEntity,
     onDismiss: () -> Unit
 ) {
-    val context = LocalContext.current
-    val qrBitmap = remember(subscription.url) {
-        runCatching { QrCodeUtil.encodeAsBitmap(subscription.url, sizePx = 800) }.getOrNull()
-    }
-
-    AlertDialog(
-        onDismissRequest = onDismiss,
-        title = { Text(subscription.name) },
-        text = {
-            Column(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .verticalScroll(rememberScrollState()),
-                verticalArrangement = Arrangement.spacedBy(MdvSpace.S3),
-                horizontalAlignment = Alignment.CenterHorizontally
-            ) {
-                if (qrBitmap != null) {
-                    Image(
-                        bitmap = qrBitmap.asImageBitmap(),
-                        contentDescription = stringResource(R.string.profiles_subscription_share_qr),
-                        modifier = Modifier
-                            .size(220.dp)
-                            .clip(RoundedCornerShape(MdvRadius.Lg))
-                            .background(MdvColor.QrBackground)
-                            .padding(MdvSpace.S2)
-                    )
-                }
-                CompositionLocalProvider(LocalLayoutDirection provides LayoutDirection.Ltr) {
-                    OutlinedTextField(
-                        value = subscription.url,
-                        onValueChange = {},
-                        readOnly = true,
-                        modifier = Modifier.fillMaxWidth().height(100.dp),
-                        maxLines = 4,
-                        textStyle = LocalTextStyle.current.copy(textDirection = TextDirection.Ltr, textAlign = TextAlign.Start)
-                    )
-                }
-            }
-        },
-        confirmButton = {
-            TextButton(onClick = {
-                val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
-                clipboard.setPrimaryClip(ClipData.newPlainText(subscription.name, subscription.url))
-                Toast.makeText(context, context.getString(R.string.profiles_share_copied), Toast.LENGTH_SHORT).show()
-            }) {
-                Text(stringResource(R.string.btn_copy))
-            }
-        },
-        dismissButton = {
-            TextButton(onClick = onDismiss) {
-                Text(stringResource(R.string.action_close))
-            }
-        }
+    QrShareDialog(
+        title = subscription.name,
+        url = subscription.url,
+        qrContentDescription = stringResource(R.string.profiles_subscription_share_qr),
+        clipboardLabel = subscription.name,
+        onDismiss = onDismiss
     )
 }
 

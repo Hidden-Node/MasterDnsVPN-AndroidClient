@@ -185,65 +185,20 @@ fun HomeScreen(
             MdvHomeHeader(onOpenInfo = onOpenInfo)
             Spacer(modifier = Modifier.height(MdvSpace.S4))
 
-            if (metrics.isWide) {
-                Row(modifier = Modifier.fillMaxWidth()) {
-                    Column(
-                        modifier = Modifier.weight(1f),
-                        horizontalAlignment = Alignment.CenterHorizontally
-                    ) {
-                        HomeStatusSummary(
-                            statusText = statusText,
-                            statusColor = statusColor,
-                            profileName = profileDisplayName
-                        )
-                        Spacer(modifier = Modifier.height(MdvSpace.S6))
-                        MdvConnectionNodeButton(
-                            isConnected = isConnected,
-                            shouldPulse = isConnecting || isDisconnecting,
-                            pulseScale = pulseScale,
-                            statusColor = statusColor,
-                            onToggle = toggleVpn
-                        )
-                    }
-
-                    Spacer(modifier = Modifier.width(MdvSpace.S6))
-
-                    HomeCardsColumn(
-                        vpnState = vpnState,
-                        proxyHost = proxyHost,
-                        proxyPort = proxyPort,
-                        socksAuthEnabled = socksAuthEnabled,
-                        socksUser = socksUser,
-                        socksPass = socksPass,
-                        isConnecting = isConnecting,
-                        connectionWarning = connectionWarning,
-                        profileName = profileSelectorName,
-                        onNavigateToProfiles = onNavigateToProfiles,
-                        error = error,
-                        onOpenHowToUse = { showHowToUse = true },
-                        modifier = Modifier
-                            .weight(1f)
-                            .widthIn(max = 560.dp)
-                    )
-                }
-            } else {
-                HomeStatusSummary(
+            val heroSection: @Composable (Modifier) -> Unit = { modifier ->
+                HomeHeroSection(
                     statusText = statusText,
                     statusColor = statusColor,
-                    profileName = profileDisplayName
-                )
-                Spacer(modifier = Modifier.height(MdvSpace.S6))
-
-                MdvConnectionNodeButton(
+                    profileDisplayName = profileDisplayName,
                     isConnected = isConnected,
-                    shouldPulse = isConnecting || isDisconnecting,
+                    isTransitioning = isConnecting || isDisconnecting,
                     pulseScale = pulseScale,
-                    statusColor = statusColor,
-                    onToggle = toggleVpn
+                    onToggleVpn = toggleVpn,
+                    modifier = modifier
                 )
+            }
 
-                Spacer(modifier = Modifier.height(MdvSpace.S6))
-
+            val cardsSection: @Composable (Modifier) -> Unit = { modifier ->
                 HomeCardsColumn(
                     vpnState = vpnState,
                     proxyHost = proxyHost,
@@ -257,14 +212,57 @@ fun HomeScreen(
                     onNavigateToProfiles = onNavigateToProfiles,
                     error = error,
                     onOpenHowToUse = { showHowToUse = true },
-                    modifier = Modifier.fillMaxWidth()
+                    modifier = modifier
                 )
+            }
+
+            if (metrics.isWide) {
+                Row(modifier = Modifier.fillMaxWidth()) {
+                    heroSection(Modifier.weight(1f))
+                    Spacer(modifier = Modifier.width(MdvSpace.S6))
+                    cardsSection(Modifier.weight(1f).widthIn(max = 560.dp))
+                }
+            } else {
+                heroSection(Modifier.fillMaxWidth())
+                Spacer(modifier = Modifier.height(MdvSpace.S6))
+                cardsSection(Modifier.fillMaxWidth())
             }
         }
     }
 
     if (showHowToUse) {
         HowToUseDialog(onDismiss = { showHowToUse = false })
+    }
+}
+
+@Composable
+private fun HomeHeroSection(
+    statusText: String,
+    statusColor: Color,
+    profileDisplayName: String,
+    isConnected: Boolean,
+    isTransitioning: Boolean,
+    pulseScale: Float,
+    onToggleVpn: () -> Unit,
+    modifier: Modifier = Modifier
+) {
+    Column(
+        modifier = modifier,
+        horizontalAlignment = Alignment.CenterHorizontally
+    ) {
+        HomeStatusSummary(
+            statusText = statusText,
+            statusColor = statusColor,
+            profileName = profileDisplayName
+        )
+        Spacer(modifier = Modifier.height(MdvSpace.S6))
+        MdvConnectionNodeButton(
+            isConnected = isConnected,
+            shouldPulse = isTransitioning,
+            pulseScale = pulseScale,
+            statusColor = statusColor,
+            onToggle = onToggleVpn
+        )
     }
 }
 
