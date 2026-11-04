@@ -95,6 +95,7 @@ import androidx.compose.ui.window.Dialog
 import androidx.core.os.LocaleListCompat
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.masterdns.vpn.R
+import com.masterdns.vpn.ui.components.mdv.cards.MdvCardHigh
 import com.masterdns.vpn.ui.components.mdv.controls.MdvFilterChip
 import com.masterdns.vpn.ui.components.mdv.controls.MdvTopAppBar
 import com.masterdns.vpn.ui.theme.MdvColor
@@ -353,7 +354,7 @@ fun GlobalSettingsScreen(vm: GlobalSettingsViewModel = viewModel()) {
                         LanguageCard()
                     }
                     item {
-                        Card(colors = CardDefaults.cardColors(containerColor = MdvColor.SurfaceHigh)) {
+                        MdvCardHigh {
                             Column(modifier = Modifier.padding(MdvSpace.S3), verticalArrangement = Arrangement.spacedBy(MdvSpace.S3)) {
                         ExposedDropdownMenuBox(
                             expanded = modeExpanded,
@@ -492,7 +493,7 @@ fun GlobalSettingsScreen(vm: GlobalSettingsViewModel = viewModel()) {
                 }
             }
                     item {
-                        Card(colors = CardDefaults.cardColors(containerColor = MdvColor.SurfaceHigh)) {
+                        MdvCardHigh {
                             Column(
                                 modifier = Modifier.padding(MdvSpace.S3),
                                 verticalArrangement = Arrangement.spacedBy(MdvSpace.S3)
