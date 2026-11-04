@@ -29,9 +29,9 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
-import androidx.compose.material3.Card
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
+import com.masterdns.vpn.ui.components.mdv.cards.MdvCardLow
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
@@ -342,7 +342,7 @@ private fun HomeCardsColumn(
 
 @Composable
 private fun HowToUseCard(onOpen: () -> Unit) {
-    Card(modifier = Modifier.fillMaxWidth(), onClick = onOpen) {
+    MdvCardLow(modifier = Modifier.fillMaxWidth(), onClick = onOpen) {
         Column(modifier = Modifier.fillMaxWidth().padding(MdvSpace.S3)) {
             Text(
                 text = stringResource(R.string.home_howto_title),

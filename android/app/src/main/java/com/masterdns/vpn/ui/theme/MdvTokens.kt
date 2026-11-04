@@ -29,6 +29,11 @@ object MdvColor {
     val ErrorContainer = Color(0xFF93000A)
     val OnError = Color(0xFF690005)
 
+    val LogWarn = Color(0xFFFFB74D)
+    val LogWarnContainer = Color(0xFF5A4321)
+    val LogInfo = Color(0xFF81C784)
+    val LogInfoContainer = Color(0xFF1C3B25)
+
     val QrBackground = Color(0xFFFFFFFF)
     val OverlayScrim = Color(0x99000000)
     val CameraBackdrop = Color(0xFF000000)

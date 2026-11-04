@@ -77,7 +77,7 @@ class ProfilesViewModel @Inject constructor(
             try {
                 subscriptionRepository.addSubscriptionAndFetch(name, url)
                     .onSuccess { sub -> onSuccess(sub.profileCount) }
-                    .onFailure { err -> onError(err.message ?: "Failed to fetch subscription") }
+                    .onFailure { err -> onError(err.message.orEmpty()) }
             } finally {
                 _isRefreshingSubscriptions.value = false
             }

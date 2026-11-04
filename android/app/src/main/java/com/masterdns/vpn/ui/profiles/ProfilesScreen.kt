@@ -50,6 +50,7 @@ import com.google.gson.Gson
 import com.masterdns.vpn.R
 import com.masterdns.vpn.data.local.ProfileEntity
 import com.masterdns.vpn.data.local.SubscriptionEntity
+import com.masterdns.vpn.ui.components.mdv.cards.MdvCardHigh
 import com.masterdns.vpn.ui.components.mdv.cards.MdvCardLow
 import com.masterdns.vpn.ui.components.mdv.controls.MdvBackTopAppBar
 import com.masterdns.vpn.ui.components.mdv.controls.MdvFilterChip
@@ -395,7 +396,7 @@ fun ProfilesScreen(
                     items(subscriptions, key = { it.id }) { sub ->
                         MdvFilterChip(
                             selected = selectedSubscriptionId == sub.id,
-                            label = "${sub.name} (${sub.profileCount})",
+                            label = stringResource(R.string.profiles_subscription_chip_label, sub.name, sub.profileCount),
                             onClick = { selectedSubscriptionId = if (selectedSubscriptionId == sub.id) null else sub.id }
                         )
                     }
@@ -483,7 +484,7 @@ fun ProfilesScreen(
                             }
                         },
                         onError = { err ->
-                            addSubscriptionError = err
+                            addSubscriptionError = err.ifBlank { context.getString(R.string.profiles_subscription_fetch_failed) }
                         }
                     )
                 },
@@ -887,10 +888,7 @@ private fun ProfileEditorDialog(
                 }
 
                 if (!showResolversEditor && largeResolversText) {
-                    Card(
-                        modifier = Modifier.fillMaxWidth(),
-                        colors = CardDefaults.cardColors(containerColor = MdvColor.SurfaceHigh)
-                    ) {
+                    MdvCardHigh(modifier = Modifier.fillMaxWidth()) {
                         Column(modifier = Modifier.padding(10.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
                             Text(stringResource(R.string.profiles_large_resolvers_title, resolvers.lines().size))
                             Text(
@@ -1510,10 +1508,7 @@ private fun SubscriptionQrDialog(
 
 @Composable
 private fun ResolverImportStatsCard(stats: ResolverImportStats) {
-    Card(
-        modifier = Modifier.fillMaxWidth(),
-        colors = CardDefaults.cardColors(containerColor = MdvColor.SurfaceHigh)
-    ) {
+    MdvCardHigh(modifier = Modifier.fillMaxWidth()) {
         Column(
             modifier = Modifier.padding(10.dp),
             verticalArrangement = Arrangement.spacedBy(4.dp)

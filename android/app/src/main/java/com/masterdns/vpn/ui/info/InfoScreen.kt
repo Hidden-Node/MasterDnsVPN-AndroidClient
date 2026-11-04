@@ -44,6 +44,7 @@ import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.unit.dp
 import com.masterdns.vpn.BuildConfig
 import com.masterdns.vpn.R
+import com.masterdns.vpn.ui.components.mdv.cards.MdvCardHigh
 import com.masterdns.vpn.ui.components.mdv.controls.MdvBackTopAppBar
 import com.masterdns.vpn.ui.theme.MdvColor
 import com.masterdns.vpn.ui.theme.MdvSpace
@@ -144,7 +145,7 @@ fun InfoScreen(onBack: () -> Unit) {
                 }
             }
             item {
-                Card(colors = CardDefaults.cardColors(containerColor = MdvColor.SurfaceHigh)) {
+                MdvCardHigh {
                     Column(
                         modifier = Modifier.padding(14.dp),
                         verticalArrangement = Arrangement.spacedBy(6.dp)
@@ -169,7 +170,7 @@ fun InfoScreen(onBack: () -> Unit) {
                 }
             }
             item {
-                Card(colors = CardDefaults.cardColors(containerColor = MdvColor.SurfaceHigh)) {
+                MdvCardHigh {
                     Column(
                         modifier = Modifier.padding(14.dp),
                         verticalArrangement = Arrangement.spacedBy(8.dp)
