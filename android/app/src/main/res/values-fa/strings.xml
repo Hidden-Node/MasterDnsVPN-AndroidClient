@@ -315,6 +315,8 @@
     <string name="profiles_add_manual">ایجاد دستی</string>
     <string name="profiles_import_dialog_title">وارد کردن پروفایل‌ها</string>
     <string name="profiles_import_dialog_hint">لینک‌های \u2066masterdns://\u2069 را خط به خط وارد کنید</string>
+    <string name="profiles_import_dialog_paste">جای‌گذاری</string>
+    <string name="profiles_import_dialog_scan_qr">اسکن QR</string>
     <string name="profiles_imported_count_msg">%d پروفایل وارد شدند</string>
     <string name="profiles_clipboard_empty_msg">هیچ لینک پروفایلی در کلیپ‌بورد یافت نشد</string>
     <string name="profiles_qr_scan_cancelled">اسکن QR code لغو شد</string>

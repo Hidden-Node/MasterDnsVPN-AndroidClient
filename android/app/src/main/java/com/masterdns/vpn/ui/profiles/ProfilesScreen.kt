@@ -1184,26 +1184,28 @@ private fun ImportProfilesDialog(
                                 errorMessage = context.getString(R.string.profiles_clipboard_empty_msg)
                             }
                         },
-                        modifier = Modifier.weight(1f)
+                        modifier = Modifier.weight(1f),
+                        contentPadding = PaddingValues(horizontal = MdvSpace.S2, vertical = MdvSpace.S1)
                     ) {
                         Icon(Icons.Filled.ContentPaste, contentDescription = null, modifier = Modifier.size(16.dp))
                         Spacer(modifier = Modifier.width(MdvSpace.S1))
                         Text(
-                            stringResource(R.string.profiles_add_clipboard),
-                            style = MaterialTheme.typography.labelSmall,
+                            stringResource(R.string.profiles_import_dialog_paste),
+                            style = MaterialTheme.typography.labelSmall.copy(textDirection = TextDirection.ContentOrRtl),
                             maxLines = 1,
                             overflow = TextOverflow.Ellipsis
                         )
                     }
                     OutlinedButton(
                         onClick = { dialogQrScanner.launch(Intent(context, ScannerActivity::class.java)) },
-                        modifier = Modifier.weight(1f)
+                        modifier = Modifier.weight(1f),
+                        contentPadding = PaddingValues(horizontal = MdvSpace.S2, vertical = MdvSpace.S1)
                     ) {
                         Icon(Icons.Filled.QrCodeScanner, contentDescription = null, modifier = Modifier.size(16.dp))
                         Spacer(modifier = Modifier.width(MdvSpace.S1))
                         Text(
-                            stringResource(R.string.profiles_add_qr),
-                            style = MaterialTheme.typography.labelSmall,
+                            stringResource(R.string.profiles_import_dialog_scan_qr),
+                            style = MaterialTheme.typography.labelSmall.copy(textDirection = TextDirection.ContentOrRtl),
                             maxLines = 1,
                             overflow = TextOverflow.Ellipsis
                         )
