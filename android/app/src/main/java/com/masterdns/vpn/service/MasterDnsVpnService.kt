@@ -256,7 +256,7 @@ class MasterDnsVpnService : VpnService() {
                     VpnManager.appendLog("Proxy mode active: skipping Android VpnService TUN setup")
                     VpnManager.updateState(VpnManager.VpnState.CONNECTED)
                     releaseWakeLock()
-                    VpnManager.startTrafficMonitor()
+                    VpnManager.startTrafficMonitor(isProxyMode = true)
                     showConnectedNotification(
                         profileName = inputs.profile.name,
                         statusText = getString(R.string.notification_proxy_active, inputs.socksPort),
@@ -270,7 +270,7 @@ class MasterDnsVpnService : VpnService() {
 
                 VpnManager.updateState(VpnManager.VpnState.CONNECTED)
                 releaseWakeLock()
-                VpnManager.startTrafficMonitor()
+                VpnManager.startTrafficMonitor(isProxyMode = false)
                 VpnManager.appendLog("VPN connected successfully!")
 
                 showConnectedNotification(

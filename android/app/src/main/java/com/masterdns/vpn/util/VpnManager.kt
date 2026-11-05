@@ -2,6 +2,7 @@ package com.masterdns.vpn.util
 
 import android.content.Context
 import android.content.Intent
+import android.net.TrafficStats
 import androidx.core.content.ContextCompat
 import com.masterdns.vpn.R
 import com.masterdns.vpn.data.local.ProfileEntity
@@ -245,12 +246,25 @@ object VpnManager {
         return version
     }
 
-    fun startTrafficMonitor() {
+    internal fun computeTrafficDelta(current: Long, previous: Long): Long {
+        if (current < 0L || previous < 0L) return 0L
+        return (current - previous).coerceAtLeast(0L)
+    }
+
+    fun startTrafficMonitor(isProxyMode: Boolean = false) {
         trafficMonitorJob?.cancel()
         trafficMonitorJob = monitorScope.launch {
-            val initialBw = Mobile.getGvisorBandwidth()
-            var prevTx = initialBw.up.coerceAtLeast(0L)
-            var prevRx = initialBw.down.coerceAtLeast(0L)
+            val uid = android.os.Process.myUid()
+            var prevTx: Long
+            var prevRx: Long
+            if (isProxyMode) {
+                prevTx = TrafficStats.getUidTxBytes(uid)
+                prevRx = TrafficStats.getUidRxBytes(uid)
+            } else {
+                val initialBw = Mobile.getGvisorBandwidth()
+                prevTx = initialBw.up.coerceAtLeast(0L)
+                prevRx = initialBw.down.coerceAtLeast(0L)
+            }
             var prevTime = System.currentTimeMillis()
             val startedAt = prevTime
             _uploadTotalBytes.value = 0L
@@ -259,24 +273,32 @@ object VpnManager {
             while (isActive) {
                 delay(1000L)
                 val now = System.currentTimeMillis()
-                val bw = Mobile.getGvisorBandwidth()
-                val tx = bw.up.coerceAtLeast(0L)
-                val rx = bw.down.coerceAtLeast(0L)
+                val tx: Long
+                val rx: Long
+                if (isProxyMode) {
+                    tx = TrafficStats.getUidTxBytes(uid)
+                    rx = TrafficStats.getUidRxBytes(uid)
+                } else {
+                    val bw = Mobile.getGvisorBandwidth()
+                    tx = bw.up
+                    rx = bw.down
+                }
                 val dt = (now - prevTime).coerceAtLeast(1L)
-                val uploadDelta = (tx - prevTx).coerceAtLeast(0L)
-                val downloadDelta = (rx - prevRx).coerceAtLeast(0L)
+                val uploadDelta = computeTrafficDelta(current = tx, previous = prevTx)
+                val downloadDelta = computeTrafficDelta(current = rx, previous = prevRx)
                 val newUploadSpeed = (uploadDelta * 1000L) / dt
-                if (newUploadSpeed != _uploadSpeedBps.value) _uploadSpeedBps.value = newUploadSpeed
                 val newDownloadSpeed = (downloadDelta * 1000L) / dt
-                if (newDownloadSpeed != _downloadSpeedBps.value) _downloadSpeedBps.value = newDownloadSpeed
                 val newUploadTotal = _uploadTotalBytes.value + uploadDelta
-                if (newUploadTotal != _uploadTotalBytes.value) _uploadTotalBytes.value = newUploadTotal
                 val newDownloadTotal = _downloadTotalBytes.value + downloadDelta
-                if (newDownloadTotal != _downloadTotalBytes.value) _downloadTotalBytes.value = newDownloadTotal
                 val newDuration = ((now - startedAt) / 1000L).coerceAtLeast(0L)
+                if (!isActive) break
+                if (newUploadSpeed != _uploadSpeedBps.value) _uploadSpeedBps.value = newUploadSpeed
+                if (newDownloadSpeed != _downloadSpeedBps.value) _downloadSpeedBps.value = newDownloadSpeed
+                if (newUploadTotal != _uploadTotalBytes.value) _uploadTotalBytes.value = newUploadTotal
+                if (newDownloadTotal != _downloadTotalBytes.value) _downloadTotalBytes.value = newDownloadTotal
                 if (newDuration != _connectedDurationSeconds.value) _connectedDurationSeconds.value = newDuration
-                prevTx = tx
-                prevRx = rx
+                if (tx >= 0L) prevTx = tx
+                if (rx >= 0L) prevRx = rx
                 prevTime = now
             }
         }
